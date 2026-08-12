@@ -19,7 +19,34 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     exit();
 }
 
-// Include header
+// ============================================================
+// FIX: MOVE ALL REDIRECTS HERE (BEFORE INCLUDING HEADER)
+// ============================================================
+// Handle Delete Request
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $delete_id = (int)$_GET['delete'];
+    
+    try {
+        $conn = getDBConnection();
+        $stmt = $conn->prepare("UPDATE users SET status = 'deleted' WHERE user_id = ?");
+        $stmt->bind_param("i", $delete_id);
+        
+        if ($stmt->execute()) {
+            // Redirect with success message
+            header('Location: residents.php?msg=deleted');
+            exit();
+        } else {
+            $error = "Failed to delete resident: " . $stmt->error;
+        }
+        $stmt->close();
+    } catch (Exception $e) {
+        $error = "Error: " . $e->getMessage();
+    }
+}
+
+// ============================================================
+// NOW INCLUDE HEADER (AFTER ALL REDIRECTS)
+// ============================================================
 include '../includes/header.php'; 
 
 // ============================================================
@@ -109,31 +136,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && is
     } else {
         $error = "Please select a photo to upload.";
     }
-}
-
-// ============================================================
-// HANDLE DELETE REQUEST
-// ============================================================
-if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
-    $delete_id = (int)$_GET['delete'];
-    
-    try {
-        $conn = getDBConnection();
-        $stmt = $conn->prepare("UPDATE users SET status = 'deleted' WHERE user_id = ?");
-        $stmt->bind_param("i", $delete_id);
-        
-        if ($stmt->execute()) {
-            $delete_success = true;
-        } else {
-            $error = "Failed to delete resident: " . $stmt->error;
-        }
-        $stmt->close();
-    } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
-    }
-    
-    header('Location: residents.php?msg=deleted');
-    exit();
 }
 
 // ============================================================
