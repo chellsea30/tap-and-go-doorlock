@@ -1,0 +1,58 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Redirect to frontend
+    RewriteRule ^$ frontend/ [L]
+    
+    # Block access to backend directories
+    RewriteRule ^backend/(config|helpers|middleware|models|services)/ - [F,L]
+    
+    # Block access to sensitive files
+    <FilesMatch "\.(env|json|yml|yaml|log|sql)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+    
+    # Protect .htaccess file
+    <Files .htaccess>
+        Order allow,deny
+        Deny from all
+    </Files>
+</IfModule>
+
+# Enable CORS for API
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-API-Key"
+</IfModule>
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# PHP Settings
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+</IfModule>
+
+# Protect admin, staff, student directories
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Redirect root to index
+    RewriteRule ^$ index.php [L]
+    
+    # Block direct access to includes
+    RewriteRule ^frontend/includes/ - [F,L]
+    
+    # Block access to backend
+    RewriteRule ^backend/(config|helpers|middleware|models|services)/ - [F,L]
+</IfModule>

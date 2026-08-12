@@ -1,0 +1,10 @@
+{
+    "intelephense.diagnostics.docblock": false,
+    "intelephense.diagnostics.unknownSymbols": false,
+    "intelephense.diagnostics.typeErrors": false,
+    "intelephense.files.maxSize": 5000000,
+    "intelephense.telemetry.enabled": false,
+    "intelephense.diagnostics.missingReturnType": false,
+    "intelephense.diagnostics.missingParamType": false,
+    "php.suggest.basic": false
+}

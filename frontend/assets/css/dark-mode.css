@@ -1,0 +1,871 @@
+/* ============================================================
+   PREVENT FLASH/BLINK - Apply immediately
+   ============================================================ */
+
+/* These styles apply immediately when dark-mode class is present */
+html.dark-mode,
+html.dark-mode body {
+    background: #0f0f1a !important;
+    color: #e0e0e0 !important;
+}
+
+html.dark-mode .navbar {
+    background: linear-gradient(135deg, #0a0a1a, #1a1a3e) !important;
+}
+
+html.dark-mode .sidebar {
+    background: #1a1a2e !important;
+}
+
+html.dark-mode .card,
+html.dark-mode .stat-card,
+html.dark-mode .form-section,
+html.dark-mode .settings-content {
+    background: #1a1a2e !important;
+    border-color: #2a2a4a !important;
+    color: #e0e0e0 !important;
+}
+
+html.dark-mode .form-control {
+    background: #22223a !important;
+    border-color: #2a2a4a !important;
+    color: #e0e0e0 !important;
+}
+
+html.dark-mode .table {
+    color: #e0e0e0 !important;
+}
+
+html.dark-mode .table thead th {
+    background: #22223a !important;
+    color: #b0b0c0 !important;
+}
+
+/**
+ * Tap-and-Go Doorlock - Global Dark Mode
+ * COMPLETE FIX - No white elements
+ */
+
+/* ============================================================
+   BASE DARK MODE
+   ============================================================ */
+body.dark-mode {
+    background: #0f0f1a !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .container-fluid,
+body.dark-mode main,
+body.dark-mode .row {
+    background: transparent !important;
+}
+
+/* ============================================================
+   CARDS & CONTAINERS - FIX WHITE BACKGROUNDS
+   ============================================================ */
+body.dark-mode .card,
+body.dark-mode .stat-card,
+body.dark-mode .resident-card,
+body.dark-mode .visitor-card,
+body.dark-mode .form-section,
+body.dark-mode .report-section,
+body.dark-mode .settings-content,
+body.dark-mode .settings-sidebar,
+body.dark-mode .pagination-container,
+body.dark-mode .modal-content,
+body.dark-mode .print-section,
+body.dark-mode .card-body,
+body.dark-mode .card-header {
+    background: #1a1a2e !important;
+    border-color: #2a2a4a !important;
+    color: #e0e0e0 !important;
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Remove white background from specific elements */
+body.dark-mode .bg-white,
+body.dark-mode .bg-light {
+    background: #1a1a2e !important;
+}
+
+/* ============================================================
+   NAVBAR - FIX WHITE DROPDOWN
+   ============================================================ */
+body.dark-mode .navbar {
+    background: linear-gradient(135deg, #0a0a1a, #1a1a3e) !important;
+    border-bottom: 1px solid #2a2a4a !important;
+}
+
+body.dark-mode .navbar .navbar-brand {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .navbar .nav-link {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+body.dark-mode .navbar .nav-link:hover {
+    color: white !important;
+}
+
+/* Fix dropdown in dark mode */
+body.dark-mode .navbar .dropdown-menu {
+    background: #1a1a2e !important;
+    border: 1px solid #2a2a4a !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-mode .navbar .dropdown-item {
+    color: #b0b0c0 !important;
+    background: transparent !important;
+}
+
+body.dark-mode .navbar .dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: white !important;
+}
+
+body.dark-mode .navbar .dropdown-divider {
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .navbar .dropdown-toggle {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* ============================================================
+   SIDEBAR - FIX WHITE BACKGROUND
+   ============================================================ */
+body.dark-mode .sidebar {
+    background: #1a1a2e !important;
+    border-right: 1px solid #2a2a4a !important;
+}
+
+body.dark-mode .sidebar .nav-link {
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .sidebar .nav-link:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: #8b5cf6 !important;
+}
+
+body.dark-mode .sidebar .nav-link.active {
+    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+    color: white !important;
+}
+
+body.dark-mode .sidebar .nav-link[data-bs-toggle="collapse"]:not(.collapsed) {
+    background: rgba(102, 126, 234, 0.15) !important;
+    color: #8b5cf6 !important;
+}
+
+body.dark-mode .sidebar .nav .nav .nav-link {
+    color: #9090a0 !important;
+}
+
+body.dark-mode .sidebar .nav .nav .nav-link:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: #8b5cf6 !important;
+}
+
+body.dark-mode .sidebar .nav .nav .nav-link.active {
+    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+    color: white !important;
+}
+
+body.dark-mode .sidebar-footer {
+    border-top-color: #2a2a4a !important;
+}
+
+body.dark-mode .sidebar-footer .small {
+    color: #707080 !important;
+}
+
+/* ============================================================
+   TABLES - FIX WHITE BACKGROUND
+   ============================================================ */
+body.dark-mode .table {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .table thead th {
+    background: #22223a !important;
+    color: #b0b0c0 !important;
+    border-bottom-color: #2a2a4a !important;
+}
+
+body.dark-mode .table td,
+body.dark-mode .table th {
+    border-color: #2a2a4a !important;
+    background: transparent !important;
+}
+
+body.dark-mode .table-hover tbody tr:hover {
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+body.dark-mode .table-striped tbody tr:nth-of-type(odd) {
+    background: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* ============================================================
+   FORMS - FIX WHITE BACKGROUND
+   ============================================================ */
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+    background: #22223a !important;
+    border-color: #2a2a4a !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus {
+    background: #2a2a4a !important;
+    border-color: #667eea !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15) !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .form-control::placeholder {
+    color: #606070 !important;
+}
+
+body.dark-mode .form-label {
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .input-group-text {
+    background: #22223a !important;
+    border-color: #2a2a4a !important;
+    color: #707080 !important;
+}
+
+body.dark-mode .form-check-label {
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .form-check-input {
+    background-color: #22223a !important;
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .form-check-input:checked {
+    background-color: #667eea !important;
+    border-color: #667eea !important;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+body.dark-mode .btn-outline-secondary {
+    border-color: #2a2a4a !important;
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .btn-outline-secondary:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: #4a4a6a !important;
+}
+
+body.dark-mode .btn-outline-primary {
+    border-color: #667eea !important;
+    color: #8b5cf6 !important;
+}
+
+body.dark-mode .btn-outline-primary:hover {
+    background: rgba(102, 126, 234, 0.15) !important;
+}
+
+/* ============================================================
+   ALERTS - FIX WHITE BACKGROUND
+   ============================================================ */
+body.dark-mode .alert-success {
+    background: rgba(16, 185, 129, 0.15) !important;
+    border-color: rgba(16, 185, 129, 0.2) !important;
+    color: #6ee7b7 !important;
+}
+
+body.dark-mode .alert-danger {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.2) !important;
+    color: #fca5a5 !important;
+}
+
+body.dark-mode .alert-info {
+    background: rgba(59, 130, 246, 0.15) !important;
+    border-color: rgba(59, 130, 246, 0.2) !important;
+    color: #93c5fd !important;
+}
+
+body.dark-mode .alert-warning {
+    background: rgba(251, 191, 36, 0.15) !important;
+    border-color: rgba(251, 191, 36, 0.2) !important;
+    color: #fcd34d !important;
+}
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+body.dark-mode .badge {
+    background: #2a2a4a !important;
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .badge.bg-success {
+    background: #10b981 !important;
+    color: white !important;
+}
+
+body.dark-mode .badge.bg-danger {
+    background: #ef4444 !important;
+    color: white !important;
+}
+
+body.dark-mode .badge.bg-warning {
+    background: #f59e0b !important;
+    color: #1a1a2e !important;
+}
+
+body.dark-mode .badge.bg-info {
+    background: #3b82f6 !important;
+    color: white !important;
+}
+
+body.dark-mode .badge.bg-primary {
+    background: #667eea !important;
+    color: white !important;
+}
+
+body.dark-mode .badge.bg-secondary {
+    background: #2a2a4a !important;
+    color: #b0b0c0 !important;
+}
+
+/* ============================================================
+   SETTINGS PAGE
+   ============================================================ */
+body.dark-mode .settings-sidebar .nav-link {
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .settings-sidebar .nav-link:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: #8b5cf6 !important;
+}
+
+body.dark-mode .settings-sidebar .nav-link.active {
+    background: rgba(102, 126, 234, 0.15) !important;
+    color: #8b5cf6 !important;
+    border-left-color: #667eea !important;
+}
+
+body.dark-mode .settings-content h4 {
+    color: #e0e0e0 !important;
+    border-bottom-color: #ffd700 !important;
+}
+
+body.dark-mode .setting-item {
+    border-bottom-color: #2a2a4a !important;
+}
+
+body.dark-mode .setting-item .setting-info h6 {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .setting-item .setting-info p {
+    color: #9090a0 !important;
+}
+
+body.dark-mode .twofa-setup {
+    background: #15152a !important;
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .qr-placeholder {
+    background: #2a2a4a !important;
+    color: #606070 !important;
+}
+
+body.dark-mode .language-option {
+    border-color: #2a2a4a !important;
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .language-option:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: #667eea !important;
+}
+
+body.dark-mode .language-option.active {
+    background: rgba(102, 126, 234, 0.15) !important;
+    border-color: #667eea !important;
+}
+
+body.dark-mode .export-card {
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .export-card:hover {
+    border-color: #667eea !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+}
+
+body.dark-mode .export-card i {
+    color: #8b5cf6 !important;
+}
+
+/* ============================================================
+   PAGINATION
+   ============================================================ */
+body.dark-mode .pagination .page-link {
+    background: #1a1a2e !important;
+    color: #b0b0c0 !important;
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .pagination .page-link:hover {
+    background: #2a2a4a !important;
+    color: #8b5cf6 !important;
+}
+
+body.dark-mode .pagination .page-item.active .page-link {
+    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+    color: white !important;
+}
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+body.dark-mode .modal-content {
+    background: #1a1a2e !important;
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .modal-header {
+    border-bottom-color: #2a2a4a !important;
+}
+
+body.dark-mode .modal-footer {
+    border-top-color: #2a2a4a !important;
+}
+
+body.dark-mode .modal-title {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .btn-close {
+    filter: invert(1);
+}
+
+/* ============================================================
+   SYSTEM INFO - FIX WHITE BACKGROUNDS
+   ============================================================ */
+body.dark-mode .border {
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .border-rounded {
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .p-3.border.rounded {
+    background: #1a1a2e !important;
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .p-3.border.rounded h6 {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .p-3.border.rounded .text-muted {
+    color: #808090 !important;
+}
+
+body.dark-mode .p-3.border.rounded strong {
+    color: #e0e0e0 !important;
+}
+
+/* ============================================================
+   TEXT COLORS
+   ============================================================ */
+body.dark-mode .text-muted {
+    color: #808090 !important;
+}
+
+body.dark-mode .text-dark {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .text-success {
+    color: #6ee7b7 !important;
+}
+
+body.dark-mode .text-danger {
+    color: #fca5a5 !important;
+}
+
+body.dark-mode .text-warning {
+    color: #fcd34d !important;
+}
+
+body.dark-mode .text-primary {
+    color: #93c5fd !important;
+}
+
+body.dark-mode .text-secondary {
+    color: #9090a0 !important;
+}
+
+/* ============================================================
+   PROFILE PAGE
+   ============================================================ */
+body.dark-mode .profile-header {
+    background: linear-gradient(135deg, #0a1628, #1a3a6a) !important;
+}
+
+body.dark-mode .profile-avatar {
+    border-color: #ffd700 !important;
+}
+
+body.dark-mode .stat-box {
+    background: #15152a !important;
+}
+
+body.dark-mode .stat-box .number {
+    color: #8b5cf6 !important;
+}
+
+body.dark-mode .stat-box .label {
+    color: #707080 !important;
+}
+
+body.dark-mode .info-item {
+    border-bottom-color: #2a2a4a !important;
+}
+
+body.dark-mode .info-label {
+    color: #808090 !important;
+}
+
+body.dark-mode .info-value {
+    color: #e0e0e0 !important;
+}
+
+/* ============================================================
+   VISITOR CARDS
+   ============================================================ */
+body.dark-mode .visitor-card {
+    border-left-color: #667eea !important;
+}
+
+body.dark-mode .visitor-card.checked-in {
+    border-left-color: #10b981 !important;
+}
+
+body.dark-mode .visitor-card.checked-out {
+    border-left-color: #6b7280 !important;
+    opacity: 0.7;
+}
+
+body.dark-mode .visitor-card.pending {
+    border-left-color: #f59e0b !important;
+}
+
+/* ============================================================
+   RESIDENT CARDS
+   ============================================================ */
+body.dark-mode .resident-card {
+    border-left-color: #667eea !important;
+}
+
+body.dark-mode .resident-avatar {
+    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+}
+
+body.dark-mode .resident-info h5 {
+    color: #e0e0e0 !important;
+}
+
+/* ============================================================
+   DROPDOWN - FIX WHITE BACKGROUND
+   ============================================================ */
+body.dark-mode .dropdown-menu {
+    background: #1a1a2e !important;
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .dropdown-item {
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: white !important;
+}
+
+body.dark-mode .dropdown-divider {
+    border-color: #2a2a4a !important;
+}
+
+/* ============================================================
+   PROGRESS BAR
+   ============================================================ */
+body.dark-mode .progress {
+    background: #2a2a4a !important;
+}
+
+/* ============================================================
+   TOGGLE SWITCH
+   ============================================================ */
+body.dark-mode .toggle-slider {
+    background: #2a2a4a !important;
+}
+
+body.dark-mode .toggle-switch input:checked + .toggle-slider {
+    background: #667eea !important;
+}
+
+/* ============================================================
+   BORDERS & DIVIDERS
+   ============================================================ */
+body.dark-mode .border-bottom {
+    border-bottom-color: #2a2a4a !important;
+}
+
+body.dark-mode .border-top {
+    border-top-color: #2a2a4a !important;
+}
+
+body.dark-mode .border {
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode hr {
+    border-color: #2a2a4a !important;
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+body.dark-mode ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+body.dark-mode ::-webkit-scrollbar-track {
+    background: #1a1a2e !important;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: #2a2a4a !important;
+    border-radius: 4px !important;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: #3a3a5a !important;
+}
+
+/* ============================================================
+   LOGIN PAGE
+   ============================================================ */
+body.dark-mode .login-card {
+    background: rgba(26, 26, 46, 0.9) !important;
+    border-color: #2a2a4a !important;
+}
+
+body.dark-mode .login-card .form-control {
+    background: #22223a !important;
+    border-color: #2a2a4a !important;
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .login-card .form-control:focus {
+    background: #2a2a4a !important;
+    border-color: #667eea !important;
+}
+
+body.dark-mode .login-card .form-label {
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .login-card .input-group-text {
+    background: #22223a !important;
+    border-color: #2a2a4a !important;
+    color: #707080 !important;
+}
+
+/* ============================================================
+   PRINT - Keep original colors for print
+   ============================================================ */
+@media print {
+    body.dark-mode {
+        background: white !important;
+        color: black !important;
+    }
+    body.dark-mode .card,
+    body.dark-mode .form-section,
+    body.dark-mode .report-section {
+        background: white !important;
+        border-color: #ddd !important;
+        color: black !important;
+    }
+    body.dark-mode .navbar,
+    body.dark-mode .sidebar {
+        display: none !important;
+    }
+}
+/* ============================================================
+   FIX: BLACK TEXT IN DARK MODE
+   ============================================================ */
+
+/* Force text color in dark mode */
+body.dark-mode {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode * {
+    color: inherit;
+}
+
+/* Fix table text */
+body.dark-mode .table {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .table td,
+body.dark-mode .table th {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .table thead th {
+    color: #b0b0c0 !important;
+}
+
+body.dark-mode .table tbody tr {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .table tbody td {
+    color: #e0e0e0 !important;
+}
+
+/* Fix form labels */
+body.dark-mode .form-label {
+    color: #b0b0c0 !important;
+}
+
+/* Fix badges */
+body.dark-mode .badge {
+    color: inherit !important;
+}
+
+body.dark-mode .badge.bg-success {
+    color: white !important;
+}
+
+body.dark-mode .badge.bg-primary {
+    color: white !important;
+}
+
+body.dark-mode .badge.bg-secondary {
+    color: white !important;
+}
+
+body.dark-mode .badge.bg-warning {
+    color: #1a1a2e !important;
+}
+
+/* Fix small text */
+body.dark-mode .text-muted {
+    color: #808090 !important;
+}
+
+body.dark-mode .small {
+    color: #808090 !important;
+}
+
+/* Fix table-email specific */
+body.dark-mode .table-email td,
+body.dark-mode .table-email th {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .table-email tbody tr:hover {
+    background: rgba(255,255,255,0.03) !important;
+}
+
+/* Fix card text */
+body.dark-mode .card,
+body.dark-mode .card-body,
+body.dark-mode .card-header {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .card-header h5 {
+    color: #e0e0e0 !important;
+}
+
+/* Fix stat labels */
+body.dark-mode .stat-label {
+    color: #808090 !important;
+}
+
+/* Fix nav tabs */
+body.dark-mode .nav-tabs .nav-link {
+    color: #9090a0 !important;
+}
+
+body.dark-mode .nav-tabs .nav-link.active {
+    color: #93c5fd !important;
+}
+
+/* Fix edit button */
+body.dark-mode .edit-btn {
+    color: #fcd34d !important;
+}
+
+body.dark-mode .edit-btn:hover {
+    color: #fde68a !important;
+}
+
+/* Fix all text colors */
+body.dark-mode h1,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode h5,
+body.dark-mode h6,
+body.dark-mode p,
+body.dark-mode span,
+body.dark-mode div,
+body.dark-mode strong,
+body.dark-mode b,
+body.dark-mode label,
+body.dark-mode .h1,
+body.dark-mode .h2,
+body.dark-mode .h3,
+body.dark-mode .h4,
+body.dark-mode .h5,
+body.dark-mode .h6 {
+    color: #e0e0e0 !important;
+}
+
+/* Fix specific page elements */
+body.dark-mode .form-section {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .form-section h5 {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .staff-count,
+body.dark-mode .resident-count {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .staff-avatar,
+body.dark-mode .resident-avatar {
+    color: white !important;
+}
