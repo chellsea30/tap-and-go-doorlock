@@ -296,17 +296,19 @@ $formData = $_POST ?? [];
         .sidebar-footer .text-muted { color: #606070 !important; font-size: 11px !important; }
         
         /* ============================================================
-           PAGE WRAPPER - FLEX LAYOUT
+           PAGE WRAPPER - FLEX LAYOUT (FIXED FOR FOOTER)
            ============================================================ */
         .page-wrapper {
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            overflow: hidden;
         }
         
         .content-wrapper {
             display: flex;
             flex: 1;
+            overflow: hidden; /* Prevents scrollbar on wrapper */
         }
         
         /* ============================================================
@@ -317,24 +319,30 @@ $formData = $_POST ?? [];
             margin-top: 56px !important;
             padding: 15px 25px !important;
             flex: 1;
-            min-height: calc(100vh - 56px - 50px) !important;
+            height: calc(100vh - 56px - 50px) !important;
+            overflow-y: auto !important; /* Allows scrolling inside main content only */
             background: #0a0e1a !important;
         }
         
         /* ============================================================
-           FOOTER - STICKY BOTTOM
+           FOOTER - STICKY BOTTOM (FIXED)
            ============================================================ */
         .footer {
             margin-left: 220px !important;
-            padding: 10px 25px !important;
+            padding: 12px 25px !important;
             background: #0d1528 !important;
             border-top: 1px solid #1a2a4a !important;
-            color: #606070 !important;
-            font-size: 12px !important;
+            color: #8a8a9a !important;
+            font-size: 13px !important;
             text-align: center !important;
-            flex-shrink: 0;
-            width: calc(100% - 220px) !important;
+            flex-shrink: 0 !important;
+            height: 50px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            letter-spacing: 0.5px !important;
         }
+        .footer span { color: #ffd700 !important; }
         
         /* ============================================================
            FORM SECTION
@@ -426,14 +434,14 @@ $formData = $_POST ?? [];
         }
         
         /* ============================================================
-           HEADER TITLE
+           HEADER TITLE (REMOVED BORDER TO FIX YELLOW LINE)
            ============================================================ */
         .header-title {
             background: linear-gradient(135deg, #0a1628, #1a2a4a) !important;
             padding: 15px 25px;
             border-radius: 12px 12px 0 0;
             margin: -20px -25px 16px -25px;
-            border-bottom: 1px solid #1e2a3a;
+            border-bottom: none !important; /* FIX: Removed border line */
         }
         
         .header-title h4 {
@@ -586,12 +594,13 @@ $formData = $_POST ?? [];
             .main-content {
                 margin-left: 0 !important;
                 padding: 12px 15px !important;
-                min-height: calc(100vh - 56px - 40px) !important;
+                height: calc(100vh - 56px - 40px) !important;
             }
             .footer {
                 margin-left: 0 !important;
                 padding: 8px 15px !important;
                 width: 100% !important;
+                height: 40px !important;
             }
             .form-section { padding: 15px; }
             .header-title { padding: 12px 15px; margin: -15px -15px 15px -15px; }
@@ -641,7 +650,7 @@ $formData = $_POST ?? [];
             .footer { display: none !important; }
             .navbar { display: none !important; }
             .sidebar { display: none !important; }
-            .main-content { margin: 0 !important; padding: 20px !important; }
+            .main-content { margin: 0 !important; padding: 20px !important; height: auto !important; overflow: visible !important;}
         }
     </style>
 </head>
@@ -795,4 +804,223 @@ $formData = $_POST ?? [];
                                     <input type="text" class="form-control" name="school_address" placeholder="School address" value="<?php echo htmlspecialchars($formData['school_address'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label">Cultural Origin</
+                                    <label class="form-label">Cultural Origin</label>
+                                    <input type="text" class="form-control" name="cultural_origin" placeholder="e.g., Ilocano" value="<?php echo htmlspecialchars($formData['cultural_origin'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Religion</label>
+                                    <input type="text" class="form-control" name="religion" placeholder="Religion" value="<?php echo htmlspecialchars($formData['religion'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Dialect Spoken</label>
+                                    <input type="text" class="form-control" name="dialect" placeholder="Dialect" value="<?php echo htmlspecialchars($formData['dialect'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">CP No.</label>
+                                    <input type="text" class="form-control" name="cp_no" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($formData['cp_no'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Complete Home Address</label>
+                                    <input type="text" class="form-control" name="home_address" placeholder="House number, Street, Barangay" value="<?php echo htmlspecialchars($formData['home_address'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Civil Status</label>
+                                    <select class="form-select" name="civil_status">
+                                        <option value="">Select</option>
+                                        <option value="Married" <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Married') ? 'selected' : ''; ?>>Married</option>
+                                        <option value="Single" <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Single') ? 'selected' : ''; ?>>Single</option>
+                                        <option value="Separated" <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Separated') ? 'selected' : ''; ?>>Separated</option>
+                                        <option value="Abandoned" <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Abandoned') ? 'selected' : ''; ?>>Abandoned</option>
+                                        <option value="Live-in" <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Live-in') ? 'selected' : ''; ?>>Live-in</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PARENT/GUARDIAN INFORMATION -->
+                        <div class="form-section">
+                            <h5><i class="fas fa-users me-2"></i>Parent / Guardian Information</h5>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">Father's Education</label>
+                                    <input type="text" class="form-control" name="father_education" placeholder="e.g., College Graduate" value="<?php echo htmlspecialchars($formData['father_education'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Mother's Education</label>
+                                    <input type="text" class="form-control" name="mother_education" placeholder="e.g., High School Grad" value="<?php echo htmlspecialchars($formData['mother_education'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Father's Occupation</label>
+                                    <input type="text" class="form-control" name="father_occupation" placeholder="Occupation" value="<?php echo htmlspecialchars($formData['father_occupation'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Mother's Occupation</label>
+                                    <input type="text" class="form-control" name="mother_occupation" placeholder="Occupation" value="<?php echo htmlspecialchars($formData['mother_occupation'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">Parent's Marital Status</label>
+                                    <div class="d-flex flex-wrap gap-2 pt-1">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="parents_marital_status" value="Living Together" id="livingTogether" <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Living Together') ? 'checked' : ''; ?>>
+                                            <label class="form-check-label" for="livingTogether">Living Together</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="parents_marital_status" value="Separated" id="separated" <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Separated') ? 'checked' : ''; ?>>
+                                            <label class="form-check-label" for="separated">Separated</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="parents_marital_status" value="Abandoned" id="abandoned" <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Abandoned') ? 'checked' : ''; ?>>
+                                            <label class="form-check-label" for="abandoned">Abandoned</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="parents_marital_status" value="Mother with Other Family" id="motherOther" <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Mother with Other Family') ? 'checked' : ''; ?>>
+                                            <label class="form-check-label" for="motherOther">Mother with Other</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="parents_marital_status" value="Father with Other Family" id="fatherOther" <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Father with Other Family') ? 'checked' : ''; ?>>
+                                            <label class="form-check-label" for="fatherOther">Father with Other</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- EMERGENCY CONTACT -->
+                        <div class="form-section">
+                            <h5><i class="fas fa-phone-alt me-2"></i>Emergency Contact</h5>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">Name <span class="required">*</span></label>
+                                    <input type="text" class="form-control" name="emergency_name" placeholder="Full name" value="<?php echo htmlspecialchars($formData['emergency_name'] ?? ''); ?>" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Relationship <span class="required">*</span></label>
+                                    <input type="text" class="form-control" name="emergency_relationship" placeholder="e.g., Mother, Father" value="<?php echo htmlspecialchars($formData['emergency_relationship'] ?? ''); ?>" required>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Address <span class="required">*</span></label>
+                                    <input type="text" class="form-control" name="emergency_address" placeholder="Complete address" value="<?php echo htmlspecialchars($formData['emergency_address'] ?? ''); ?>" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Contact No. <span class="required">*</span></label>
+                                    <input type="text" class="form-control" name="emergency_contact" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($formData['emergency_contact'] ?? ''); ?>" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- BOARDING HISTORY -->
+                        <div class="form-section">
+                            <h5><i class="fas fa-home me-2"></i>Boarding History</h5>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">Length of Stay in Former Boarding House</label>
+                                    <input type="text" class="form-control" name="former_boarding_years" placeholder="e.g., 2 years" value="<?php echo htmlspecialchars($formData['former_boarding_years'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">Plan to Transfer After This Semester?</label>
+                                    <div class="d-flex gap-3 pt-1">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="plan_transfer" value="Yes" id="planYes" <?php echo (isset($formData['plan_transfer']) && $formData['plan_transfer'] == 'Yes') ? 'checked' : ''; ?>>
+                                            <label class="form-check-label" for="planYes">Yes</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="plan_transfer" value="No" id="planNo" <?php echo (isset($formData['plan_transfer']) && $formData['plan_transfer'] == 'No') ? 'checked' : ''; ?>>
+                                            <label class="form-check-label" for="planNo">No</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6" id="planYesDiv" style="display:none;">
+                                    <label class="form-label">Why, If Yes?</label>
+                                    <input type="text" class="form-control" name="plan_transfer_yes" placeholder="Reason for transferring" value="<?php echo htmlspecialchars($formData['plan_transfer_yes'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-6" id="planNoDiv" style="display:none;">
+                                    <label class="form-label">Why, If No?</label>
+                                    <input type="text" class="form-control" name="plan_transfer_no" placeholder="Reason for staying" value="<?php echo htmlspecialchars($formData['plan_transfer_no'] ?? ''); ?>">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SUBMIT BUTTONS -->
+                        <div class="text-center mb-2 no-print">
+                            <button type="submit" name="submit" class="btn btn-submit">
+                                <i class="fas fa-save me-2"></i> Register Resident
+                            </button>
+                            <button type="reset" class="btn btn-outline-secondary ms-2" onclick="resetForm()">
+                                <i class="fas fa-undo me-1"></i> Reset
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+                
+            </main>
+        </div>
+        
+        <!-- ============================================================
+        FOOTER - STICKY BOTTOM (FIXED)
+        ============================================================ -->
+        <footer class="footer">
+            &copy; <?php echo date('Y'); ?> <span>Tap-and-Go Doorlock</span> System &bull; ISU-Echague Dormitory. All rights reserved.
+        </footer>
+    </div>
+
+  
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ============================================================
+        // TOGGLE PLAN TRANSFER FIELDS
+        // ============================================================
+        document.querySelectorAll('input[name="plan_transfer"]').forEach(function(el) {
+            el.addEventListener('change', function() {
+                if (this.value === 'Yes') {
+                    document.getElementById('planYesDiv').style.display = 'block';
+                    document.getElementById('planNoDiv').style.display = 'none';
+                } else if (this.value === 'No') {
+                    document.getElementById('planYesDiv').style.display = 'none';
+                    document.getElementById('planNoDiv').style.display = 'block';
+                }
+            });
+        });
+
+        // ============================================================
+        // AUTO-CALCULATE AGE
+        // ============================================================
+        document.querySelector('input[name="birth_date"]').addEventListener('change', function() {
+            if (this.value) {
+                const birthDate = new Date(this.value);
+                const today = new Date();
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                if (age > 0) {
+                    document.querySelector('input[name="age"]').value = age;
+                }
+            }
+        });
+
+        // ============================================================
+        // RESET FORM
+        // ============================================================
+        function resetForm() {
+            document.getElementById('residentForm').reset();
+            document.getElementById('planYesDiv').style.display = 'none';
+            document.getElementById('planNoDiv').style.display = 'none';
+        }
+
+        // ============================================================
+        // AUTO-FOCUS ON FIRST FIELD
+        // ============================================================
+        document.querySelector('input[name="full_name"]').focus();
+        
+        // ============================================================
+        // SIDEBAR TOGGLE (mobile)
+        // ============================================================
+        function toggleSidebar() {
+            document.querySelector('.sidebar')?.classList.toggle('show');
+        }
+    </script>
+</body>
+</html>
