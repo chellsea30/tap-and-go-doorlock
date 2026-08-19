@@ -520,6 +520,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     $show_puzzle = true;
     $puzzle_user_id = $_SESSION['puzzle_user_id'] ?? 0;
     $puzzle_user_type = $_SESSION['puzzle_user_type'] ?? '';
+    // FIX: Explicitly set email and name from session to prevent "undefined array key"
     $puzzle_email = $_SESSION['puzzle_email'] ?? '';
     $puzzle_name = $_SESSION['puzzle_name'] ?? '';
 }
@@ -955,13 +956,14 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 <div class="puzzle-header">
                     <h4><i class="fas fa-calculator me-2" style="color: #ffd700;"></i>Solve the Math Puzzle</h4>
                     <p>Please solve this simple addition problem to continue</p>
-                    <p class="user-email"><i class="fas fa-user me-1"></i> <?php echo htmlspecialchars($puzzle_name); ?> (<?php echo htmlspecialchars($puzzle_email); ?>)</p>
+                    <!-- FIX: Add default value '' to prevent htmlspecialchars(null) and undefined key errors -->
+                    <p class="user-email"><i class="fas fa-user me-1"></i> <?php echo htmlspecialchars($puzzle_name ?? ''); ?> (<?php echo htmlspecialchars($puzzle_email ?? ''); ?>)</p>
                 </div>
 
                 <form method="POST" action="" id="puzzleForm">
                     <input type="hidden" name="user_id" value="<?php echo $puzzle_user_id; ?>">
                     <input type="hidden" name="user_type" value="<?php echo $puzzle_user_type; ?>">
-                    <input type="hidden" name="email" value="<?php echo htmlspecialchars($puzzle_email); ?>">
+                    <input type="hidden" name="email" value="<?php echo htmlspecialchars($puzzle_email ?? ''); ?>">
                     <input type="hidden" name="question" value="<?php echo htmlspecialchars($puzzle_data['question'] ?? $_SESSION['puzzle_question'] ?? ''); ?>">
                     <input type="hidden" name="correct_answer" value="<?php echo $puzzle_data['answer'] ?? $_SESSION['puzzle_answer'] ?? 0; ?>">
                     
