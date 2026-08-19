@@ -16,7 +16,7 @@
 // These will be automatically set by Railway
 define('DB_HOST', getenv('DB_HOST') ?: 'mysql.railway.internal');
 define('DB_USER', getenv('DB_USER') ?: 'root');
-define('DB_PASS', getenv('DB_PASSWORD') ?: 'uQcMTaYnsOvpMlVctbUHUtgBkAaryBWa');
+define('DB_PASSWORD', getenv('DB_PASSWORD') ?: 'uQcMTaYnsOvpMlVctbUHUtgBkAaryBWa');
 define('DB_NAME', getenv('DB_NAME') ?: 'tap_and_go_db');
 
 // Database connection settings
