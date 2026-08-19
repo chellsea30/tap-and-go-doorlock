@@ -1,9 +1,9 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Register Visitor with RFID
- * COMPLETE VERSION - With Visitor Details
- * PURE DARK MODE - FIXED LAYOUT SAME AS DASHBOARD
- * WITH AUTO-EXPIRATION SYSTEM
+ * WITH AES-256-CBC ENCRYPTION
+ * COMPLETE ENCRYPTED VERSION
+ * PURE DARK MODE
  */
 
 session_start();
@@ -17,7 +17,7 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
 }
-// Include header
+
 include '../includes/header.php'; 
 $conn = getDBConnection();
 $error = '';
@@ -58,7 +58,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET AVAILABLE RFID CARDS (Only active and not expired)
+// GET AVAILABLE RFID CARDS
 // ============================================================
 $availableCards = [];
 $result = $conn->query("
@@ -77,7 +77,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET CARDS EXPIRING SOON (for display)
+// GET CARDS EXPIRING SOON
 // ============================================================
 $expiringSoonCards = [];
 $result = $conn->query("
@@ -96,7 +96,7 @@ if ($result) {
 }
 
 // ============================================================
-// HANDLE VISITOR REGISTRATION
+// HANDLE VISITOR REGISTRATION WITH ENCRYPTION
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) {
     $visitor_name = trim($_POST['visitor_name'] ?? '');
@@ -118,6 +118,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
             if (!empty($validity_start) && $duration_days > 0) {
                 $validity_end = date('Y-m-d', strtotime($validity_start . " + $duration_days days"));
             }
+            
+            // ============================================================
+            // ENCRYPT SENSITIVE DATA
+            // ============================================================
+            $encrypted_name = encryptData($visitor_name);
+            $encrypted_phone = encryptData($phone);
+            $encrypted_relationship = encryptData($relationship);
+            $encrypted_purpose = encryptData($purpose);
+            
+            // Get resident name for encryption
+            $residentName = '';
+            foreach ($residentsList as $r) {
+                if ($r['user_id'] == $resident_visited) {
+                    $residentName = $r['full_name'];
+                    break;
+                }
+            }
+            $encrypted_resident = encryptData($residentName);
             
             if (!empty($card_uid)) {
                 $check = $conn->prepare("
@@ -160,6 +178,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
                     
                     $expiry_date = $card_expiry ?? $validity_end;
                     
+                    // ============================================================
+                    // UPDATE RFID CARD WITH ENCRYPTED DATA
+                    // ============================================================
                     $stmt = $conn->prepare("
                         UPDATE rfid_cards 
                         SET user_id = ?, 
@@ -167,17 +188,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
                             visitor_phone = ?, 
                             resident_visited = ?, 
                             purpose_of_visit = ?,
-                            expiry_date = ?
+                            expiry_date = ?,
+                            is_encrypted = 1
                         WHERE card_uid = ?
                     ");
-                    $stmt->bind_param("ississ", 
+                    $stmt->bind_param("ississs", 
                         $resident_visited, 
-                        $visitor_name, 
-                        $phone, 
+                        $encrypted_name, 
+                        $encrypted_phone, 
                         $resident_visited, 
-                        $purpose,
+                        $encrypted_purpose,
                         $expiry_date,
                         $card_uid
+                    );
+                    $stmt->execute();
+                    $stmt->close();
+                    
+                    // ============================================================
+                    // SAVE ENCRYPTED VISITOR DATA TO SEPARATE TABLE
+                    // ============================================================
+                    $stmt = $conn->prepare("
+                        INSERT INTO encrypted_visitor_data (
+                            card_uid,
+                            visitor_name_enc,
+                            phone_enc,
+                            relationship_enc,
+                            purpose_enc,
+                            resident_visited_enc,
+                            validity_start,
+                            validity_end,
+                            created_by,
+                            ip_address
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+                    $stmt->bind_param("ssssssssis",
+                        $card_uid,
+                        $encrypted_name,
+                        $encrypted_phone,
+                        $encrypted_relationship,
+                        $encrypted_purpose,
+                        $encrypted_resident,
+                        $validity_start,
+                        $validity_end,
+                        $_SESSION['admin_id'],
+                        $ip
                     );
                     $stmt->execute();
                     $stmt->close();
@@ -187,6 +242,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
             if (empty($error)) {
                 $card_uid_value = !empty($card_uid) ? $card_uid : NULL;
                 
+                // ============================================================
+                // SAVE ENCRYPTED TO VISITOR LOGS
+                // ============================================================
                 $stmt = $conn->prepare("
                     INSERT INTO visitor_logs (
                         visitor_name, 
@@ -202,11 +260,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
                 ");
                 $stmt->bind_param("sssissss", 
-                    $visitor_name, 
-                    $phone, 
-                    $relationship, 
+                    $encrypted_name, 
+                    $encrypted_phone, 
+                    $encrypted_relationship, 
                     $resident_visited, 
-                    $purpose, 
+                    $encrypted_purpose, 
                     $card_uid_value, 
                     $validity_start, 
                     $validity_end
@@ -214,9 +272,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
                 
                 if ($stmt->execute()) {
                     $conn->commit();
-                    $success = "✅ Visitor registered successfully!";
-                    logAudit($_SESSION['admin_id'], 'Register Visitor', "Registered visitor: $visitor_name");
+                    $success = "✅ Visitor registered successfully with AES-256 encryption!";
+                    logAudit($_SESSION['admin_id'], 'Register Visitor', "Registered encrypted visitor: $visitor_name");
                     
+                    // Refresh available cards
                     $availableCards = [];
                     $result = $conn->query("
                         SELECT card_uid 
@@ -265,8 +324,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_rfid_card'])
             $error = 'Card UID already exists.';
         } else {
             $stmt = $conn->prepare("
-                INSERT INTO rfid_cards (card_uid, user_id, card_type, status, issued_date, expiry_date)
-                VALUES (?, NULL, ?, 'active', CURDATE(), ?)
+                INSERT INTO rfid_cards (card_uid, user_id, card_type, status, issued_date, expiry_date, is_encrypted)
+                VALUES (?, NULL, ?, 'active', CURDATE(), ?, 1)
             ");
             $stmt->bind_param("sss", $card_uid, $card_type, $expiry_date);
             if ($stmt->execute()) {
@@ -328,6 +387,13 @@ if (isset($_GET['activate']) && !empty($_GET['activate'])) {
 
 if (isset($_GET['delete']) && !empty($_GET['delete'])) {
     $card_uid = $_GET['delete'];
+    
+    // Delete encrypted data first
+    $stmt = $conn->prepare("DELETE FROM encrypted_visitor_data WHERE card_uid = ?");
+    $stmt->bind_param("s", $card_uid);
+    $stmt->execute();
+    $stmt->close();
+    
     $stmt = $conn->prepare("DELETE FROM rfid_cards WHERE card_uid = ?");
     $stmt->bind_param("s", $card_uid);
     if ($stmt->execute()) {
@@ -340,7 +406,7 @@ if (isset($_GET['delete']) && !empty($_GET['delete'])) {
 }
 
 // ============================================================
-// GET VISITOR CARDS WITH PAGINATION
+// GET VISITOR CARDS WITH DECRYPTION
 // ============================================================
 $visitorCards = [];
 
@@ -368,8 +434,17 @@ $result = $conn->query("
     ORDER BY c.created_at DESC
     LIMIT $perPage OFFSET $offset
 ");
+
 if ($result) {
     while ($row = $result->fetch_assoc()) {
+        // ============================================================
+        // DECRYPT SENSITIVE DATA FOR DISPLAY
+        // ============================================================
+        if ($row['is_encrypted'] == 1) {
+            $row['visitor_name'] = decryptData($row['visitor_name'] ?? '');
+            $row['visitor_phone'] = decryptData($row['visitor_phone'] ?? '');
+            $row['purpose_of_visit'] = decryptData($row['purpose_of_visit'] ?? '');
+        }
         $visitorCards[] = $row;
     }
 }
@@ -381,7 +456,8 @@ $stats = [
     'available_cards' => count($availableCards),
     'total_residents' => count($residentsList),
     'expired_visitors' => 0,
-    'expiring_soon' => 0
+    'expiring_soon' => 0,
+    'encrypted_visitors' => 0
 ];
 
 $result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs");
@@ -415,6 +491,16 @@ $result = $conn->query("
 if ($result && $row = $result->fetch_assoc()) {
     $stats['expiring_soon'] = (int)$row['count'];
 }
+
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM rfid_cards 
+    WHERE card_type = 'visitor' 
+    AND is_encrypted = 1
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['encrypted_visitors'] = (int)$row['count'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -428,7 +514,7 @@ if ($result && $row = $result->fetch_assoc()) {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
         /* ============================================================
-           GLOBAL DARK THEME - SAME AS DASHBOARD
+           GLOBAL DARK THEME
            ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -440,21 +526,9 @@ if ($result && $row = $result->fetch_assoc()) {
             padding-top: 70px !important;
         }
         
-        /* ============================================================
-           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
-           ============================================================ */
-        .container-fluid {
-            padding-top: 10px !important;
-        }
+        .container-fluid { padding-top: 10px !important; }
+        main { padding-top: 10px !important; margin-top: 0 !important; }
         
-        main {
-            padding-top: 10px !important;
-            margin-top: 0 !important;
-        }
-        
-        /* ============================================================
-           DARK NAVBAR OVERRIDE - SAME AS DASHBOARD
-           ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -470,9 +544,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           DARK SIDEBAR - SAME AS DASHBOARD
-           ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
@@ -493,9 +564,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           DARK STAT CARDS - SAME AS DASHBOARD
-           ============================================================ */
         .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -530,9 +598,6 @@ if ($result && $row = $result->fetch_assoc()) {
             100% { transform: scale(1); }
         }
         
-        /* ============================================================
-           DARK FORM SECTIONS
-           ============================================================ */
         .form-section {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -574,9 +639,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .text-danger { color: #f87171 !important; }
         .text-success { color: #34d399 !important; }
         
-        /* ============================================================
-           DARK BUTTONS
-           ============================================================ */
         .btn-submit {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             border: none !important;
@@ -617,14 +679,6 @@ if ($result && $row = $result->fetch_assoc()) {
             background: #2a2a4a !important;
             color: #e0e0e0 !important;
         }
-        .btn-outline-primary {
-            border-color: #1a3a6a !important;
-            color: #93c5fd !important;
-        }
-        .btn-outline-primary:hover {
-            background: #1a3a6a !important;
-            color: white !important;
-        }
         .btn-warning {
             background: #4a3a1a !important;
             color: #fbbf24 !important;
@@ -645,9 +699,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .btn-danger:hover { background: #8a3a3a !important; color: #fca5a5 !important; }
         .btn-sm { font-size: 12px !important; padding: 4px 10px !important; }
         
-        /* ============================================================
-           DARK CARD ITEMS
-           ============================================================ */
         .card-item {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -662,14 +713,8 @@ if ($result && $row = $result->fetch_assoc()) {
             transform: translateX(4px);
             box-shadow: 0 8px 25px rgba(0,0,0,0.4) !important;
         }
-        .card-item.deactivated {
-            border-left-color: #6b7280 !important;
-            opacity: 0.7;
-        }
-        .card-item.expired {
-            border-left-color: #ef4444 !important;
-            background: #1a0a0a !important;
-        }
+        .card-item.deactivated { border-left-color: #6b7280 !important; opacity: 0.7; }
+        .card-item.expired { border-left-color: #ef4444 !important; background: #1a0a0a !important; }
         .card-item .uid {
             font-family: monospace;
             font-weight: 700;
@@ -689,9 +734,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .card-item .badge-danger { background: #7a2a2a !important; color: #f87171 !important; }
         .card-item .badge-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
         
-        /* ============================================================
-           DARK AVAILABLE CARDS
-           ============================================================ */
         .available-card-item {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -718,9 +760,18 @@ if ($result && $row = $result->fetch_assoc()) {
             color: #808090 !important;
         }
         
-        /* ============================================================
-           DARK ALERTS
-           ============================================================ */
+        .encryption-badge {
+            background: #1a3a6a !important;
+            color: #93c5fd !important;
+            border: 1px solid #2a5a9a !important;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+        .encryption-badge i {
+            margin-right: 4px;
+        }
+        
         .alert-success {
             background: #065f46 !important;
             border-color: #065f46 !important;
@@ -736,11 +787,7 @@ if ($result && $row = $result->fetch_assoc()) {
             border-color: #4a3a1a !important;
             color: #fbbf24 !important;
         }
-        .alert .btn-close { filter: invert(1) !important; }
         
-        /* ============================================================
-           PAGINATION - SAME AS DASHBOARD
-           ============================================================ */
         .pagination-container {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -774,23 +821,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .page-info { color: #808090 !important; font-size: 14px; }
         .page-info strong { color: #93c5fd !important; }
         
-        .per-page-selector select {
-            background: #1a1a2e !important;
-            border: 1px solid #2a2a4a !important;
-            color: #e0e0e0 !important;
-            border-radius: 8px;
-            padding: 4px 8px;
-            font-size: 13px;
-        }
-        .per-page-selector select:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
-        }
-        .per-page-selector label { color: #808090 !important; font-size: 13px; margin: 0; }
-        
-        /* ============================================================
-           BORDER & MISC
-           ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
         
@@ -809,18 +839,9 @@ if ($result && $row = $result->fetch_assoc()) {
             100% { opacity: 1; transform: scale(1); }
         }
         
-        /* ============================================================
-           RESPONSIVE - SAME AS DASHBOARD
-           ============================================================ */
         @media (max-width: 768px) {
-            body {
-                padding-top: 60px !important;
-            }
-            
-            .navbar {
-                height: 60px !important;
-            }
-            
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
@@ -833,39 +854,10 @@ if ($result && $row = $result->fetch_assoc()) {
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            
             .form-section { padding: 20px; }
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
             .stat-icon { width: 40px; height: 40px; font-size: 16px; }
-            
-            .pagination-container .row {
-                flex-direction: column;
-                gap: 10px;
-            }
-            .pagination-container .col-md-6 {
-                width: 100%;
-                text-align: center !important;
-            }
-            .pagination {
-                justify-content: center !important;
-            }
-        }
-        
-        @media (max-width: 576px) {
-            .form-section .row .col-md-4,
-            .form-section .row .col-md-6,
-            .form-section .row .col-md-12 {
-                margin-bottom: 8px;
-            }
-            .card-item .d-flex {
-                flex-direction: column;
-                gap: 8px;
-            }
-            .card-item .d-flex .d-flex.flex-column {
-                flex-direction: row !important;
-                flex-wrap: wrap;
-            }
         }
     </style>
 </head>
@@ -879,13 +871,14 @@ if ($result && $row = $result->fetch_assoc()) {
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 
-                <!-- ============================================================
-                HEADER - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- HEADER -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-user-plus me-2" style="color: #1a3a6a;"></i>
                         Register Visitor
+                        <span class="encryption-badge ms-2">
+                            <i class="fas fa-lock"></i> AES-256 Encrypted
+                        </span>
                         <?php if ($stats['pending'] > 0): ?>
                             <span class="badge bg-warning ms-2"><?php echo $stats['pending']; ?> pending</span>
                         <?php endif; ?>
@@ -915,9 +908,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                EXPIRING SOON NOTIFICATION
-                ============================================================ -->
+                <!-- EXPIRING SOON NOTIFICATION -->
                 <?php if (!empty($expiringSoonCards)): ?>
                     <div class="alert alert-warning alert-dismissible fade show" role="alert">
                         <i class="fas fa-clock me-2"></i>
@@ -933,9 +924,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                STATS CARDS - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- STATS CARDS -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-4 col-xl-2">
                         <div class="stat-card">
@@ -955,9 +944,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                 </div>
                                 <div class="stat-label">Pending</div>
                             </div>
-                            <?php if ($stats['pending'] > 0): ?>
-                                <span class="badge bg-warning pulse-badge" style="position:absolute; top:8px; right:8px;"><?php echo $stats['pending']; ?></span>
-                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="col-6 col-sm-4 col-xl-2">
@@ -969,9 +955,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                 </div>
                                 <div class="stat-label">Available Cards</div>
                             </div>
-                            <?php if ($stats['available_cards'] == 0): ?>
-                                <span class="badge bg-danger pulse-badge" style="position:absolute; top:8px; right:8px;">⚠️</span>
-                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="col-6 col-sm-4 col-xl-2">
@@ -985,18 +968,15 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                     <div class="col-6 col-sm-4 col-xl-2">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: <?php echo $stats['expired_visitors'] > 0 ? '#ef4444' : '#6b7280'; ?>;">
-                                <i class="fas fa-hourglass-end"></i>
+                            <div class="stat-icon" style="background: <?php echo $stats['encrypted_visitors'] > 0 ? '#10b981' : '#6b7280'; ?>;">
+                                <i class="fas fa-lock"></i>
                             </div>
                             <div>
-                                <div class="stat-number <?php echo $stats['expired_visitors'] > 0 ? 'text-danger' : ''; ?>">
-                                    <?php echo $stats['expired_visitors']; ?>
+                                <div class="stat-number <?php echo $stats['encrypted_visitors'] > 0 ? 'text-success' : ''; ?>">
+                                    <?php echo $stats['encrypted_visitors']; ?>
                                 </div>
-                                <div class="stat-label">Expired Cards</div>
+                                <div class="stat-label">Encrypted</div>
                             </div>
-                            <?php if ($stats['expired_visitors'] > 0): ?>
-                                <span class="badge bg-danger pulse-badge" style="position:absolute; top:8px; right:8px;">⚠️</span>
-                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="col-6 col-sm-4 col-xl-2">
@@ -1010,18 +990,18 @@ if ($result && $row = $result->fetch_assoc()) {
                                 </div>
                                 <div class="stat-label">Expiring Soon</div>
                             </div>
-                            <?php if ($stats['expiring_soon'] > 0): ?>
-                                <span class="badge bg-warning pulse-badge" style="position:absolute; top:8px; right:8px;">⏰</span>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
 
-                <!-- ============================================================
-                REGISTER VISITOR FORM
-                ============================================================ -->
+                <!-- REGISTER VISITOR FORM -->
                 <div class="form-section">
-                    <h5><i class="fas fa-user-plus me-2"></i>Visitor Registration</h5>
+                    <h5>
+                        <i class="fas fa-user-plus me-2"></i>Visitor Registration
+                        <span class="encryption-badge ms-2">
+                            <i class="fas fa-lock me-1"></i> AES-256 Encrypted
+                        </span>
+                    </h5>
                     
                     <form method="POST" action="">
                         <div class="row g-3">
@@ -1030,8 +1010,8 @@ if ($result && $row = $result->fetch_assoc()) {
                                 <input type="text" class="form-control" name="visitor_name" placeholder="Full name" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Phone</label>
-                                <input type="text" class="form-control" name="phone" placeholder="09XXXXXXXXX">
+                                <label class="form-label">Phone <span class="required">*</span></label>
+                                <input type="text" class="form-control" name="phone" placeholder="09XXXXXXXXX" required>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Resident to Visit <span class="required">*</span></label>
@@ -1076,14 +1056,16 @@ if ($result && $row = $result->fetch_assoc()) {
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <small class="text-muted">Assign an available visitor RFID card (non-expired)</small>
+                                <small class="text-muted">
+                                    <i class="fas fa-lock me-1"></i> All visitor data will be encrypted at rest (AES-256)
+                                </small>
                                 <?php if (empty($availableCards)): ?>
                                     <br><small class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i> No available cards. Register a new card below.</small>
                                 <?php endif; ?>
                             </div>
                             <div class="col-md-12">
                                 <button type="submit" name="register_visitor" class="btn btn-submit" <?php echo empty($availableCards) ? 'disabled' : ''; ?>>
-                                    <i class="fas fa-save me-1"></i> Register Visitor
+                                    <i class="fas fa-lock me-1"></i> Register Visitor (Encrypted)
                                 </button>
                                 <?php if (empty($availableCards)): ?>
                                     <span class="text-muted ms-2"><i class="fas fa-info-circle me-1"></i> Register a card first</span>
@@ -1093,9 +1075,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </form>
                 </div>
 
-                <!-- ============================================================
-                REGISTER RFID CARD
-                ============================================================ -->
+                <!-- REGISTER RFID CARD -->
                 <div class="form-section">
                     <h5><i class="fas fa-id-card me-2"></i>Register Visitor RFID Card</h5>
                     <p class="text-muted">Register a new RFID card for visitors</p>
@@ -1126,9 +1106,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </form>
                 </div>
 
-                <!-- ============================================================
-                AVAILABLE RFID CARDS
-                ============================================================ -->
+                <!-- AVAILABLE RFID CARDS -->
                 <div class="form-section">
                     <h5><i class="fas fa-list me-2"></i>Available Visitor RFID Cards</h5>
                     
@@ -1165,11 +1143,14 @@ if ($result && $row = $result->fetch_assoc()) {
                     <?php endif; ?>
                 </div>
 
-                <!-- ============================================================
-                REGISTERED VISITOR CARDS WITH PAGINATION
-                ============================================================ -->
+                <!-- REGISTERED VISITOR CARDS -->
                 <div class="form-section">
-                    <h5><i class="fas fa-list me-2"></i>Registered Visitor Cards</h5>
+                    <h5>
+                        <i class="fas fa-list me-2"></i>Registered Visitor Cards
+                        <span class="encryption-badge ms-2">
+                            <i class="fas fa-lock me-1"></i> Encrypted
+                        </span>
+                    </h5>
                     
                     <?php if (empty($visitorCards)): ?>
                         <p class="text-muted text-center py-3">No visitor cards registered yet</p>
@@ -1187,11 +1168,24 @@ if ($result && $row = $result->fetch_assoc()) {
                                     <div class="card-item <?php echo $card['status'] != 'active' ? $card['status'] : ''; ?>">
                                         <div class="d-flex justify-content-between align-items-start">
                                             <div>
-                                                <div class="uid"><?php echo htmlspecialchars($card['card_uid']); ?></div>
+                                                <div class="uid">
+                                                    <?php echo htmlspecialchars($card['card_uid']); ?>
+                                                    <?php if ($card['is_encrypted'] == 1): ?>
+                                                        <span class="encryption-badge ms-1" style="font-size: 8px;">
+                                                            <i class="fas fa-lock"></i>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </div>
                                                 <div class="visitor-detail">
                                                     <i class="fas fa-user me-1"></i>
                                                     <?php echo htmlspecialchars($card['visitor_name'] ?? 'Unassigned'); ?>
                                                 </div>
+                                                <?php if (!empty($card['visitor_phone'])): ?>
+                                                    <div class="visitor-detail">
+                                                        <i class="fas fa-phone me-1"></i>
+                                                        <?php echo htmlspecialchars($card['visitor_phone']); ?>
+                                                    </div>
+                                                <?php endif; ?>
                                                 <?php if (!empty($card['resident_name'])): ?>
                                                     <div class="visitor-detail">
                                                         <i class="fas fa-user me-1"></i>
@@ -1242,7 +1236,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 <?php endif; ?>
                                                 <a href="?delete=<?php echo $card['card_uid']; ?>" 
                                                    class="btn btn-sm btn-danger"
-                                                   onclick="return confirm('Delete this card permanently?')">
+                                                   onclick="return confirm('Delete this card permanently? This will also delete encrypted data.')">
                                                     <i class="fas fa-trash"></i> Delete
                                                 </a>
                                             </div>
@@ -1252,9 +1246,7 @@ if ($result && $row = $result->fetch_assoc()) {
                             <?php endforeach; ?>
                         </div>
                         
-                        <!-- ============================================================
-                        PAGINATION WITH SHOW ENTRIES - SAME AS DASHBOARD
-                        ============================================================ -->
+                        <!-- PAGINATION -->
                         <?php if ($totalPages > 1): ?>
                         <div class="pagination-container">
                             <div class="row align-items-center">
@@ -1330,9 +1322,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     <?php endif; ?>
                 </div>
 
-                <!-- ============================================================
-                FOOTER - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- FOOTER -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
@@ -1341,13 +1331,11 @@ if ($result && $row = $result->fetch_assoc()) {
                     <span>Total: <?php echo $stats['total_visitors']; ?> visitors</span>
                     <span class="mx-2">|</span>
                     <span class="text-success"><i class="fas fa-id-card me-1"></i><?php echo $stats['available_cards']; ?> available</span>
+                    <span class="mx-2">|</span>
+                    <span class="text-info"><i class="fas fa-lock me-1"></i><?php echo $stats['encrypted_visitors']; ?> encrypted</span>
                     <?php if ($stats['expired_visitors'] > 0): ?>
                         <span class="mx-2">|</span>
                         <span class="text-danger"><i class="fas fa-hourglass-end me-1"></i><?php echo $stats['expired_visitors']; ?> expired</span>
-                    <?php endif; ?>
-                    <?php if ($stats['expiring_soon'] > 0): ?>
-                        <span class="mx-2">|</span>
-                        <span class="text-warning"><i class="fas fa-clock me-1"></i><?php echo $stats['expiring_soon']; ?> expiring soon</span>
                     <?php endif; ?>
                 </footer>
             </main>
@@ -1358,9 +1346,6 @@ if ($result && $row = $result->fetch_assoc()) {
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // CHANGE PER PAGE
-        // ============================================================
         function changePerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
@@ -1368,9 +1353,6 @@ if ($result && $row = $result->fetch_assoc()) {
             window.location.href = '?' + urlParams.toString();
         }
         
-        // ============================================================
-        // AUTO-CALCULATE VALIDITY END
-        // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
             const startDateInput = document.querySelector('input[name="validity_start"]');
             const durationInput = document.querySelector('input[name="duration_days"]');
@@ -1399,9 +1381,6 @@ if ($result && $row = $result->fetch_assoc()) {
             updateEndDate();
         });
         
-        // ============================================================
-        // UPDATE TIME - SAME AS DASHBOARD
-        // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
             const timeString = now.toLocaleTimeString('en-US', { 
@@ -1427,9 +1406,6 @@ if ($result && $row = $result->fetch_assoc()) {
         setInterval(updateLastUpdateTime, 10000);
         document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
         
-        // ============================================================
-        // SIDEBAR TOGGLE
-        // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
