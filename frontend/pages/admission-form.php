@@ -142,23 +142,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     );
                 } else {
                     // Insert new admission
+                    // FIX: Added 'room_assignment' with default 'Not Assigned'
                     $stmt = $conn->prepare("
                         INSERT INTO admission_records (
                             user_id, semester_sy, age, birth_date, home_address,
                             school_last, school_address, strand_track, course_taken,
                             year_level_old, former_bh, former_address,
                             guardian_name, guardian_contact,
-                            student_signature, status, created_at
+                            student_signature, status, room_assignment, created_at
                         ) VALUES (
                             ?, ?, ?, ?, ?,
                             ?, ?, ?, ?,
                             ?, ?, ?,
                             ?, ?,
-                            ?, ?, NOW()
+                            ?, ?, ?, NOW()
                         )
                     ");
                     $stmt->bind_param(
-                        "isississssssssss",
+                        "isississsssssssss",
                         $user_id,
                         $data['semester_sy'],
                         $data['age'],
@@ -174,8 +175,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                         $data['guardian_name'],
                         $data['guardian_contact'],
                         $data['student_signature'],
-                        $data['status']
+                        $data['status'],
+                        $room_assignment // FIX: Passed a default value
                     );
+                    
+                    // Since room_assignment is not in the form, we set it here
+                    $room_assignment = 'Not Assigned';
                 }
             } else {
                 // Create new user and admission
@@ -192,23 +197,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 $stmt->close();
                 
                 // Insert admission
+                // FIX: Added 'room_assignment' with default 'Not Assigned'
                 $stmt = $conn->prepare("
                     INSERT INTO admission_records (
                         user_id, semester_sy, age, birth_date, home_address,
                         school_last, school_address, strand_track, course_taken,
                         year_level_old, former_bh, former_address,
                         guardian_name, guardian_contact,
-                        student_signature, status, created_at
+                        student_signature, status, room_assignment, created_at
                     ) VALUES (
                         ?, ?, ?, ?, ?,
                         ?, ?, ?, ?,
                         ?, ?, ?,
                         ?, ?,
-                        ?, ?, NOW()
+                        ?, ?, ?, NOW()
                     )
                 ");
+                $room_assignment = 'Not Assigned'; // FIX: Default value
                 $stmt->bind_param(
-                    "isississssssssss",
+                    "isississsssssssss",
                     $user_id,
                     $data['semester_sy'],
                     $data['age'],
@@ -224,7 +231,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     $data['guardian_name'],
                     $data['guardian_contact'],
                     $data['student_signature'],
-                    $data['status']
+                    $data['status'],
+                    $room_assignment
                 );
             }
             
@@ -918,7 +926,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         </footer>
     </div>
 
-    <?php include '../includes/footer.php'; ?>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
