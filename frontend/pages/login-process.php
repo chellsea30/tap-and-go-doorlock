@@ -2,7 +2,7 @@
 /**
  * Tap-and-Go Doorlock - Login Processor
  * Handles Admin, Staff, and Student Login
- * COMPLETE VERSION
+ * COMPLETE VERSION - UPDATED FOR RAILWAY
  */
 
 session_start();
@@ -46,11 +46,13 @@ try {
                     $_SESSION['full_name'] = $row['full_name'];
                     $_SESSION['role'] = $row['role'];
                     $_SESSION['login_time'] = time();
+                    $_SESSION['user_type'] = 'admin';  // ADD THIS
                     
                     updateLastLogin($row['admin_id']);
                     logAudit($row['admin_id'], 'Login', 'Admin logged in from IP: ' . ($_SERVER['REMOTE_ADDR'] ?? 'Unknown'));
                     
-                    header('Location: dashboard.php');
+                    // CHANGED: Use absolute path
+                    header('Location: /frontend/pages/dashboard.php');
                     exit();
                 } else {
                     $error = 'Invalid password. Please try again.';
@@ -79,10 +81,12 @@ try {
                     $_SESSION['department'] = $row['department'];
                     $_SESSION['role'] = 'staff';
                     $_SESSION['login_time'] = time();
+                    $_SESSION['user_type'] = 'staff';  // ADD THIS
                     
                     logStaffAudit($row['staff_id'], 'Login', 'Staff logged in from IP: ' . ($_SERVER['REMOTE_ADDR'] ?? 'Unknown'));
                     
-                    header('Location: staff/dashboard.php');
+                    // CHANGED: Use absolute path
+                    header('Location: /frontend/pages/staff/dashboard.php');
                     exit();
                 } else {
                     $error = 'Invalid password. Please try again.';
@@ -115,10 +119,12 @@ try {
                     $_SESSION['room_number'] = $row['room_number'];
                     $_SESSION['role'] = 'student';
                     $_SESSION['login_time'] = time();
+                    $_SESSION['user_type'] = 'student';  // ADD THIS
                     
                     logStudentAudit($row['student_id'], 'Login', 'Student logged in from IP: ' . ($_SERVER['REMOTE_ADDR'] ?? 'Unknown'));
                     
-                    header('Location: student/dashboard.php');
+                    // CHANGED: Use absolute path
+                    header('Location: /frontend/pages/student/dashboard.php');
                     exit();
                 } else {
                     $error = 'Invalid password. Please try again.';
@@ -146,13 +152,14 @@ try {
 // ============================================================
 if (!empty($error)) {
     // Determine which login page to redirect to based on role
-    $redirect_page = 'login.php';
+    $redirect_page = '/frontend/pages/login.php';  // CHANGED: Use absolute path
     if ($role === 'staff') {
-        $redirect_page = 'staff/login.php';
+        $redirect_page = '/frontend/pages/staff/login.php';
     } elseif ($role === 'student') {
-        $redirect_page = 'student/login.php';
+        $redirect_page = '/frontend/pages/student/login.php';
     }
     
     header('Location: ' . $redirect_page . '?error=' . urlencode($error));
     exit();
 }
+?>
