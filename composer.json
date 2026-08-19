@@ -3,7 +3,7 @@
     "description": "RFID-Based Access Control System with Real-Time Monitoring",
     "type": "project",
     "require": {
-        "php": ">=7.4",
+        "php": ">=8.0",
         "ext-mysqli": "*",
         "ext-json": "*",
         "phpmailer/phpmailer": "*"
