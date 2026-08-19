@@ -14,13 +14,13 @@
 
 // Database credentials - NOW USING RAILWAY ENVIRONMENT VARIABLES
 // These will be automatically set by Railway
-define('DB_HOST', getenv('MYSQL_HOST') ?: 'mysql.railway.internal');
-define('DB_USER', getenv('MYSQL_USER') ?: 'root');
-define('DB_PASS', getenv('MYSQL_PASSWORD') ?: 'uQcMTaYnsOvpMlVctbUHUtgBkAaryBWa');
-define('DB_NAME', getenv('MYSQL_DATABASE') ?: 'railway');
+define('DB_HOST', getenv('DB_HOST') ?: 'mysql.railway.internal');
+define('DB_USER', getenv('DB_USER') ?: 'root');
+define('DB_PASS', getenv('DB_PASSWORD') ?: 'uQcMTaYnsOvpMlVctbUHUtgBkAaryBWa');
+define('DB_NAME', getenv('DB_DATABASE') ?: 'railway');
 
 // Database connection settings
-define('DB_PORT', getenv('MYSQL_PORT') ?: 3306);
+define('DB_PORT', getenv('DB_PORT') ?: 3306);
 define('DB_CHARSET', 'utf8mb4');
 define('DB_COLLATION', 'utf8mb4_unicode_ci');
 
