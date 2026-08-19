@@ -9,17 +9,18 @@
  */
 
 // ============================================
-// DATABASE CONFIGURATION
+// DATABASE CONFIGURATION - UPDATED FOR RAILWAY
 // ============================================
 
-// Database credentials - UPDATE THESE FOR YOUR ENVIRONMENT
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'tap_and_go_db');
+// Database credentials - NOW USING RAILWAY ENVIRONMENT VARIABLES
+// These will be automatically set by Railway
+define('DB_HOST', getenv('MYSQL_HOST') ?: 'mysql.railway.internal');
+define('DB_USER', getenv('MYSQL_USER') ?: 'root');
+define('DB_PASS', getenv('MYSQL_PASSWORD') ?: 'uQcMTaYnsOvpMlVctbUHUtgBkAaryBWa');
+define('DB_NAME', getenv('MYSQL_DATABASE') ?: 'railway');
 
 // Database connection settings
-define('DB_PORT', 3306);
+define('DB_PORT', getenv('MYSQL_PORT') ?: 3306);
 define('DB_CHARSET', 'utf8mb4');
 define('DB_COLLATION', 'utf8mb4_unicode_ci');
 
@@ -28,8 +29,9 @@ define('DB_COLLATION', 'utf8mb4_unicode_ci');
 // ============================================
 
 define('SITE_NAME', 'Tap-and-Go Doorlock System');
-define('SITE_URL', 'http://10.55.160.156/tap-and-go-doorlock/'); // CHANGE THIS TO YOUR ACTUAL URL
-define('APP_ENV', 'development'); // development, staging, production
+// CHANGE THIS TO YOUR RAILWAY URL AFTER DEPLOYMENT
+define('SITE_URL', getenv('RAILWAY_PUBLIC_DOMAIN') ? 'https://' . getenv('RAILWAY_PUBLIC_DOMAIN') . '/' : 'http://10.55.160.156/tap-and-go-doorlock/');
+define('APP_ENV', getenv('APP_ENV') ?: 'production'); // Changed to production for Railway
 
 // Application paths
 define('BASE_PATH', dirname(dirname(__DIR__)));
@@ -65,7 +67,8 @@ define('CSRF_TOKEN_EXPIRY', 3600); // 1 hour
  * 
  * DO NOT use the default key in production!
  */
-define('ENCRYPTION_KEY', 'tapandgo_secret_key_2024_secure_encryption_32bytes!!');
+// Use Railway environment variable for encryption key, or fallback to default
+define('ENCRYPTION_KEY', getenv('ENCRYPTION_KEY') ?: 'tapandgo_secret_key_2024_secure_encryption_32bytes!!');
 define('ENCRYPTION_METHOD', 'AES-256-CBC');
 
 // Encryption for visitor data
@@ -616,18 +619,17 @@ function isVisitorEncryptionEnabled(): bool {
 // ============================================
 // EMAIL CONFIGURATION - SMTP (GMAIL)
 // ============================================
-// ⚠️ REPLACE WITH YOUR ACTUAL EMAIL AND APP PASSWORD
 
 // SMTP Configuration
 define('SMTP_HOST', 'smtp.gmail.com');
 define('SMTP_PORT', 587);
-define('SMTP_USERNAME', 'albanochellsea30@gmail.com');     // ← YOUR GMAIL
-define('SMTP_PASSWORD', 'djuz tjyz uhvr lfel');             // ← YOUR APP PASSWORD
+define('SMTP_USERNAME', 'albanochellsea30@gmail.com');
+define('SMTP_PASSWORD', 'djuz tjyz uhvr lfel');
 define('SMTP_FROM_EMAIL', 'albanochellsea30@gmail.com');
 define('SMTP_FROM_NAME', 'Tap-and-Go Doorlock System');
 
 // Email settings
-define('EMAIL_ENCRYPTION', 'tls'); // tls, ssl, or none
+define('EMAIL_ENCRYPTION', 'tls');
 define('EMAIL_DEBUG', false);
 
 // ============================================
@@ -642,7 +644,7 @@ define('OTP_MAX_ATTEMPTS', 3);
 // LOGGING CONFIGURATION
 // ============================================
 
-define('LOG_LEVEL', 'info'); // debug, info, warning, error, critical
+define('LOG_LEVEL', 'info');
 define('LOG_ACCESS_ATTEMPTS', true);
 define('LOG_SYSTEM_EVENTS', true);
 define('LOG_ENCRYPTION_EVENTS', true);
