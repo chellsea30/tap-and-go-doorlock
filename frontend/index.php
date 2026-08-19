@@ -14,12 +14,12 @@ if (isset($_SESSION['user_type']) && isset($_SESSION['user_id']) && isSessionVal
         header('Location: pages/student/dashboard.php');
     } else {
         // Fallback
-        header('Location: pages/dashboard.php');
+        header('Location: pages/login.php');
     }
     exit();
 } else {
     // Not logged in, go to login
-    header('Location: pages/login.php');
+    header('Location: pages/dashboard.php');
     exit();
 }
 ?>
