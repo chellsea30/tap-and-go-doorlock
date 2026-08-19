@@ -2,135 +2,228 @@
 /**
  * Encryption Helper - AES-256-CBC
  * For data encryption at rest
+ * 
+ * @package TapAndGo
+ * @version 2.0.0
  */
 
 class EncryptionHelper {
-    private static $encryptionKey = null;
-    private static $cipherMethod = 'AES-256-CBC';
+    /** @var string|null Encryption key */
+    private static ?string $encryptionKey = null;
+    
+    /** @var string Cipher method */
+    private static string $cipherMethod = 'AES-256-CBC';
+    
+    /** @var bool Initialization flag */
+    private static bool $initialized = false;
     
     /**
-     * Get or generate encryption key
+     * Initialize encryption helper
      */
-    private static function getEncryptionKey() {
-        if (self::$encryptionKey === null) {
-            // Try to get from environment or config
-            $configKey = defined('ENCRYPTION_KEY') ? ENCRYPTION_KEY : null;
-            
-            if ($configKey) {
-                self::$encryptionKey = $configKey;
-            } else {
-                // Generate from server fingerprint
-                $serverInfo = $_SERVER['SERVER_NAME'] . $_SERVER['SERVER_ADDR'];
-                $serverInfo .= php_uname('n') . php_uname('s');
-                self::$encryptionKey = hash('sha256', $serverInfo . 'TAP_AND_GO_SECRET_SALT_2026');
-            }
+    private static function initialize(): void {
+        if (self::$initialized) {
+            return;
         }
-        return self::$encryptionKey;
+        
+        // Get encryption key from config or generate
+        if (defined('ENCRYPTION_KEY')) {
+            self::$encryptionKey = ENCRYPTION_KEY;
+        } else {
+            // Generate from server fingerprint
+            $serverInfo = $_SERVER['SERVER_NAME'] ?? '';
+            $serverInfo .= $_SERVER['SERVER_ADDR'] ?? '';
+            $serverInfo .= php_uname('n') . php_uname('s');
+            self::$encryptionKey = hash('sha256', $serverInfo . 'TAP_AND_GO_SECRET_SALT_2026');
+        }
+        
+        if (defined('ENCRYPTION_METHOD')) {
+            self::$cipherMethod = ENCRYPTION_METHOD;
+        }
+        
+        self::$initialized = true;
     }
     
     /**
-     * Encrypt data
+     * Get encryption key
      */
-    public static function encrypt($data) {
+    private static function getEncryptionKey(): string {
+        self::initialize();
+        return self::$encryptionKey ?? 'default_fallback_key_32bytes_long!!';
+    }
+    
+    /**
+     * Get cipher method
+     */
+    private static function getCipherMethod(): string {
+        self::initialize();
+        return self::$cipherMethod;
+    }
+    
+    /**
+     * Encrypt data using AES-256-CBC
+     * 
+     * @param string $data Data to encrypt
+     * @return string Base64 encoded encrypted data
+     */
+    public static function encrypt(string $data): string {
         if (empty($data)) return '';
         
         try {
             $key = self::getEncryptionKey();
-            $ivLength = openssl_cipher_iv_length(self::$cipherMethod);
+            $method = self::getCipherMethod();
+            
+            $ivLength = openssl_cipher_iv_length($method);
             $iv = openssl_random_pseudo_bytes($ivLength);
             
             $encrypted = openssl_encrypt(
                 $data,
-                self::$cipherMethod,
+                $method,
                 $key,
                 OPENSSL_RAW_DATA,
                 $iv
             );
             
-            // Store IV with encrypted data (base64 encoded)
+            if ($encrypted === false) {
+                throw new Exception('Encryption failed');
+            }
+            
             return base64_encode($iv . $encrypted);
+            
         } catch (Exception $e) {
             error_log("Encryption error: " . $e->getMessage());
-            return $data; // Fallback to plaintext
+            return $data;
         }
     }
     
     /**
-     * Decrypt data
+     * Decrypt data using AES-256-CBC
+     * 
+     * @param string $encryptedData Base64 encoded encrypted data
+     * @return string Decrypted data
      */
-    public static function decrypt($encryptedData) {
+    public static function decrypt(string $encryptedData): string {
         if (empty($encryptedData)) return '';
         
         try {
             $key = self::getEncryptionKey();
-            $data = base64_decode($encryptedData);
+            $method = self::getCipherMethod();
             
-            $ivLength = openssl_cipher_iv_length(self::$cipherMethod);
-            $iv = substr($data, 0, $ivLength);
-            $encrypted = substr($data, $ivLength);
+            $decoded = base64_decode($encryptedData);
+            if ($decoded === false) {
+                return $encryptedData;
+            }
+            
+            $ivLength = openssl_cipher_iv_length($method);
+            $iv = substr($decoded, 0, $ivLength);
+            $encrypted = substr($decoded, $ivLength);
             
             $decrypted = openssl_decrypt(
                 $encrypted,
-                self::$cipherMethod,
+                $method,
                 $key,
                 OPENSSL_RAW_DATA,
                 $iv
             );
             
-            return $decrypted !== false ? $decrypted : $encryptedData;
+            if ($decrypted === false) {
+                return $encryptedData;
+            }
+            
+            return $decrypted;
+            
         } catch (Exception $e) {
             error_log("Decryption error: " . $e->getMessage());
-            return $encryptedData; // Fallback to raw data
+            return $encryptedData;
         }
     }
     
     /**
-     * Encrypt array of data
+     * Check if data is encrypted
+     * 
+     * @param string $data Data to check
+     * @return bool True if data appears encrypted
      */
-    public static function encryptArray($dataArray) {
-        $encrypted = [];
-        foreach ($dataArray as $key => $value) {
-            if (is_string($value)) {
-                $encrypted[$key] = self::encrypt($value);
-            } else {
-                $encrypted[$key] = $value;
-            }
-        }
-        return $encrypted;
+    public static function isEncrypted(string $data): bool {
+        if (empty($data)) return false;
+        if (strlen($data) < 24) return false;
+        
+        $decoded = base64_decode($data, true);
+        if ($decoded === false) return false;
+        
+        $ivLength = openssl_cipher_iv_length(self::getCipherMethod());
+        if (strlen($decoded) < $ivLength + 16) return false;
+        
+        return true;
     }
     
     /**
-     * Decrypt array of data
+     * Encrypt visitor data array
+     * 
+     * @param array $data Visitor data
+     * @return array Encrypted visitor data
      */
-    public static function decryptArray($dataArray) {
-        $decrypted = [];
-        foreach ($dataArray as $key => $value) {
-            if (is_string($value) && !empty($value)) {
-                $decrypted[$key] = self::decrypt($value);
+    public static function encryptVisitorArray(array $data): array {
+        $fields = [
+            'visitor_name', 'visitor_phone', 'phone', 'relationship',
+            'purpose_of_visit', 'purpose', 'resident_visited_name',
+            'resident_name', 'contact_number', 'email'
+        ];
+        
+        $result = [];
+        foreach ($data as $key => $value) {
+            if (is_string($value) && in_array($key, $fields) && !empty($value)) {
+                $result[$key] = self::encrypt($value);
             } else {
-                $decrypted[$key] = $value;
+                $result[$key] = $value;
             }
         }
-        return $decrypted;
+        return $result;
+    }
+    
+    /**
+     * Decrypt visitor data array
+     * 
+     * @param array $data Encrypted visitor data
+     * @return array Decrypted visitor data
+     */
+    public static function decryptVisitorArray(array $data): array {
+        $fields = [
+            'visitor_name', 'visitor_phone', 'phone', 'relationship',
+            'purpose_of_visit', 'purpose', 'resident_visited_name',
+            'resident_name', 'contact_number', 'email'
+        ];
+        
+        $result = [];
+        foreach ($data as $key => $value) {
+            if (is_string($value) && in_array($key, $fields) && !empty($value)) {
+                $result[$key] = self::decrypt($value);
+            } else {
+                $result[$key] = $value;
+            }
+        }
+        return $result;
     }
 }
 
-// ============================================================
-// SPECIFIC VISITOR ENCRYPTION FUNCTIONS
-// ============================================================
-
-function encryptVisitorData($data) {
+/**
+ * Global encryption functions for easy use
+ */
+function encryptData(string $data): string {
     return EncryptionHelper::encrypt($data);
 }
 
-function decryptVisitorData($data) {
+function decryptData(string $data): string {
     return EncryptionHelper::decrypt($data);
 }
 
-function encryptVisitorArray($data) {
-    return EncryptionHelper::encryptArray($data);
+function encryptVisitorData(array $data): array {
+    return EncryptionHelper::encryptVisitorArray($data);
 }
 
-function decryptVisitorArray($data) {
-    return EncryptionHelper::decryptArray($data);
+function decryptVisitorData(array $data): array {
+    return EncryptionHelper::decryptVisitorArray($data);
+}
+
+function isDataEncrypted(string $data): bool {
+    return EncryptionHelper::isEncrypted($data);
 }
