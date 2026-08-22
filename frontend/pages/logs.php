@@ -1,25 +1,23 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Access Logs / Attendance
- * COMPLETE - With same layout as dashboard.php
- * PURE DARK MODE - Fixed navbar, sidebar, footer
+ * FIXED VERSION
  */
 
 session_start();
 
 // ============================================================
-// FIXED: CORRECT FILE PATHS FOR ADMIN
+// FIXED: CORRECT AUTHENTICATION CHECK
 // ============================================================
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
 
-// Check authentication
-if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
-    if (!isset($_SESSION['staff_id']) || !isStaffSessionValid()) {
-        header('Location: login.php');
-        exit();
-    }
+// Check authentication - FIXED for all user types
+if (!isset($_SESSION['user_type']) || !isset($_SESSION['user_id']) || !isSessionValid()) {
+    header('Location: login.php');
+    exit();
 }
+
 // Include header
 include '../includes/header.php'; 
 $conn = getDBConnection();
@@ -35,13 +33,77 @@ if (!in_array($perPage, $perPageOptions)) {
 }
 
 // Get filters
-$dateFilter = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
+$dateFilter = isset($_GET['date']) ? $_GET['date'] : '';
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 $typeFilter = isset($_GET['type']) ? $_GET['type'] : '';
 $searchFilter = isset($_GET['search']) ? trim($_GET['search']) : '';
 
 // ============================================================
-// GET ALERT LOGS (Like Dashboard)
+// GET ALL ACCESS LOGS - FIXED
+// ============================================================
+$allLogs = [];
+$countQuery = "SELECT COUNT(*) as total FROM access_logs WHERE 1=1";
+$query = "
+    SELECT 
+        al.*,
+        c.card_uid,
+        c.card_type,
+        c.visitor_name,
+        c.purpose_of_visit,
+        c.resident_visited,
+        u.full_name as user_name,
+        u.room_number,
+        u.student_id,
+        ru.full_name as resident_visited_name
+    FROM access_logs al
+    LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
+    LEFT JOIN users u ON c.user_id = u.user_id
+    LEFT JOIN users ru ON c.resident_visited = ru.user_id
+    WHERE 1=1
+";
+
+// Apply filters
+if (!empty($dateFilter)) {
+    $query .= " AND DATE(al.timestamp) = '$dateFilter'";
+    $countQuery .= " AND DATE(timestamp) = '$dateFilter'";
+}
+if (!empty($statusFilter)) {
+    $query .= " AND al.access_status = '$statusFilter'";
+    $countQuery .= " AND access_status = '$statusFilter'";
+}
+if (!empty($typeFilter)) {
+    $query .= " AND al.access_type = '$typeFilter'";
+    $countQuery .= " AND access_type = '$typeFilter'";
+}
+if (!empty($searchFilter)) {
+    $query .= " AND (al.card_uid LIKE '%$searchFilter%' OR u.full_name LIKE '%$searchFilter%' OR c.visitor_name LIKE '%$searchFilter%')";
+    $countQuery .= " AND (card_uid LIKE '%$searchFilter%')";
+}
+
+// Get total count
+$countResult = $conn->query($countQuery);
+$totalLogs = 0;
+if ($countResult && $row = $countResult->fetch_assoc()) {
+    $totalLogs = (int)$row['total'];
+}
+
+$totalPages = ceil($totalLogs / $perPage);
+if ($totalPages < 1) $totalPages = 1;
+if ($page > $totalPages) $page = $totalPages;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $perPage;
+
+$query .= " ORDER BY al.timestamp DESC LIMIT $perPage OFFSET $offset";
+
+$result = $conn->query($query);
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $allLogs[] = $row;
+    }
+}
+
+// ============================================================
+// GET ALERT LOGS
 // ============================================================
 $alertLogs = [];
 $alertQuery = "
@@ -63,15 +125,11 @@ $alertQuery = "
 if (!empty($dateFilter)) {
     $alertQuery .= " AND DATE(alog.timestamp) = '$dateFilter'";
 }
-if (!empty($statusFilter)) {
+if (!empty($statusFilter) && ($statusFilter == 'pending' || $statusFilter == 'resolved')) {
     $alertQuery .= " AND alog.delivery_status = '$statusFilter'";
 }
 if (!empty($searchFilter)) {
-    $alertQuery .= " AND (
-        alog.card_uid LIKE '%$searchFilter%' 
-        OR alog.user_name LIKE '%$searchFilter%'
-        OR alog.reason LIKE '%$searchFilter%'
-    )";
+    $alertQuery .= " AND (alog.card_uid LIKE '%$searchFilter%' OR alog.user_name LIKE '%$searchFilter%')";
 }
 
 $alertQuery .= " ORDER BY 
@@ -92,168 +150,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET RESIDENT ACCESS LOGS WITH COUNT
-// ============================================================
-$residentLogs = [];
-$residentCountQuery = "
-    SELECT COUNT(*) as total
-    FROM access_logs al
-    LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
-    LEFT JOIN users u ON c.user_id = u.user_id
-    LEFT JOIN users ru ON c.resident_visited = ru.user_id
-    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE (c.card_type = 'resident' OR c.card_type = 'staff' OR c.card_type IS NULL)
-";
-
-if (!empty($dateFilter)) {
-    $residentCountQuery .= " AND DATE(al.timestamp) = '$dateFilter'";
-}
-if (!empty($statusFilter)) {
-    $residentCountQuery .= " AND al.access_status = '$statusFilter'";
-}
-if (!empty($typeFilter)) {
-    $residentCountQuery .= " AND al.access_type = '$typeFilter'";
-}
-if (!empty($searchFilter)) {
-    $residentCountQuery .= " AND (u.full_name LIKE '%$searchFilter%' OR al.card_uid LIKE '%$searchFilter%')";
-}
-
-$countResult = $conn->query($residentCountQuery);
-$residentTotal = 0;
-if ($countResult && $row = $countResult->fetch_assoc()) {
-    $residentTotal = (int)$row['total'];
-}
-
-$residentPages = ceil($residentTotal / $perPage);
-if ($residentPages < 1) $residentPages = 1;
-if ($page > $residentPages) $page = $residentPages;
-if ($page < 1) $page = 1;
-$offset = ($page - 1) * $perPage;
-
-$residentQuery = "
-    SELECT 
-        al.*,
-        c.card_uid,
-        c.card_type,
-        c.visitor_name,
-        c.purpose_of_visit,
-        c.resident_visited,
-        u.full_name as user_name,
-        u.room_number,
-        u.student_id,
-        rp.course,
-        rp.year_level,
-        ru.full_name as resident_visited_name
-    FROM access_logs al
-    LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
-    LEFT JOIN users u ON c.user_id = u.user_id
-    LEFT JOIN users ru ON c.resident_visited = ru.user_id
-    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE (c.card_type = 'resident' OR c.card_type = 'staff' OR c.card_type IS NULL)
-";
-
-if (!empty($dateFilter)) {
-    $residentQuery .= " AND DATE(al.timestamp) = '$dateFilter'";
-}
-if (!empty($statusFilter)) {
-    $residentQuery .= " AND al.access_status = '$statusFilter'";
-}
-if (!empty($typeFilter)) {
-    $residentQuery .= " AND al.access_type = '$typeFilter'";
-}
-if (!empty($searchFilter)) {
-    $residentQuery .= " AND (u.full_name LIKE '%$searchFilter%' OR al.card_uid LIKE '%$searchFilter%')";
-}
-
-$residentQuery .= " ORDER BY al.timestamp DESC LIMIT $perPage OFFSET $offset";
-
-$result = $conn->query($residentQuery);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $residentLogs[] = $row;
-    }
-}
-
-// ============================================================
-// GET VISITOR ACCESS LOGS
-// ============================================================
-$visitorLogs = [];
-$visitorQuery = "
-    SELECT 
-        al.*,
-        c.card_uid,
-        c.card_type,
-        c.visitor_name,
-        c.purpose_of_visit,
-        c.resident_visited,
-        ru.full_name as resident_visited_name,
-        ru.room_number as resident_room,
-        vl.validity_end
-    FROM access_logs al
-    LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
-    LEFT JOIN users ru ON c.resident_visited = ru.user_id
-    LEFT JOIN visitor_logs vl ON c.card_uid = vl.temporary_card_uid
-    WHERE c.card_type = 'visitor'
-";
-
-if (!empty($dateFilter)) {
-    $visitorQuery .= " AND DATE(al.timestamp) = '$dateFilter'";
-}
-if (!empty($statusFilter)) {
-    $visitorQuery .= " AND al.access_status = '$statusFilter'";
-}
-if (!empty($typeFilter)) {
-    $visitorQuery .= " AND al.access_type = '$typeFilter'";
-}
-if (!empty($searchFilter)) {
-    $visitorQuery .= " AND (c.visitor_name LIKE '%$searchFilter%' OR al.card_uid LIKE '%$searchFilter%')";
-}
-
-$visitorQuery .= " ORDER BY al.timestamp DESC LIMIT 500";
-
-$result = $conn->query($visitorQuery);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $visitorLogs[] = $row;
-    }
-}
-
-// ============================================================
-// GET UNAUTHORIZED ACCESS LOGS (DENIED)
-// ============================================================
-$unauthorizedLogs = [];
-$unauthorizedQuery = "
-    SELECT 
-        al.*,
-        c.card_uid,
-        c.card_type,
-        c.visitor_name,
-        u.full_name as user_name,
-        u.room_number
-    FROM access_logs al
-    LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
-    LEFT JOIN users u ON c.user_id = u.user_id
-    WHERE al.access_status = 'denied'
-";
-
-if (!empty($dateFilter)) {
-    $unauthorizedQuery .= " AND DATE(al.timestamp) = '$dateFilter'";
-}
-if (!empty($searchFilter)) {
-    $unauthorizedQuery .= " AND (al.card_uid LIKE '%$searchFilter%' OR u.full_name LIKE '%$searchFilter%')";
-}
-
-$unauthorizedQuery .= " ORDER BY al.timestamp DESC LIMIT 100";
-
-$result = $conn->query($unauthorizedQuery);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $unauthorizedLogs[] = $row;
-    }
-}
-
-// ============================================================
-// GET STATS - WITH UNAUTHORIZED TOTAL COUNT
+// GET STATS
 // ============================================================
 $stats = [
     'total' => 0,
@@ -306,6 +203,11 @@ if ($result && $row = $result->fetch_assoc()) {
     $stats['unauthorized_today'] = (int)$row['count'];
 }
 
+$result = $conn->query("SELECT COUNT(*) as count FROM access_logs WHERE access_status = 'denied'");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['unauthorized_total'] = (int)$row['count'];
+}
+
 $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM access_logs al
@@ -350,13 +252,8 @@ if ($result && $row = $result->fetch_assoc()) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
-        /* ============================================================
-           GLOBAL DARK THEME - SAME AS DASHBOARD
-           ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
         body {
             font-family: 'Inter', sans-serif;
             background: #0a0e1a !important;
@@ -364,22 +261,9 @@ if ($result && $row = $result->fetch_assoc()) {
             min-height: 100vh;
             padding-top: 70px !important;
         }
+        .container-fluid { padding-top: 10px !important; }
+        main { padding-top: 10px !important; margin-top: 0 !important; }
         
-        /* ============================================================
-           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
-           ============================================================ */
-        .container-fluid {
-            padding-top: 10px !important;
-        }
-        
-        main {
-            padding-top: 10px !important;
-            margin-top: 0 !important;
-        }
-        
-        /* ============================================================
-           DARK NAVBAR OVERRIDE - SAME AS DASHBOARD
-           ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -395,32 +279,18 @@ if ($result && $row = $result->fetch_assoc()) {
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           DARK SIDEBAR - SAME AS DASHBOARD
-           ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
             padding-top: 80px !important;
             min-height: calc(100vh - 70px) !important;
         }
-        .sidebar .nav-link {
-            color: #9090a0 !important;
-        }
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.05) !important;
-            color: #e0e0e0 !important;
-        }
-        .sidebar .nav-link.active {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-        }
+        .sidebar .nav-link { color: #9090a0 !important; }
+        .sidebar .nav-link:hover { background: rgba(255,255,255,0.05) !important; color: #e0e0e0 !important; }
+        .sidebar .nav-link.active { background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important; color: white !important; }
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           DARK STAT CARDS - SAME AS DASHBOARD
-           ============================================================ */
         .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -444,7 +314,7 @@ if ($result && $row = $result->fetch_assoc()) {
         .stat-label { font-size: 12px; color: #808090; margin: 0; }
         .stat-card .text-danger { color: #f87171 !important; }
         .stat-card .text-muted { color: #606070 !important; }
-        .stat-card .pulse-badge {
+        .pulse-badge {
             position: absolute;
             top: 8px;
             right: 8px;
@@ -456,9 +326,6 @@ if ($result && $row = $result->fetch_assoc()) {
             100% { transform: scale(1); }
         }
         
-        /* ============================================================
-           DARK CARDS - SAME AS DASHBOARD
-           ============================================================ */
         .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -475,9 +342,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .card-header h5 { margin: 0; font-weight: 600; color: #e0e0e0; font-size: 16px; }
         .card-body { padding: 20px; background: #111827 !important; }
         
-        /* ============================================================
-           DARK FILTERS
-           ============================================================ */
         .filter-section {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -513,9 +377,6 @@ if ($result && $row = $result->fetch_assoc()) {
             box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
         
-        /* ============================================================
-           DARK TABLE
-           ============================================================ */
         .log-table { font-size: 13px; }
         .log-table th {
             font-weight: 600;
@@ -532,9 +393,7 @@ if ($result && $row = $result->fetch_assoc()) {
             color: #e0e0e0;
             border-bottom: 1px solid #1a2a4a;
         }
-        .log-table tr:hover td {
-            background: rgba(255,255,255,0.02);
-        }
+        .log-table tr:hover td { background: rgba(255,255,255,0.02); }
         .log-table .user-cell { display: flex; align-items: center; gap: 10px; }
         .log-table .user-avatar {
             width: 32px; height: 32px; border-radius: 50%;
@@ -564,11 +423,7 @@ if ($result && $row = $result->fetch_assoc()) {
             color: #f87171;
             background: #3a1a1a;
         }
-        .log-table .text-muted { color: #808090 !important; }
         
-        /* ============================================================
-           DARK BADGES
-           ============================================================ */
         .badge-granted { background: #065f46 !important; color: #34d399 !important; }
         .badge-denied { background: #7a2a2a !important; color: #f87171 !important; }
         .badge-entry { background: #1a3a6a !important; color: #93c5fd !important; }
@@ -583,19 +438,12 @@ if ($result && $row = $result->fetch_assoc()) {
         .badge-pending { background: #4a3a1a !important; color: #fbbf24 !important; }
         .badge-resolved { background: #065f46 !important; color: #34d399 !important; }
         .badge-unauthorized { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-buzzer { background: #4a3a1a !important; color: #fbbf24 !important; }
-        .badge-unauthorized-header { background: #7a2a2a !important; color: #f87171 !important; }
         .badge-success { background: #065f46 !important; color: #34d399 !important; }
         .badge-danger { background: #7a2a2a !important; color: #f87171 !important; }
         .badge-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
         .badge-secondary { background: #1a2a4a !important; color: #808090 !important; }
         .badge-primary { background: #1a3a6a !important; color: #93c5fd !important; }
-        .badge-info { background: #1a3a6a !important; color: #93c5fd !important; }
-        .badge-light { background: #2a2a4a !important; color: #b0b0c0 !important; }
         
-        /* ============================================================
-           DARK ALERT ITEMS
-           ============================================================ */
         .alert-item {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -640,9 +488,6 @@ if ($result && $row = $result->fetch_assoc()) {
         }
         .btn-resolve:hover { background: #059669 !important; color: white !important; }
         
-        /* ============================================================
-           DARK BORDER & MISC
-           ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .border-top { border-top-color: #1a2a4a !important; }
         hr { border-color: #1a2a4a !important; }
@@ -666,45 +511,6 @@ if ($result && $row = $result->fetch_assoc()) {
             100% { opacity: 1; transform: scale(1); }
         }
         
-        .badge-denied-alert {
-            background: #7a2a2a !important;
-            color: #f87171 !important;
-            animation: pulseAlert 1.5s infinite;
-        }
-        @keyframes pulseAlert {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-        
-        .visitor-tag {
-            font-size: 9px;
-            background: #1a2a5a !important;
-            color: #93c5fd !important;
-            padding: 1px 6px;
-            border-radius: 10px;
-            margin-left: 4px;
-        }
-        .resident-tag {
-            font-size: 9px;
-            background: #065f46 !important;
-            color: #34d399 !important;
-            padding: 1px 6px;
-            border-radius: 10px;
-            margin-left: 4px;
-        }
-        .staff-tag {
-            font-size: 9px;
-            background: #4a3a1a !important;
-            color: #fbbf24 !important;
-            padding: 1px 6px;
-            border-radius: 10px;
-            margin-left: 4px;
-        }
-        
-        /* ============================================================
-           PAGINATION - DARK
-           ============================================================ */
         .pagination-container {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -752,9 +558,6 @@ if ($result && $row = $result->fetch_assoc()) {
         }
         .per-page-selector label { color: #808090 !important; font-size: 13px; margin: 0; }
         
-        /* ============================================================
-           SECTION HEADER
-           ============================================================ */
         .section-header {
             display: flex;
             align-items: center;
@@ -778,18 +581,34 @@ if ($result && $row = $result->fetch_assoc()) {
             gap: 10px;
         }
         
-        /* ============================================================
-           RESPONSIVE - SAME AS DASHBOARD
-           ============================================================ */
+        .visitor-tag {
+            font-size: 9px;
+            background: #1a2a5a !important;
+            color: #93c5fd !important;
+            padding: 1px 6px;
+            border-radius: 10px;
+            margin-left: 4px;
+        }
+        .resident-tag {
+            font-size: 9px;
+            background: #065f46 !important;
+            color: #34d399 !important;
+            padding: 1px 6px;
+            border-radius: 10px;
+            margin-left: 4px;
+        }
+        .staff-tag {
+            font-size: 9px;
+            background: #4a3a1a !important;
+            color: #fbbf24 !important;
+            padding: 1px 6px;
+            border-radius: 10px;
+            margin-left: 4px;
+        }
+        
         @media (max-width: 768px) {
-            body {
-                padding-top: 60px !important;
-            }
-            
-            .navbar {
-                height: 60px !important;
-            }
-            
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
@@ -802,11 +621,9 @@ if ($result && $row = $result->fetch_assoc()) {
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
             .stat-icon { width: 40px; height: 40px; font-size: 16px; }
-            
             .pagination-container .row {
                 flex-direction: column;
                 gap: 10px;
@@ -815,33 +632,16 @@ if ($result && $row = $result->fetch_assoc()) {
                 width: 100%;
                 text-align: center !important;
             }
-            .pagination {
-                justify-content: center !important;
-            }
+            .pagination { justify-content: center !important; }
         }
         
         @media (max-width: 576px) {
             .filter-section .row .col-md-2,
-            .filter-section .row .col-md-3 {
-                margin-bottom: 8px;
-            }
-            
-            .log-table {
-                font-size: 11px;
-            }
-            .log-table th,
-            .log-table td {
-                padding: 6px 8px;
-            }
-            .log-table .user-avatar {
-                width: 24px;
-                height: 24px;
-                font-size: 9px;
-            }
-            .log-table .uid-cell {
-                font-size: 10px;
-                padding: 1px 4px;
-            }
+            .filter-section .row .col-md-3 { margin-bottom: 8px; }
+            .log-table { font-size: 11px; }
+            .log-table th, .log-table td { padding: 6px 8px; }
+            .log-table .user-avatar { width: 24px; height: 24px; font-size: 9px; }
+            .log-table .uid-cell { font-size: 10px; padding: 1px 4px; }
         }
     </style>
 </head>
@@ -855,9 +655,7 @@ if ($result && $row = $result->fetch_assoc()) {
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 
-                <!-- ============================================================
-                HEADER - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- HEADER -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-history me-2" style="color: #1a3a6a;"></i>
@@ -875,7 +673,7 @@ if ($result && $row = $result->fetch_assoc()) {
                         </span>
                         <span class="badge bg-secondary" id="lastUpdate">Updated: <?php echo date('h:i A'); ?></span>
                         <?php if ($stats['pending_alerts'] > 0): ?>
-                            <a href="alerts.php" class="badge badge-denied-alert ms-2 p-2" style="text-decoration: none;">
+                            <a href="alerts.php" class="badge badge-danger ms-2 p-2" style="text-decoration: none; animation: pulseBadge 1s infinite;">
                                 <i class="fas fa-exclamation-triangle me-1"></i>
                                 <?php echo $stats['pending_alerts']; ?> Alert<?php echo $stats['pending_alerts'] > 1 ? 's' : ''; ?>
                             </a>
@@ -886,9 +684,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STATS ROW 1 - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- STATS ROW 1 -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
@@ -951,9 +747,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STATS ROW 2 - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- STATS ROW 2 -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
@@ -1001,9 +795,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                FILTERS
-                ============================================================ -->
+                <!-- FILTERS -->
                 <div class="filter-section">
                     <form method="GET" action="" class="row g-2 align-items-end">
                         <div class="col-md-2">
@@ -1016,8 +808,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                 <option value="">All</option>
                                 <option value="granted" <?php echo $statusFilter == 'granted' ? 'selected' : ''; ?>>Granted</option>
                                 <option value="denied" <?php echo $statusFilter == 'denied' ? 'selected' : ''; ?>>Denied</option>
-                                <option value="pending" <?php echo $statusFilter == 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                <option value="resolved" <?php echo $statusFilter == 'resolved' ? 'selected' : ''; ?>>Resolved</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -1040,132 +830,21 @@ if ($result && $row = $result->fetch_assoc()) {
                     </form>
                 </div>
 
-                <!-- ============================================================
-                ALERTS TABLE
-                ============================================================ -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <div class="log-header-actions">
-                            <div class="left">
-                                <div class="section-header">
-                                    <span class="icon">🚨</span>
-                                    <span class="title" style="<?php echo $stats['critical_alerts'] > 0 ? 'color: #f87171;' : ''; ?>">Alerts</span>
-                                    <span class="count badge <?php echo $stats['pending_alerts'] > 0 ? 'badge-pending' : 'badge-resolved'; ?>">
-                                        <?php echo count($alertLogs); ?> logs
-                                        <?php if ($stats['pending_alerts'] > 0): ?>
-                                            | <?php echo $stats['pending_alerts']; ?> pending
-                                        <?php endif; ?>
-                                    </span>
-                                </div>
-                            </div>
-                            <div>
-                                <a href="alerts.php" class="btn btn-<?php echo $stats['critical_alerts'] > 0 ? 'btn-danger' : 'btn-outline-secondary'; ?> btn-sm">
-                                    <i class="fas fa-eye me-1"></i> View All Alerts
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <?php if (empty($alertLogs)): ?>
-                            <div class="text-center text-muted py-4">
-                                <i class="fas fa-check-circle fa-2x d-block mb-2 text-success"></i>
-                                <h5>All Clear! ✅</h5>
-                                <p>No alerts found. Your system is secure.</p>
-                            </div>
-                        <?php else: ?>
-                            <?php foreach ($alertLogs as $alert): 
-                                $isPending = $alert['delivery_status'] == 'pending';
-                                $isResolved = $alert['delivery_status'] == 'resolved';
-                                $isCritical = $isPending && $alert['alert_type'] == 'unauthorized';
-                                $displayName = !empty($alert['display_name']) ? $alert['display_name'] : 'Unknown';
-                                $cardUid = $alert['card_uid'] ?? 'N/A';
-                                $alertType = $alert['alert_type'] ?? 'unauthorized';
-                                $reason = $alert['reason'] ?? 'Unauthorized access attempt';
-                                $roomDisplay = $alert['room_number'] ?? 'N/A';
-                                if (!empty($alert['rfid_card_type']) && $alert['rfid_card_type'] == 'visitor' && !empty($alert['resident_visited_name'])) {
-                                    $roomDisplay = 'Visit: ' . $alert['resident_visited_name'];
-                                }
-                            ?>
-                            <div class="alert-item <?php echo $isResolved ? 'resolved' : ''; ?> <?php echo $isCritical ? 'critical' : ''; ?>">
-                                <div class="row align-items-center">
-                                    <div class="col-md-8">
-                                        <div class="d-flex align-items-start">
-                                            <?php if ($isCritical): ?>
-                                                <span class="pulse-red me-2" style="font-size: 20px;">🚨</span>
-                                            <?php elseif ($isPending): ?>
-                                                <span class="pulse-red me-2" style="font-size: 16px;">🔴</span>
-                                            <?php else: ?>
-                                                <span class="me-2" style="font-size: 16px;">✅</span>
-                                            <?php endif; ?>
-                                            <div>
-                                                <div class="d-flex align-items-center flex-wrap gap-2">
-                                                    <span class="alert-uid"><?php echo htmlspecialchars($cardUid); ?></span>
-                                                    <?php if ($isCritical): ?>
-                                                        <span class="badge bg-danger">CRITICAL</span>
-                                                    <?php endif; ?>
-                                                    <span class="badge <?php echo $isPending ? 'badge-pending' : 'badge-resolved'; ?>">
-                                                        <?php echo ucfirst($alert['delivery_status']); ?>
-                                                    </span>
-                                                    <span class="badge <?php echo $alertType == 'unauthorized' ? 'badge-unauthorized' : 'badge-buzzer'; ?>">
-                                                        <?php echo ucfirst($alertType); ?>
-                                                    </span>
-                                                    <?php if (!empty($alert['rfid_card_type'])): ?>
-                                                        <span class="badge bg-secondary"><?php echo ucfirst($alert['rfid_card_type']); ?></span>
-                                                    <?php endif; ?>
-                                                </div>
-                                                <div class="alert-reason mt-1">
-                                                    <i class="fas fa-info-circle me-1"></i>
-                                                    <?php echo htmlspecialchars($reason); ?>
-                                                </div>
-                                                <div class="alert-meta mt-1">
-                                                    <i class="fas fa-user me-1"></i>
-                                                    <span class="alert-user"><?php echo htmlspecialchars($displayName); ?></span>
-                                                    <span class="mx-2">|</span>
-                                                    <i class="fas fa-door-open me-1"></i>
-                                                    <?php echo htmlspecialchars($roomDisplay); ?>
-                                                    <span class="mx-2">|</span>
-                                                    <i class="fas fa-clock me-1"></i>
-                                                    <?php echo date('M d, Y h:i A', strtotime($alert['timestamp'])); ?>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4 text-end">
-                                        <div class="d-flex gap-2 justify-content-end flex-wrap">
-                                            <?php if ($isPending): ?>
-                                                <a href="alerts.php?resolve=<?php echo $alert['alert_id']; ?>" class="btn btn-resolve btn-sm">
-                                                    <i class="fas fa-check me-1"></i> Resolve
-                                                </a>
-                                            <?php endif; ?>
-                                            <a href="logs.php?search=<?php echo urlencode($cardUid); ?>" class="btn btn-sm btn-outline-secondary">
-                                                <i class="fas fa-history me-1"></i> View Logs
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <!-- ============================================================
-                RESIDENTS TABLE
-                ============================================================ -->
+                <!-- LOGS TABLE -->
                 <div class="card">
                     <div class="card-header">
                         <div class="log-header-actions">
                             <div class="left">
                                 <div class="section-header">
-                                    <span class="icon">🏠</span>
-                                    <span class="title">Residents / Staff</span>
-                                    <span class="count badge badge-resident-header"><?php echo count($residentLogs); ?> logs</span>
+                                    <span class="icon">📋</span>
+                                    <span class="title">All Access Logs</span>
+                                    <span class="count badge badge-primary"><?php echo count($allLogs); ?> logs</span>
                                 </div>
                             </div>
                             <div>
                                 <span class="text-muted small">
-                                    <?php if ($residentTotal > 0): ?>
-                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $residentTotal); ?> of <?php echo $residentTotal; ?>
+                                    <?php if ($totalLogs > 0): ?>
+                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalLogs); ?> of <?php echo $totalLogs; ?>
                                     <?php endif; ?>
                                 </span>
                             </div>
@@ -1186,28 +865,45 @@ if ($result && $row = $result->fetch_assoc()) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php if (empty($residentLogs)): ?>
+                                    <?php if (empty($allLogs)): ?>
                                         <tr>
                                             <td colspan="7" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
-                                                No resident/staff access logs found
+                                                No access logs found
                                             </td>
                                         </tr>
                                     <?php else: ?>
-                                        <?php foreach ($residentLogs as $log): 
+                                        <?php foreach ($allLogs as $log): 
                                             $displayName = $log['user_name'] ?? 'Unknown';
                                             $cardType = $log['card_type'] ?? 'resident';
+                                            $cardUid = $log['card_uid'] ?? 'N/A';
+                                            $roomDisplay = $log['room_number'] ?? 'N/A';
+                                            
+                                            // Handle visitor names
+                                            if ($cardType == 'visitor' && !empty($log['visitor_name'])) {
+                                                $displayName = $log['visitor_name'];
+                                                if (!empty($log['resident_visited_name'])) {
+                                                    $roomDisplay = 'Visit: ' . $log['resident_visited_name'];
+                                                }
+                                            }
+                                            
                                             $avatarClass = '';
                                             $userTypeTag = '';
                                             
                                             if ($cardType == 'staff') {
                                                 $avatarClass = 'staff';
                                                 $userTypeTag = '<span class="staff-tag">Staff</span>';
+                                            } elseif ($cardType == 'visitor') {
+                                                $avatarClass = 'visitor';
+                                                $userTypeTag = '<span class="visitor-tag">Visitor</span>';
                                             } else {
                                                 $userTypeTag = '<span class="resident-tag">Resident</span>';
                                             }
                                             
-                                            $roomDisplay = $log['room_number'] ?? 'N/A';
+                                            // Check if denied
+                                            if ($log['access_status'] == 'denied') {
+                                                $avatarClass = 'denied';
+                                            }
                                             
                                             $initials = '';
                                             $nameParts = explode(' ', $displayName);
@@ -1218,19 +914,23 @@ if ($result && $row = $result->fetch_assoc()) {
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
-                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                                                <td>
+                                                    <span class="uid-cell <?php echo $log['access_status'] == 'denied' ? 'denied-uid' : ''; ?>">
+                                                        <?php echo htmlspecialchars($cardUid); ?>
+                                                    </span>
+                                                </td>
                                                 <td>
                                                     <div class="user-cell">
                                                         <div class="user-avatar <?php echo $avatarClass; ?>">
                                                             <?php echo $initials ?: '?'; ?>
                                                         </div>
                                                         <div>
-                                                            <div><?php echo htmlspecialchars($displayName); ?> <?php echo $userTypeTag; ?></div>
+                                                            <div>
+                                                                <?php echo htmlspecialchars($displayName); ?> 
+                                                                <?php echo $userTypeTag; ?>
+                                                            </div>
                                                             <?php if (!empty($log['student_id'])): ?>
                                                                 <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['student_id']); ?></div>
-                                                            <?php endif; ?>
-                                                            <?php if (!empty($log['course'])): ?>
-                                                                <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['course']); ?></div>
                                                             <?php endif; ?>
                                                         </div>
                                                     </div>
@@ -1262,15 +962,15 @@ if ($result && $row = $result->fetch_assoc()) {
                         </div>
                         
                         <!-- PAGINATION -->
-                        <?php if ($residentPages > 1): ?>
+                        <?php if ($totalPages > 1): ?>
                         <div class="pagination-container">
                             <div class="row align-items-center">
                                 <div class="col-md-6">
                                     <div class="page-info">
                                         <i class="fas fa-info-circle me-1"></i>
-                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $residentTotal); ?> of <?php echo $residentTotal; ?> entries
+                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalLogs); ?> of <?php echo $totalLogs; ?> entries
                                         <span class="mx-1 text-muted">|</span>
-                                        <span class="text-muted">Page <?php echo $page; ?> of <?php echo $residentPages; ?></span>
+                                        <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -1299,7 +999,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 </li>
                                                 <?php
                                                 $startPage = max(1, $page - 2);
-                                                $endPage = min($residentPages, $page + 2);
+                                                $endPage = min($totalPages, $page + 2);
                                                 if ($startPage > 1) {
                                                     echo '<li class="page-item"><span class="page-link">...</span></li>';
                                                 }
@@ -1311,16 +1011,16 @@ if ($result && $row = $result->fetch_assoc()) {
                                                         </a>
                                                     </li>
                                                 <?php endfor; ?>
-                                                <?php if ($endPage < $residentPages): ?>
+                                                <?php if ($endPage < $totalPages): ?>
                                                     <li class="page-item"><span class="page-link">...</span></li>
                                                 <?php endif; ?>
-                                                <li class="page-item <?php echo ($page >= $residentPages) ? 'disabled' : ''; ?>">
+                                                <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
                                                     <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                         <i class="fas fa-angle-right"></i>
                                                     </a>
                                                 </li>
-                                                <li class="page-item <?php echo ($page >= $residentPages) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $residentPages; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                                    <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                         <i class="fas fa-angle-double-right"></i>
                                                     </a>
                                                 </li>
@@ -1334,115 +1034,100 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                VISITORS TABLE
-                ============================================================ -->
+                <!-- ALERTS SECTION -->
+                <?php if (!empty($alertLogs)): ?>
                 <div class="card">
                     <div class="card-header">
                         <div class="log-header-actions">
                             <div class="left">
                                 <div class="section-header">
-                                    <span class="icon">👤</span>
-                                    <span class="title">Visitors</span>
-                                    <span class="count badge badge-visitor-header"><?php echo count($visitorLogs); ?> logs</span>
+                                    <span class="icon">🚨</span>
+                                    <span class="title" style="<?php echo $stats['critical_alerts'] > 0 ? 'color: #f87171;' : ''; ?>">Alerts</span>
+                                    <span class="count badge <?php echo $stats['pending_alerts'] > 0 ? 'badge-pending' : 'badge-resolved'; ?>">
+                                        <?php echo count($alertLogs); ?> alerts
+                                    </span>
                                 </div>
                             </div>
                             <div>
-                                <span class="text-muted small">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Showing <?php echo count($visitorLogs); ?> visitor logs
-                                </span>
+                                <a href="alerts.php" class="btn btn-<?php echo $stats['critical_alerts'] > 0 ? 'danger' : 'outline-secondary'; ?> btn-sm">
+                                    <i class="fas fa-eye me-1"></i> View All Alerts
+                                </a>
                             </div>
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover log-table">
-                                <thead>
-                                    <tr>
-                                        <th>Date/Time</th>
-                                        <th>RFID UID</th>
-                                        <th>Visitor</th>
-                                        <th>Visiting</th>
-                                        <th>Purpose</th>
-                                        <th>Type</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (empty($visitorLogs)): ?>
-                                        <tr>
-                                            <td colspan="7" class="text-center text-muted py-4">
-                                                <i class="fas fa-inbox fa-2x d-block mb-2"></i>
-                                                No visitor access logs found
-                                            </td>
-                                        </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($visitorLogs as $log): 
-                                            $visitorName = $log['visitor_name'] ?? 'Unknown Visitor';
-                                            $residentVisited = $log['resident_visited_name'] ?? 'Unknown';
-                                            $purpose = $log['purpose_of_visit'] ?? 'N/A';
-                                            
-                                            $initials = '';
-                                            $nameParts = explode(' ', $visitorName);
-                                            foreach ($nameParts as $p) {
-                                                if (!empty($p)) $initials .= strtoupper($p[0]);
-                                            }
-                                            $initials = substr($initials, 0, 2);
-                                        ?>
-                                            <tr>
-                                                <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
-                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
-                                                <td>
-                                                    <div class="user-cell">
-                                                        <div class="user-avatar visitor">
-                                                            <?php echo $initials ?: '?'; ?>
-                                                        </div>
-                                                        <div>
-                                                            <div><?php echo htmlspecialchars($visitorName); ?> <span class="visitor-tag">Visitor</span></div>
-                                                            <?php if (!empty($log['validity_end'])): ?>
-                                                                <div style="font-size: 10px; color: #808090;">
-                                                                    Valid until: <?php echo date('M d, Y', strtotime($log['validity_end'])); ?>
-                                                                </div>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div>
-                                                        <span style="font-weight: 600;"><?php echo htmlspecialchars($residentVisited); ?></span>
-                                                        <?php if (!empty($log['resident_room'])): ?>
-                                                            <br><span style="font-size: 10px; color: #808090;">Room <?php echo htmlspecialchars($log['resident_room']); ?></span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span style="font-size: 12px;"><?php echo htmlspecialchars($purpose); ?></span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
-                                                        <i class="fas <?php echo $log['access_type'] == 'entry' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
-                                                        <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge <?php echo $log['access_status'] == 'granted' ? 'badge-granted' : 'badge-denied'; ?>">
-                                                        <i class="fas <?php echo $log['access_status'] == 'granted' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
-                                                        <?php echo ucfirst($log['access_status'] ?? 'N/A'); ?>
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
+                        <?php foreach ($alertLogs as $alert): 
+                            $isPending = $alert['delivery_status'] == 'pending';
+                            $isResolved = $alert['delivery_status'] == 'resolved';
+                            $isCritical = $isPending && $alert['alert_type'] == 'unauthorized';
+                            $displayName = !empty($alert['display_name']) ? $alert['display_name'] : 'Unknown';
+                            $cardUid = $alert['card_uid'] ?? 'N/A';
+                            $alertType = $alert['alert_type'] ?? 'unauthorized';
+                            $reason = $alert['reason'] ?? 'Unauthorized access attempt';
+                            $roomDisplay = $alert['room_number'] ?? 'N/A';
+                            if (!empty($alert['rfid_card_type']) && $alert['rfid_card_type'] == 'visitor' && !empty($alert['resident_visited_name'])) {
+                                $roomDisplay = 'Visit: ' . $alert['resident_visited_name'];
+                            }
+                        ?>
+                        <div class="alert-item <?php echo $isResolved ? 'resolved' : ''; ?> <?php echo $isCritical ? 'critical' : ''; ?>">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <div class="d-flex align-items-start">
+                                        <?php if ($isCritical): ?>
+                                            <span class="pulse-red me-2" style="font-size: 20px;">🚨</span>
+                                        <?php elseif ($isPending): ?>
+                                            <span class="pulse-red me-2" style="font-size: 16px;">🔴</span>
+                                        <?php else: ?>
+                                            <span class="me-2" style="font-size: 16px;">✅</span>
+                                        <?php endif; ?>
+                                        <div>
+                                            <div class="d-flex align-items-center flex-wrap gap-2">
+                                                <span class="alert-uid"><?php echo htmlspecialchars($cardUid); ?></span>
+                                                <?php if ($isCritical): ?>
+                                                    <span class="badge bg-danger">CRITICAL</span>
+                                                <?php endif; ?>
+                                                <span class="badge <?php echo $isPending ? 'badge-pending' : 'badge-resolved'; ?>">
+                                                    <?php echo ucfirst($alert['delivery_status']); ?>
+                                                </span>
+                                                <span class="badge <?php echo $alertType == 'unauthorized' ? 'badge-unauthorized' : 'badge-buzzer'; ?>">
+                                                    <?php echo ucfirst($alertType); ?>
+                                                </span>
+                                            </div>
+                                            <div class="alert-reason mt-1">
+                                                <i class="fas fa-info-circle me-1"></i>
+                                                <?php echo htmlspecialchars($reason); ?>
+                                            </div>
+                                            <div class="alert-meta mt-1">
+                                                <i class="fas fa-user me-1"></i>
+                                                <span class="alert-user"><?php echo htmlspecialchars($displayName); ?></span>
+                                                <span class="mx-2">|</span>
+                                                <i class="fas fa-door-open me-1"></i>
+                                                <?php echo htmlspecialchars($roomDisplay); ?>
+                                                <span class="mx-2">|</span>
+                                                <i class="fas fa-clock me-1"></i>
+                                                <?php echo date('M d, Y h:i A', strtotime($alert['timestamp'])); ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <?php if ($isPending): ?>
+                                        <a href="alerts.php?resolve=<?php echo $alert['alert_id']; ?>" class="btn btn-resolve btn-sm">
+                                            <i class="fas fa-check me-1"></i> Resolve
+                                        </a>
                                     <?php endif; ?>
-                                </tbody>
-                            </table>
+                                    <a href="logs.php?search=<?php echo urlencode($cardUid); ?>" class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-history me-1"></i> View Logs
+                                    </a>
+                                </div>
+                            </div>
                         </div>
+                        <?php endforeach; ?>
                     </div>
                 </div>
+                <?php endif; ?>
 
-                <!-- ============================================================
-                FOOTER - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- FOOTER -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
@@ -1464,13 +1149,8 @@ if ($result && $row = $result->fetch_assoc()) {
         </div>
     </div>
 
-    <?php include '../includes/footer.php'; ?>
-    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // CHANGE PER PAGE
-        // ============================================================
         function changePerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
@@ -1478,9 +1158,6 @@ if ($result && $row = $result->fetch_assoc()) {
             window.location.href = '?' + urlParams.toString();
         }
         
-        // ============================================================
-        // UPDATE TIME - SAME AS DASHBOARD
-        // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
             const timeString = now.toLocaleTimeString('en-US', { 
@@ -1506,9 +1183,6 @@ if ($result && $row = $result->fetch_assoc()) {
         setInterval(updateLastUpdateTime, 10000);
         document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
         
-        // ============================================================
-        // SIDEBAR TOGGLE (mobile)
-        // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
