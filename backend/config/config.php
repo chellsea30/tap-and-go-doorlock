@@ -17,7 +17,7 @@
 define('DB_HOST', getenv('DB_HOST') ?: 'mysql.railway.internal');
 define('DB_USER', getenv('DB_USER') ?: 'root');
 define('DB_PASS', getenv('DB_PASSWORD') ?: 'uQcMTaYnsOvpMlVctbUHUtgBkAaryBWa');
-define('DB_NAME', getenv('DB_NAME') ?: 'tap_and_go_db');
+define('DB_NAME', getenv('DB_NAME') ?: 'railway');
 
 // Database connection settings
 define('DB_PORT', getenv('DB_PORT') ?: 3306);
