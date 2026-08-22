@@ -31,7 +31,7 @@ define('DB_COLLATION', 'utf8mb4_unicode_ci');
 define('SITE_NAME', 'Tap-and-Go Doorlock System');
 // CHANGE THIS TO YOUR RAILWAY URL AFTER DEPLOYMENT
 define('SITE_URL', getenv('RAILWAY_PUBLIC_DOMAIN') ? 'https://' . getenv('RAILWAY_PUBLIC_DOMAIN') . '/' : 'http://10.55.160.156/tap-and-go-doorlock/');
-define('APP_ENV', getenv('APP_ENV') ?: 'production'); // Changed to production for Railway
+define('APP_ENV', 'development');// Changed to production for Railway
 
 // Application paths
 define('BASE_PATH', dirname(dirname(__DIR__)));
