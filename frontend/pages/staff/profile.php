@@ -1,7 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Staff Profile
- * PURE DARK MODE
+ * PURE DARK MODE WITH PHOTO SUPPORT
  */
 
 // Start session
@@ -71,6 +71,13 @@ if ($result && $row = $result->fetch_assoc()) {
 $result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['total_visitors'] = (int)$row['count'];
+}
+
+// Check if avatar column exists
+$hasAvatar = false;
+$check = $conn->query("SHOW COLUMNS FROM staff_users LIKE 'avatar'");
+if ($check && $check->num_rows > 0) {
+    $hasAvatar = true;
 }
 
 $conn->close();
@@ -198,7 +205,7 @@ $conn->close();
         .card-body { background: #111827 !important; }
         
         /* ============================================================
-           PROFILE AVATAR
+           PROFILE AVATAR - WITH PHOTO SUPPORT
            ============================================================ */
         .profile-avatar {
             width: 120px;
@@ -213,7 +220,39 @@ $conn->close();
             margin: 0 auto 15px;
             border: 3px solid #1a2a4a;
             box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+            overflow: hidden;
+            position: relative;
         }
+        .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .profile-avatar .no-photo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            font-size: 48px;
+            color: #ffd700;
+        }
+        .profile-avatar .photo-badge {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #111827;
+        }
+        
         .profile-name {
             color: #e0e0e0;
             font-weight: 700;
@@ -409,6 +448,23 @@ $conn->close();
             50% { opacity: 0.4; transform: scale(0.8); }
             100% { opacity: 1; transform: scale(1); }
         }
+        
+        /* ============================================================
+           PHOTO UPLOAD INDICATOR
+           ============================================================ */
+        .photo-upload-info {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #34d399;
+            display: inline-block;
+            margin-top: 5px;
+        }
+        .photo-upload-info i {
+            margin-right: 5px;
+        }
     </style>
 </head>
 <body class="<?php echo $darkModeClass; ?>">
@@ -443,9 +499,47 @@ $conn->close();
                     <div class="col-md-4">
                         <div class="card">
                             <div class="card-body text-center">
+                                <!-- ===== PROFILE AVATAR WITH PHOTO SUPPORT ===== -->
                                 <div class="profile-avatar">
-                                    <i class="fas fa-user-tie"></i>
+                                    <?php 
+                                        $photoPath = $staff['avatar'] ?? '';
+                                        // Build full path for checking
+                                        $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go-doorlock/' . $photoPath;
+                                        
+                                        // Also check without document root (relative path)
+                                        $relativePath = __DIR__ . '/../../../' . $photoPath;
+                                        
+                                        if (!empty($photoPath) && (file_exists($fullPath) || file_exists($relativePath))):
+                                    ?>
+                                        <img src="/tap-and-go-doorlock/<?php echo htmlspecialchars($photoPath); ?>" 
+                                             alt="Profile Photo"
+                                             onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
+                                        <span class="photo-badge">
+                                            <i class="fas fa-check-circle"></i>
+                                        </span>
+                                    <?php else: 
+                                        $name = $staff['full_name'] ?? 'Staff';
+                                        $initials = '';
+                                        $parts = explode(' ', $name);
+                                        foreach ($parts as $p) {
+                                            if (!empty($p)) $initials .= strtoupper($p[0]);
+                                        }
+                                    ?>
+                                        <div class="no-photo"><?php echo substr($initials, 0, 2); ?></div>
+                                    <?php endif; ?>
                                 </div>
+                                
+                                <!-- Show photo status -->
+                                <?php if (!empty($staff['avatar'])): ?>
+                                    <div class="photo-upload-info">
+                                        <i class="fas fa-image me-1"></i> Photo uploaded
+                                    </div>
+                                <?php else: ?>
+                                    <div class="photo-upload-info" style="color:#808090; border-color:#1a2a4a;">
+                                        <i class="fas fa-camera me-1"></i> No photo uploaded
+                                    </div>
+                                <?php endif; ?>
+                                
                                 <div class="profile-name">
                                     <?php echo htmlspecialchars($staff['full_name'] ?? 'Staff'); ?>
                                 </div>
