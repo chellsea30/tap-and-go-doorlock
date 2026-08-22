@@ -2,7 +2,7 @@
 /**
  * Tap-and-Go Doorlock - Main Login with Math Puzzle
  * SIMPLE ADDITION ONLY
- * WITH 10-MINUTE BAN AFTER 5 INCORRECT ATTEMPTS
+ * WITH 10-MINUTE BAN AFTER 3 INCORRECT ATTEMPTS
  */
 
 session_start();
@@ -35,9 +35,10 @@ $puzzle_name = '';
 $puzzle_data = null;
 $is_blocked = false;
 $reset_success = '';
-$remaining_attempts = 5;
+$remaining_attempts = 3; // CHANGED: 3 attempts max
 $block_minutes = 10;
 $block_until = '';
+$max_attempts = 3; // CHANGED: Maximum attempts set to 3
 
 // ============================================================
 // HANDLE PASSWORD RESET REQUEST
@@ -333,8 +334,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         $remaining_attempts = 0;
                     }
                 } else {
-                    // Update attempts
-                    if ($new_attempts >= 5) {
+                    // Update attempts - CHANGED: max attempts is now 3
+                    if ($new_attempts >= 3) { // CHANGED: 3 attempts max
                         // Block for 10 minutes
                         $block_until_time = date('Y-m-d H:i:s', strtotime('+10 minutes'));
                         $stmt = $conn->prepare("UPDATE $table SET login_attempts = ?, login_blocked_until = ? WHERE $id_field = ?");
@@ -342,7 +343,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         $stmt->execute();
                         $stmt->close();
                         
-                        $error = "⛔ Too many failed login attempts. Your account is locked for 10 minutes. Please try again at " . date('h:i A', strtotime($block_until_time));
+                        $error = "⛔ Too many failed login attempts (3). Your account is locked for 10 minutes. Please try again at " . date('h:i A', strtotime($block_until_time));
                         $is_blocked = true;
                         $block_until = date('h:i A', strtotime($block_until_time));
                         $remaining_attempts = 0;
@@ -352,7 +353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         $stmt->execute();
                         $stmt->close();
                         
-                        $remaining_attempts = 5 - $new_attempts;
+                        $remaining_attempts = 3 - $new_attempts; // CHANGED: 3 - attempts
                         $error = "Invalid credentials. You have $remaining_attempts attempt(s) remaining before account lock.";
                     }
                 }
@@ -956,7 +957,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 <div class="puzzle-header">
                     <h4><i class="fas fa-calculator me-2" style="color: #ffd700;"></i>Solve the Math Puzzle</h4>
                     <p>Please solve this simple addition problem to continue</p>
-                    <!-- FIX: Add default value '' to prevent htmlspecialchars(null) and undefined key errors -->
                     <p class="user-email"><i class="fas fa-user me-1"></i> <?php echo htmlspecialchars($puzzle_name ?? ''); ?> (<?php echo htmlspecialchars($puzzle_email ?? ''); ?>)</p>
                 </div>
 
@@ -1029,7 +1029,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         </div>
                     </div>
                     
-                    <?php if ($remaining_attempts < 5 && !$is_blocked): ?>
+                    <?php if ($remaining_attempts < 3 && !$is_blocked): ?>
                     <div class="attempts-warning pulse-warning">
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         <?php echo $remaining_attempts; ?> attempt(s) remaining before account lock
@@ -1058,7 +1058,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         </div>
                     </div>
                     
-                    <?php if ($remaining_attempts < 5 && !$is_blocked): ?>
+                    <?php if ($remaining_attempts < 3 && !$is_blocked): ?>
                     <div class="attempts-warning pulse-warning">
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         <?php echo $remaining_attempts; ?> attempt(s) remaining before account lock
@@ -1087,7 +1087,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         </div>
                     </div>
                     
-                    <?php if ($remaining_attempts < 5 && !$is_blocked): ?>
+                    <?php if ($remaining_attempts < 3 && !$is_blocked): ?>
                     <div class="attempts-warning pulse-warning">
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         <?php echo $remaining_attempts; ?> attempt(s) remaining before account lock
