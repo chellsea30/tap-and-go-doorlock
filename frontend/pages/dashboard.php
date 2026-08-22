@@ -13,8 +13,7 @@ session_start();
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
 
-// Check authentication - FOR ALL USER TYPES
-if (!isset($_SESSION['user_type']) || !isset($_SESSION['user_id']) || !isSessionValid()) {
+if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
 }
