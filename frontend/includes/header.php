@@ -5,9 +5,9 @@
  */
 
 // ============================================================
-// AUTO-CHECK EXPIRED CARDS ON PAGE LOAD
+// AUTO-CHECK EXPIRED CARDS ON PAGE LOAD - FIXED FOR ALL USER TYPES
 // ============================================================
-if (isset($_SESSION['admin_id'])) {
+if (isset($_SESSION['user_type']) && isset($_SESSION['user_id'])) {
     try {
         // Check for expired visitor cards
         $expired_count = checkExpiredVisitorCards();
@@ -36,11 +36,11 @@ if (isset($_SESSION['admin_id'])) {
 // Get dark mode from database if session exists
 $darkModeClass = '';
 $darkModeFromDb = 'false';
-if (isset($_SESSION['admin_id'])) {
+if (isset($_SESSION['user_type']) && isset($_SESSION['user_id'])) {
     try {
         $conn = getDBConnection();
         $stmt = $conn->prepare("SELECT setting_value FROM user_settings WHERE admin_id = ? AND setting_key = 'dark_mode'");
-        $stmt->bind_param("i", $_SESSION['admin_id']);
+        $stmt->bind_param("i", $_SESSION['user_id']);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($row = $result->fetch_assoc()) {
