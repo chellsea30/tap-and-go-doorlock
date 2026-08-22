@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - RFID Access API
  * COMPLETE - WITH REAL-TIME ALERT NOTIFICATIONS
  * WITH ACCESS CONTROL
+ * FIXED: Correct binding for access_logs insertion
  */
 
 header('Content-Type: application/json');
@@ -182,27 +183,33 @@ switch ($action) {
     // LOG ACCESS ATTEMPT - WITH REAL-TIME ALERT
     // ============================================================
     case 'log_access':
+        // Get input data
         $uid = isset($input['uid']) ? strtoupper(trim($input['uid'])) : '';
         $type = isset($input['type']) ? $input['type'] : 'entry';
         $granted = isset($input['granted']) ? (bool)$input['granted'] : false;
         $power_source = isset($input['power_source']) ? $input['power_source'] : 'main';
+        $user_name = isset($input['user_name']) ? $input['user_name'] : 'Unknown';
+        $user_type = isset($input['user_type']) ? $input['user_type'] : 'unknown';
+        $card_type = isset($input['card_type']) ? $input['card_type'] : 'unknown';
+        $room_number = isset($input['room_number']) ? $input['room_number'] : 'N/A';
         
         if (empty($uid)) {
             sendResponse(false, 'Card UID required');
         }
         
+        // Log the received data for debugging
+        error_log("📥 Received: UID=$uid, Type=$type, Granted=" . ($granted ? 'true' : 'false') . ", User=$user_name");
+        
         // Initialize variables
         $user_id = null;
-        $user_name = 'Unknown';
-        $room_number = 'N/A';
-        $student_id = 'N/A';
-        $card_type = 'unknown';
         $isAuthorized = false;
         $visitor_name = '';
         $purpose = '';
         $resident_visited = null;
         $card_exists = false;
         $alert_created = false;
+        $visitor_name = '';
+        $purpose = '';
         
         // ------------------------------------------------------------
         // STEP 1: Check rfid_cards table
@@ -283,7 +290,6 @@ switch ($action) {
                     case 'staff':
                         $user_name = $row['full_name'] ?? 'Staff';
                         $room_number = $row['room_number'] ?? 'Staff Area';
-                        $student_id = $row['student_id'] ?? 'N/A';
                         $user_id = $row['user_id'];
                         $isAuthorized = true;
                         $granted = true;
@@ -293,7 +299,6 @@ switch ($action) {
                     default:
                         $user_name = $row['full_name'] ?? 'Resident';
                         $room_number = $row['room_number'] ?? 'N/A';
-                        $student_id = $row['student_id'] ?? 'N/A';
                         $user_id = $row['user_id'];
                         $isAuthorized = true;
                         $granted = true;
@@ -365,11 +370,12 @@ switch ($action) {
         }
         
         // ------------------------------------------------------------
-        // INSERT ACCESS LOG
+        // INSERT ACCESS LOG - FIXED BINDING
         // ------------------------------------------------------------
         $status = $granted ? 'granted' : 'denied';
         $alert_triggered = $granted ? 0 : 1;
         
+        // ✅ FIXED: Correct binding types - user_id is integer
         $stmt = $conn->prepare("
             INSERT INTO access_logs (
                 card_uid, 
@@ -381,9 +387,13 @@ switch ($action) {
                 timestamp
             ) VALUES (?, ?, ?, ?, ?, ?, NOW())
         ");
+        // Binding: s=string, i=integer
+        // uid(string), status(string), type(string), user_id(integer), alert_triggered(integer), power_source(string)
         $stmt->bind_param("sssiss", $uid, $status, $type, $user_id, $alert_triggered, $power_source);
         
         if ($stmt->execute()) {
+            error_log("✅ Access log inserted for UID: $uid, Status: $status");
+            
             // ------------------------------------------------------------
             // CREATE ALERT AND NOTIFICATION FOR DENIED ACCESS
             // ------------------------------------------------------------
@@ -474,7 +484,6 @@ switch ($action) {
                 'user_id' => $user_id,
                 'user_name' => $user_name,
                 'room_number' => $room_number,
-                'student_id' => $student_id,
                 'card_type' => $cardType,
                 'is_authorized' => $isAuthorized,
                 'visitor_name' => $visitor_name,
@@ -483,6 +492,7 @@ switch ($action) {
                 'card_exists' => $card_exists
             ]);
         } else {
+            error_log("❌ Failed to insert access log: " . $stmt->error);
             sendResponse(false, 'Failed to log access: ' . $stmt->error);
         }
         $stmt->close();
