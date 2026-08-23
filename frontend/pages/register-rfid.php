@@ -1171,14 +1171,6 @@ if (isset($_SESSION['admin_id'])) {
 
             </main>
         </div>
-    
-        <!-- ============================================================
-        FOOTER - STICKY BOTTOM (DARK) - FIXED
-        ============================================================ -->
-        <footer class="footer">
-            &copy; <?php echo date('Y'); ?> <span>Tap-and-Go Doorlock</span> System &bull; ISU-Echague Dormitory. All rights reserved.
-        </footer>
-    </div>
 
     <?php include '../includes/footer.php'; ?>
     
