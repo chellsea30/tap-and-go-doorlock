@@ -80,6 +80,61 @@ if ($check && $check->num_rows > 0) {
     $hasAvatar = true;
 }
 
+// ============================================================
+// PHOTO PATH DETECTION - FIXED
+// ============================================================
+$photoPath = $staff['avatar'] ?? '';
+$hasPhoto = false;
+$photoUrl = '';
+$photoFullPath = '';
+
+if (!empty($photoPath)) {
+    // Try different path possibilities
+    $paths_to_try = [
+        // Relative paths from staff/pages/
+        '../../' . $photoPath,
+        '../' . $photoPath,
+        // Absolute paths
+        $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go/' . $photoPath,
+        $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go-doorlock/' . $photoPath,
+        // Direct uploads path
+        $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go/uploads/staff_photos/' . basename($photoPath),
+        $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go-doorlock/uploads/staff_photos/' . basename($photoPath),
+        // Using __DIR__
+        __DIR__ . '/../../../uploads/staff_photos/' . basename($photoPath),
+    ];
+    
+    foreach ($paths_to_try as $path) {
+        if (file_exists($path)) {
+            $hasPhoto = true;
+            $photoFullPath = $path;
+            
+            // Determine URL path
+            if (strpos($path, 'tap-and-go-doorlock') !== false) {
+                $photoUrl = '/tap-and-go-doorlock/' . $photoPath;
+            } elseif (strpos($path, 'tap-and-go') !== false) {
+                $photoUrl = '/tap-and-go/' . $photoPath;
+            } else {
+                // Fallback: use relative path
+                $photoUrl = '../../' . $photoPath;
+            }
+            break;
+        }
+    }
+    
+    // If no path found, try one more time with direct URL
+    if (!$hasPhoto) {
+        // Check if file exists via URL (for remote servers)
+        $test_url = '/tap-and-go/' . $photoPath;
+        $full_test_path = $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go/' . $photoPath;
+        if (file_exists($full_test_path)) {
+            $hasPhoto = true;
+            $photoUrl = $test_url;
+            $photoFullPath = $full_test_path;
+        }
+    }
+}
+
 $conn->close();
 ?>
 <!DOCTYPE html>
@@ -235,6 +290,7 @@ $conn->close();
             width: 100%;
             height: 100%;
             font-size: 48px;
+            font-weight: 700;
             color: #ffd700;
         }
         .profile-avatar .photo-badge {
@@ -501,19 +557,10 @@ $conn->close();
                             <div class="card-body text-center">
                                 <!-- ===== PROFILE AVATAR WITH PHOTO SUPPORT ===== -->
                                 <div class="profile-avatar">
-                                    <?php 
-                                        $photoPath = $staff['avatar'] ?? '';
-                                        // Build full path for checking
-                                        $fullPath = $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go-doorlock/' . $photoPath;
-                                        
-                                        // Also check without document root (relative path)
-                                        $relativePath = __DIR__ . '/../../../' . $photoPath;
-                                        
-                                        if (!empty($photoPath) && (file_exists($fullPath) || file_exists($relativePath))):
-                                    ?>
-                                        <img src="/tap-and-go-doorlock/<?php echo htmlspecialchars($photoPath); ?>" 
+                                    <?php if ($hasPhoto && !empty($photoUrl)): ?>
+                                        <img src="<?php echo htmlspecialchars($photoUrl); ?>" 
                                              alt="Profile Photo"
-                                             onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
+                                             onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex'">
                                         <span class="photo-badge">
                                             <i class="fas fa-check-circle"></i>
                                         </span>
@@ -524,13 +571,14 @@ $conn->close();
                                         foreach ($parts as $p) {
                                             if (!empty($p)) $initials .= strtoupper($p[0]);
                                         }
+                                        $initials = substr($initials, 0, 2);
                                     ?>
-                                        <div class="no-photo"><?php echo substr($initials, 0, 2); ?></div>
+                                        <div class="no-photo"><?php echo $initials; ?></div>
                                     <?php endif; ?>
                                 </div>
                                 
                                 <!-- Show photo status -->
-                                <?php if (!empty($staff['avatar'])): ?>
+                                <?php if ($hasPhoto): ?>
                                     <div class="photo-upload-info">
                                         <i class="fas fa-image me-1"></i> Photo uploaded
                                     </div>
