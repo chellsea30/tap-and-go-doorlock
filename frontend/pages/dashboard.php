@@ -1,9 +1,8 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Dashboard
- * COMPLETE WITH UNAUTHORIZED ALERT - USING alert_logs
+ * COMPLETE WITH OCCUPANCY TRACKING (ENTRY/EXIT)
  * PURE DARK MODE - No white backgrounds
- * WITHOUT RECENT ACCESS LOGS
  */
 
 // Start session
@@ -85,21 +84,21 @@ if ($result && $row = $result->fetch_assoc()) {
     $stats['unauthorized_today'] = (int)$row['count'];
 }
 
-// Current occupancy
+// ============================================================
+// GET CURRENT OCCUPANCY FROM current_occupancy TABLE
+// ============================================================
+$currentOccupants = [];
 $result = $conn->query("
-    SELECT COUNT(DISTINCT user_id) as count 
-    FROM access_logs 
-    WHERE user_id IS NOT NULL 
-    AND access_type = 'entry' 
-    AND timestamp = (
-        SELECT MAX(timestamp) 
-        FROM access_logs al2 
-        WHERE al2.user_id = access_logs.user_id
-    )
+    SELECT * FROM current_occupancy 
+    WHERE status = 'inside' 
+    ORDER BY entry_time DESC
 ");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['current_occupancy'] = (int)$row['count'];
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $currentOccupants[] = $row;
+    }
 }
+$stats['current_occupancy'] = count($currentOccupants);
 
 // Total visitors today
 $result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE DATE(entry_timestamp) = CURDATE()");
@@ -266,12 +265,9 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
             background: #0a0e1a !important;
             color: #e0e0e0 !important;
             min-height: 100vh;
-            padding-top: 70px !important; /* FIX: Add padding for fixed navbar */
+            padding-top: 70px !important;
         }
         
-        /* ============================================================
-           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
-           ============================================================ */
         .container-fluid {
             padding-top: 10px !important;
         }
@@ -281,15 +277,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
             margin-top: 0 !important;
         }
         
-        /* If navbar is fixed-top, ensure content doesn't hide behind it */
-        .navbar.fixed-top + .container-fluid,
-        .navbar.fixed-top ~ .container-fluid {
-            padding-top: 20px !important;
-        }
-        
-        /* ============================================================
-           DARK NAVBAR OVERRIDE
-           ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -305,13 +292,10 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           DARK SIDEBAR
-           ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
-            padding-top: 80px !important; /* FIX: Add padding for fixed navbar */
+            padding-top: 80px !important;
             min-height: calc(100vh - 70px) !important;
         }
         .sidebar .nav-link {
@@ -328,9 +312,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           DARK CARDS
-           ============================================================ */
         .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -370,6 +351,22 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         .stat-label { font-size: 12px; color: #808090; margin: 0; }
         .stat-card .text-danger { color: #f87171 !important; }
         .stat-card .text-success { color: #34d399 !important; }
+        
+        /* ============================================================
+           OCCUPANT CARDS
+           ============================================================ */
+        .occupant-card {
+            background: #111827 !important;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 12px !important;
+            padding: 12px 16px;
+            border-left: 4px solid #10b981;
+            transition: all 0.3s ease;
+        }
+        .occupant-card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .occupant-card .name { font-weight: 600; color: #e0e0e0; font-size: 14px; }
+        .occupant-card .detail { font-size: 11px; color: #808090; }
+        .occupant-card .time { font-size: 10px; color: #606070; }
         
         /* ============================================================
            DARK ROOM CARDS
@@ -896,7 +893,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                             <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-people-arrows"></i></div>
                             <div>
                                 <div class="stat-number"><?php echo $stats['current_occupancy']; ?></div>
-                                <div class="stat-label">Occupancy</div>
+                                <div class="stat-label">Currently Inside</div>
                             </div>
                         </div>
                     </div>
@@ -911,6 +908,68 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 <span class="badge bg-warning pulse-badge">
                                     <?php echo $stats['pending_alerts']; ?>
                                 </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                CURRENT OCCUPANTS - WHO'S INSIDE
+                ============================================================ -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5>
+                            <i class="fas fa-door-open me-2" style="color: #10b981;"></i>
+                            Currently Inside
+                            <span class="badge bg-success ms-2">
+                                <span class="live-indicator me-1"></span>
+                                <?php echo $stats['current_occupancy']; ?> inside
+                            </span>
+                        </h5>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshOccupancy()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2" id="occupancyContainer">
+                            <?php if (empty($currentOccupants)): ?>
+                                <div class="col-12 text-center text-muted py-4">
+                                    <i class="fas fa-bed fa-2x d-block mb-2"></i>
+                                    <p>No one is currently inside the dormitory</p>
+                                </div>
+                            <?php else: ?>
+                                <?php foreach ($currentOccupants as $occupant): ?>
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="occupant-card">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="status-dot" style="
+                                                    width: 10px; 
+                                                    height: 10px; 
+                                                    border-radius: 50%; 
+                                                    background: #34d399;
+                                                    animation: pulse 1.5s infinite;
+                                                    flex-shrink: 0;
+                                                "></div>
+                                                <div style="flex:1;">
+                                                    <div class="name">
+                                                        <?php echo htmlspecialchars($occupant['full_name']); ?>
+                                                        <span class="badge <?php echo $occupant['card_type'] == 'visitor' ? 'badge-visitor' : ($occupant['card_type'] == 'staff' ? 'badge-staff' : 'badge-resident'); ?> ms-1">
+                                                            <?php echo ucfirst($occupant['card_type'] ?? 'Resident'); ?>
+                                                        </span>
+                                                    </div>
+                                                    <div class="detail">
+                                                        <i class="fas fa-door-open me-1"></i>
+                                                        <?php echo htmlspecialchars($occupant['room_number'] ?? 'N/A'); ?>
+                                                    </div>
+                                                    <div class="time">
+                                                        <i class="fas fa-clock me-1"></i>
+                                                        Since <?php echo date('h:i A', strtotime($occupant['entry_time'])); ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -1120,6 +1179,90 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
+        // REFRESH OCCUPANCY - Auto-update every 10 seconds
+        // ============================================================
+        function refreshOccupancy() {
+            fetch('api/get_occupancy.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateOccupancyDisplay(data.occupants, data.total);
+                    }
+                })
+                .catch(err => console.log('Error fetching occupancy:', err));
+        }
+
+        function updateOccupancyDisplay(occupants, total) {
+            const container = document.getElementById('occupancyContainer');
+            if (!container) return;
+
+            // Update the badge count in header
+            const badge = document.querySelector('.card-header .badge.bg-success');
+            if (badge) {
+                badge.innerHTML = `<span class="live-indicator me-1"></span> ${total} inside`;
+            }
+
+            if (occupants.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center text-muted py-4">
+                        <i class="fas fa-bed fa-2x d-block mb-2"></i>
+                        <p>No one is currently inside the dormitory</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            occupants.forEach(occ => {
+                const cardType = occ.card_type || 'resident';
+                const badgeClass = cardType === 'visitor' ? 'badge-visitor' : (cardType === 'staff' ? 'badge-staff' : 'badge-resident');
+                
+                html += `
+                    <div class="col-md-4 col-lg-3">
+                        <div class="occupant-card">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="status-dot" style="
+                                    width: 10px; 
+                                    height: 10px; 
+                                    border-radius: 50%; 
+                                    background: #34d399;
+                                    animation: pulse 1.5s infinite;
+                                    flex-shrink: 0;
+                                "></div>
+                                <div style="flex:1;">
+                                    <div class="name">
+                                        ${escapeHtml(occ.full_name)}
+                                        <span class="badge ${badgeClass} ms-1">${capitalize(cardType)}</span>
+                                    </div>
+                                    <div class="detail">
+                                        <i class="fas fa-door-open me-1"></i>
+                                        ${escapeHtml(occ.room_number || 'N/A')}
+                                    </div>
+                                    <div class="time">
+                                        <i class="fas fa-clock me-1"></i>
+                                        Since ${new Date(occ.entry_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function capitalize(text) {
+            return text.charAt(0).toUpperCase() + text.slice(1);
+        }
+
+        // ============================================================
         // DISMISS ALERT
         // ============================================================
         function dismissAlert() {
@@ -1223,6 +1366,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         // ============================================================
         setInterval(() => {
             updateLastUpdateTime();
+            refreshOccupancy();
             checkNewAlerts();
         }, 10000);
 
@@ -1231,6 +1375,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
             updateLastUpdateTime();
+            refreshOccupancy();
             
             <?php if ($stats['pending_alerts'] > 0): ?>
                 setTimeout(() => {
