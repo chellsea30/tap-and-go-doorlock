@@ -1196,14 +1196,6 @@ if (isset($_SESSION['admin_id'])) {
                 </div>
             </main>
         </div>
-        
-        <!-- ============================================================
-        FOOTER - STICKY BOTTOM
-        ============================================================ -->
-        <footer class="footer">
-            &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System - ISU-Echague Dormitory. All rights reserved.
-        </footer>
-    </div>
 
     <?php include '../includes/footer.php'; ?>
     
