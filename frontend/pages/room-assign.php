@@ -4,6 +4,7 @@
  * Manage rooms 1-5 with 7 residents per room
  * COMPLETE VERSION - PURE DARK MODE
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
+ * FIXED: Dark table
  */
 
 session_start();
@@ -357,6 +358,7 @@ if (isset($_SESSION['admin_id'])) {
             flex-shrink: 0;
             width: calc(100% - 220px) !important;
         }
+        .footer span { color: #ffd700 !important; }
         
         /* ============================================================
            DARK STAT CARDS
@@ -480,22 +482,33 @@ if (isset($_SESSION['admin_id'])) {
         .room-card .text-muted { color: #606070 !important; }
         
         /* ============================================================
-           DARK TABLE
+           DARK TABLE - FIXED
            ============================================================ */
         .table {
             color: #e0e0e0 !important;
             font-size: 13px;
+            background: #111827 !important;
         }
         .table th {
             color: #808090 !important;
             border-bottom: 2px solid #1a2a4a !important;
             font-size: 12px;
+            background: #0d1528 !important;
         }
         .table td {
             border-bottom: 1px solid #1a2a4a !important;
+            background: #111827 !important;
+            color: #e0e0e0 !important;
         }
-        .table-hover tbody tr:hover {
-            background: rgba(255,255,255,0.02) !important;
+        .table-hover tbody tr:hover td {
+            background: rgba(255,255,255,0.03) !important;
+        }
+        .table .text-muted { color: #6b7280 !important; }
+        .table-responsive {
+            background: #111827 !important;
+            border-radius: 8px;
+            border: 1px solid #1a2a4a !important;
+            overflow: hidden;
         }
         
         /* ============================================================
@@ -1078,7 +1091,7 @@ if (isset($_SESSION['admin_id'])) {
         FOOTER - STICKY BOTTOM
         ============================================================ -->
         <footer class="footer">
-            &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System - ISU-Echague Dormitory. All rights reserved.
+            &copy; <?php echo date('Y'); ?> <span>Tap-and-Go Doorlock</span> System &bull; ISU-Echague Dormitory. All rights reserved.
         </footer>
     </div>
 
