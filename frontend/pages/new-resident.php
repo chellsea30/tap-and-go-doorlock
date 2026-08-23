@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - New Resident Registration
  * DARK MODE - NO PHOTO - NO ROOM ASSIGNMENT
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
+ * AUTO UPPERCASE FOR ALL TEXT FIELDS
  */
 
 // Start session
@@ -24,39 +25,39 @@ $error = '';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
-    // Get form data
-    $full_name = trim($_POST['full_name'] ?? '');
-    $course = trim($_POST['course'] ?? '');
+    // Get form data and convert to UPPERCASE
+    $full_name = strtoupper(trim($_POST['full_name'] ?? ''));
+    $course = strtoupper(trim($_POST['course'] ?? ''));
     $year_level = trim($_POST['year_level'] ?? '');
     $gender = $_POST['gender'] ?? '';
-    $gender_other = trim($_POST['gender_other'] ?? '');
+    $gender_other = strtoupper(trim($_POST['gender_other'] ?? ''));
     $birth_date = $_POST['birth_date'] ?? '';
     $age = (int)($_POST['age'] ?? 0);
-    $birth_no = trim($_POST['birth_no'] ?? '');
-    $no_siblings = trim($_POST['no_siblings'] ?? '');
-    $scholarship = trim($_POST['scholarship'] ?? '');
-    $allowance_source = trim($_POST['allowance_source'] ?? '');
-    $school_last = trim($_POST['school_last'] ?? '');
-    $school_address = trim($_POST['school_address'] ?? '');
-    $cultural_origin = trim($_POST['cultural_origin'] ?? '');
-    $religion = trim($_POST['religion'] ?? '');
-    $dialect = trim($_POST['dialect'] ?? '');
-    $cp_no = trim($_POST['cp_no'] ?? '');
-    $home_address = trim($_POST['home_address'] ?? '');
+    $birth_no = strtoupper(trim($_POST['birth_no'] ?? ''));
+    $no_siblings = strtoupper(trim($_POST['no_siblings'] ?? ''));
+    $scholarship = strtoupper(trim($_POST['scholarship'] ?? ''));
+    $allowance_source = strtoupper(trim($_POST['allowance_source'] ?? ''));
+    $school_last = strtoupper(trim($_POST['school_last'] ?? ''));
+    $school_address = strtoupper(trim($_POST['school_address'] ?? ''));
+    $cultural_origin = strtoupper(trim($_POST['cultural_origin'] ?? ''));
+    $religion = strtoupper(trim($_POST['religion'] ?? ''));
+    $dialect = strtoupper(trim($_POST['dialect'] ?? ''));
+    $cp_no = strtoupper(trim($_POST['cp_no'] ?? ''));
+    $home_address = strtoupper(trim($_POST['home_address'] ?? ''));
     $civil_status = $_POST['civil_status'] ?? '';
-    $father_education = trim($_POST['father_education'] ?? '');
-    $mother_education = trim($_POST['mother_education'] ?? '');
-    $father_occupation = trim($_POST['father_occupation'] ?? '');
-    $mother_occupation = trim($_POST['mother_occupation'] ?? '');
-    $emergency_name = trim($_POST['emergency_name'] ?? '');
-    $emergency_relationship = trim($_POST['emergency_relationship'] ?? '');
-    $emergency_address = trim($_POST['emergency_address'] ?? '');
-    $emergency_contact = trim($_POST['emergency_contact'] ?? '');
+    $father_education = strtoupper(trim($_POST['father_education'] ?? ''));
+    $mother_education = strtoupper(trim($_POST['mother_education'] ?? ''));
+    $father_occupation = strtoupper(trim($_POST['father_occupation'] ?? ''));
+    $mother_occupation = strtoupper(trim($_POST['mother_occupation'] ?? ''));
+    $emergency_name = strtoupper(trim($_POST['emergency_name'] ?? ''));
+    $emergency_relationship = strtoupper(trim($_POST['emergency_relationship'] ?? ''));
+    $emergency_address = strtoupper(trim($_POST['emergency_address'] ?? ''));
+    $emergency_contact = strtoupper(trim($_POST['emergency_contact'] ?? ''));
     $parents_marital_status = $_POST['parents_marital_status'] ?? '';
-    $former_boarding_years = trim($_POST['former_boarding_years'] ?? '');
+    $former_boarding_years = strtoupper(trim($_POST['former_boarding_years'] ?? ''));
     $plan_transfer = $_POST['plan_transfer'] ?? '';
-    $plan_transfer_yes = trim($_POST['plan_transfer_yes'] ?? '');
-    $plan_transfer_no = trim($_POST['plan_transfer_no'] ?? '');
+    $plan_transfer_yes = strtoupper(trim($_POST['plan_transfer_yes'] ?? ''));
+    $plan_transfer_no = strtoupper(trim($_POST['plan_transfer_no'] ?? ''));
     $date_registered = $_POST['date'] ?? date('Y-m-d');
     
     // Validate required fields
@@ -308,7 +309,7 @@ $formData = $_POST ?? [];
         .content-wrapper {
             display: flex;
             flex: 1;
-            overflow: hidden; /* Prevents scrollbar on wrapper */
+            overflow: hidden;
         }
         
         /* ============================================================
@@ -320,7 +321,7 @@ $formData = $_POST ?? [];
             padding: 15px 25px !important;
             flex: 1;
             height: calc(100vh - 56px - 50px) !important;
-            overflow-y: auto !important; /* Allows scrolling inside main content only */
+            overflow-y: auto !important;
             background: #0a0e1a !important;
         }
         
@@ -382,6 +383,11 @@ $formData = $_POST ?? [];
             height: 38px;
         }
         
+        /* ===== AUTO UPPERCASE ===== */
+        .form-control.auto-upper {
+            text-transform: uppercase;
+        }
+        
         .form-control:focus,
         .form-select:focus {
             border-color: #ffd700 !important;
@@ -392,6 +398,7 @@ $formData = $_POST ?? [];
         
         .form-control::placeholder {
             color: #6b7280 !important;
+            text-transform: none !important;
         }
         
         .form-control:disabled,
@@ -434,14 +441,14 @@ $formData = $_POST ?? [];
         }
         
         /* ============================================================
-           HEADER TITLE (REMOVED BORDER TO FIX YELLOW LINE)
+           HEADER TITLE
            ============================================================ */
         .header-title {
             background: linear-gradient(135deg, #0a1628, #1a2a4a) !important;
             padding: 15px 25px;
             border-radius: 12px 12px 0 0;
             margin: -20px -25px 16px -25px;
-            border-bottom: none !important; /* FIX: Removed border line */
+            border-bottom: none !important;
         }
         
         .header-title h4 {
@@ -714,7 +721,7 @@ $formData = $_POST ?? [];
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Name of Dorm Occupant <span class="required">*</span></label>
-                                            <input type="text" class="form-control" name="full_name" placeholder="Enter full name" value="<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?>" required>
+                                            <input type="text" class="form-control auto-upper" name="full_name" placeholder="Enter full name" value="<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?>" required>
                                         </div>
                                     </div>
                                 </div>
@@ -727,7 +734,7 @@ $formData = $_POST ?? [];
                             <div class="row g-2">
                                 <div class="col-md-6">
                                     <label class="form-label">Name <span class="required">*</span></label>
-                                    <input type="text" class="form-control" name="full_name" placeholder="Full Name" value="<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?>" required>
+                                    <input type="text" class="form-control auto-upper" name="full_name" placeholder="Full Name" value="<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?>" required>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Gender</label>
@@ -745,7 +752,7 @@ $formData = $_POST ?? [];
                                             <label class="form-check-label" for="genderLGBT">LGBT</label>
                                         </div>
                                         <div>
-                                            <input type="text" class="form-control form-control-sm" name="gender_other" placeholder="Specify" value="<?php echo htmlspecialchars($formData['gender_other'] ?? ''); ?>" style="width:100px; display:inline; height:32px; font-size:12px;">
+                                            <input type="text" class="form-control form-control-sm auto-upper" name="gender_other" placeholder="Specify" value="<?php echo htmlspecialchars($formData['gender_other'] ?? ''); ?>" style="width:100px; display:inline; height:32px; font-size:12px;">
                                         </div>
                                     </div>
                                 </div>
@@ -759,11 +766,11 @@ $formData = $_POST ?? [];
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Birth No.</label>
-                                    <input type="text" class="form-control" name="birth_no" placeholder="Birth Certificate No." value="<?php echo htmlspecialchars($formData['birth_no'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="birth_no" placeholder="Birth Certificate No." value="<?php echo htmlspecialchars($formData['birth_no'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label">Course <span class="required">*</span></label>
-                                    <input type="text" class="form-control" name="course" placeholder="e.g., BSIT" value="<?php echo htmlspecialchars($formData['course'] ?? ''); ?>" required>
+                                    <input type="text" class="form-control auto-upper" name="course" placeholder="e.g., BSIT" value="<?php echo htmlspecialchars($formData['course'] ?? ''); ?>" required>
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label">Year Level <span class="required">*</span></label>
@@ -778,15 +785,15 @@ $formData = $_POST ?? [];
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">No. of Siblings</label>
-                                    <input type="text" class="form-control" name="no_siblings" placeholder="e.g., 3 siblings" value="<?php echo htmlspecialchars($formData['no_siblings'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="no_siblings" placeholder="e.g., 3 siblings" value="<?php echo htmlspecialchars($formData['no_siblings'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Scholarship Grant</label>
-                                    <input type="text" class="form-control" name="scholarship" placeholder="If none, type 'None'" value="<?php echo htmlspecialchars($formData['scholarship'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="scholarship" placeholder="If none, type 'None'" value="<?php echo htmlspecialchars($formData['scholarship'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-12">
                                     <label class="form-label">Other Sources of Allowance for School</label>
-                                    <input type="text" class="form-control" name="allowance_source" placeholder="e.g., Parents, Part-time job" value="<?php echo htmlspecialchars($formData['allowance_source'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="allowance_source" placeholder="e.g., Parents, Part-time job" value="<?php echo htmlspecialchars($formData['allowance_source'] ?? ''); ?>">
                                 </div>
                             </div>
                         </div>
@@ -797,31 +804,31 @@ $formData = $_POST ?? [];
                             <div class="row g-2">
                                 <div class="col-md-6">
                                     <label class="form-label">School Last Attended</label>
-                                    <input type="text" class="form-control" name="school_last" placeholder="School name" value="<?php echo htmlspecialchars($formData['school_last'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="school_last" placeholder="School name" value="<?php echo htmlspecialchars($formData['school_last'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">School Address</label>
-                                    <input type="text" class="form-control" name="school_address" placeholder="School address" value="<?php echo htmlspecialchars($formData['school_address'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="school_address" placeholder="School address" value="<?php echo htmlspecialchars($formData['school_address'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Cultural Origin</label>
-                                    <input type="text" class="form-control" name="cultural_origin" placeholder="e.g., Ilocano" value="<?php echo htmlspecialchars($formData['cultural_origin'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="cultural_origin" placeholder="e.g., Ilocano" value="<?php echo htmlspecialchars($formData['cultural_origin'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Religion</label>
-                                    <input type="text" class="form-control" name="religion" placeholder="Religion" value="<?php echo htmlspecialchars($formData['religion'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="religion" placeholder="Religion" value="<?php echo htmlspecialchars($formData['religion'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Dialect Spoken</label>
-                                    <input type="text" class="form-control" name="dialect" placeholder="Dialect" value="<?php echo htmlspecialchars($formData['dialect'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="dialect" placeholder="Dialect" value="<?php echo htmlspecialchars($formData['dialect'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">CP No.</label>
-                                    <input type="text" class="form-control" name="cp_no" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($formData['cp_no'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="cp_no" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($formData['cp_no'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-8">
                                     <label class="form-label">Complete Home Address</label>
-                                    <input type="text" class="form-control" name="home_address" placeholder="House number, Street, Barangay" value="<?php echo htmlspecialchars($formData['home_address'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="home_address" placeholder="House number, Street, Barangay" value="<?php echo htmlspecialchars($formData['home_address'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Civil Status</label>
@@ -843,19 +850,19 @@ $formData = $_POST ?? [];
                             <div class="row g-2">
                                 <div class="col-md-6">
                                     <label class="form-label">Father's Education</label>
-                                    <input type="text" class="form-control" name="father_education" placeholder="e.g., College Graduate" value="<?php echo htmlspecialchars($formData['father_education'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="father_education" placeholder="e.g., College Graduate" value="<?php echo htmlspecialchars($formData['father_education'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Mother's Education</label>
-                                    <input type="text" class="form-control" name="mother_education" placeholder="e.g., High School Grad" value="<?php echo htmlspecialchars($formData['mother_education'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="mother_education" placeholder="e.g., High School Grad" value="<?php echo htmlspecialchars($formData['mother_education'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Father's Occupation</label>
-                                    <input type="text" class="form-control" name="father_occupation" placeholder="Occupation" value="<?php echo htmlspecialchars($formData['father_occupation'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="father_occupation" placeholder="Occupation" value="<?php echo htmlspecialchars($formData['father_occupation'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Mother's Occupation</label>
-                                    <input type="text" class="form-control" name="mother_occupation" placeholder="Occupation" value="<?php echo htmlspecialchars($formData['mother_occupation'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="mother_occupation" placeholder="Occupation" value="<?php echo htmlspecialchars($formData['mother_occupation'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-12">
                                     <label class="form-label">Parent's Marital Status</label>
@@ -891,19 +898,19 @@ $formData = $_POST ?? [];
                             <div class="row g-2">
                                 <div class="col-md-6">
                                     <label class="form-label">Name <span class="required">*</span></label>
-                                    <input type="text" class="form-control" name="emergency_name" placeholder="Full name" value="<?php echo htmlspecialchars($formData['emergency_name'] ?? ''); ?>" required>
+                                    <input type="text" class="form-control auto-upper" name="emergency_name" placeholder="Full name" value="<?php echo htmlspecialchars($formData['emergency_name'] ?? ''); ?>" required>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Relationship <span class="required">*</span></label>
-                                    <input type="text" class="form-control" name="emergency_relationship" placeholder="e.g., Mother, Father" value="<?php echo htmlspecialchars($formData['emergency_relationship'] ?? ''); ?>" required>
+                                    <input type="text" class="form-control auto-upper" name="emergency_relationship" placeholder="e.g., Mother, Father" value="<?php echo htmlspecialchars($formData['emergency_relationship'] ?? ''); ?>" required>
                                 </div>
                                 <div class="col-md-8">
                                     <label class="form-label">Address <span class="required">*</span></label>
-                                    <input type="text" class="form-control" name="emergency_address" placeholder="Complete address" value="<?php echo htmlspecialchars($formData['emergency_address'] ?? ''); ?>" required>
+                                    <input type="text" class="form-control auto-upper" name="emergency_address" placeholder="Complete address" value="<?php echo htmlspecialchars($formData['emergency_address'] ?? ''); ?>" required>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Contact No. <span class="required">*</span></label>
-                                    <input type="text" class="form-control" name="emergency_contact" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($formData['emergency_contact'] ?? ''); ?>" required>
+                                    <input type="text" class="form-control auto-upper" name="emergency_contact" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($formData['emergency_contact'] ?? ''); ?>" required>
                                 </div>
                             </div>
                         </div>
@@ -914,7 +921,7 @@ $formData = $_POST ?? [];
                             <div class="row g-2">
                                 <div class="col-md-6">
                                     <label class="form-label">Length of Stay in Former Boarding House</label>
-                                    <input type="text" class="form-control" name="former_boarding_years" placeholder="e.g., 2 years" value="<?php echo htmlspecialchars($formData['former_boarding_years'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="former_boarding_years" placeholder="e.g., 2 years" value="<?php echo htmlspecialchars($formData['former_boarding_years'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-12">
                                     <label class="form-label">Plan to Transfer After This Semester?</label>
@@ -931,11 +938,11 @@ $formData = $_POST ?? [];
                                 </div>
                                 <div class="col-md-6" id="planYesDiv" style="display:none;">
                                     <label class="form-label">Why, If Yes?</label>
-                                    <input type="text" class="form-control" name="plan_transfer_yes" placeholder="Reason for transferring" value="<?php echo htmlspecialchars($formData['plan_transfer_yes'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="plan_transfer_yes" placeholder="Reason for transferring" value="<?php echo htmlspecialchars($formData['plan_transfer_yes'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-6" id="planNoDiv" style="display:none;">
                                     <label class="form-label">Why, If No?</label>
-                                    <input type="text" class="form-control" name="plan_transfer_no" placeholder="Reason for staying" value="<?php echo htmlspecialchars($formData['plan_transfer_no'] ?? ''); ?>">
+                                    <input type="text" class="form-control auto-upper" name="plan_transfer_no" placeholder="Reason for staying" value="<?php echo htmlspecialchars($formData['plan_transfer_no'] ?? ''); ?>">
                                 </div>
                             </div>
                         </div>
@@ -968,6 +975,23 @@ $formData = $_POST ?? [];
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // ============================================================
+        // AUTO UPPERCASE ON INPUT (real-time)
+        // ============================================================
+        document.querySelectorAll('.auto-upper').forEach(function(input) {
+            input.addEventListener('input', function() {
+                // Save cursor position
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+                
+                // Convert to uppercase
+                this.value = this.value.toUpperCase();
+                
+                // Restore cursor position
+                this.setSelectionRange(start, end);
+            });
+        });
+
         // ============================================================
         // TOGGLE PLAN TRANSFER FIELDS
         // ============================================================
