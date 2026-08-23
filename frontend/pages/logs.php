@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Access Logs / Attendance
  * COMPLETE - With same layout as dashboard.php
  * PURE DARK MODE - Fixed navbar, sidebar, footer
+ * FIXED: Complete dark table
  */
 
 session_start();
@@ -514,10 +515,15 @@ if ($result && $row = $result->fetch_assoc()) {
         }
         
         /* ============================================================
-           DARK TABLE
+           DARK TABLE - COMPLETE FIX
            ============================================================ */
-        .log-table { font-size: 13px; }
-        .log-table th {
+        .log-table {
+            font-size: 13px;
+            background: #111827 !important;
+            border-collapse: collapse !important;
+            width: 100%;
+        }
+        .log-table thead th {
             font-weight: 600;
             color: #808090 !important;
             border-bottom: 2px solid #1a2a4a !important;
@@ -525,16 +531,37 @@ if ($result && $row = $result->fetch_assoc()) {
             text-transform: uppercase;
             letter-spacing: 0.5px;
             padding: 10px 12px;
+            background: #0d1528 !important;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
-        .log-table td {
+        .log-table tbody td {
             vertical-align: middle;
             padding: 8px 12px;
-            color: #e0e0e0;
-            border-bottom: 1px solid #1a2a4a;
+            color: #e0e0e0 !important;
+            border-bottom: 1px solid #1a2a4a !important;
+            background: #111827 !important;
         }
-        .log-table tr:hover td {
-            background: rgba(255,255,255,0.02);
+        .log-table tbody tr {
+            background: #111827 !important;
         }
+        .log-table tbody tr:hover td {
+            background: rgba(255,255,255,0.03) !important;
+        }
+        .log-table tbody tr:nth-child(even) td {
+            background: #0f172a !important;
+        }
+        .log-table tbody tr:nth-child(even):hover td {
+            background: rgba(255,255,255,0.04) !important;
+        }
+        .table-responsive {
+            background: #111827 !important;
+            border-radius: 12px;
+            border: 1px solid #1a2a4a !important;
+            overflow: hidden;
+        }
+        
         .log-table .user-cell { display: flex; align-items: center; gap: 10px; }
         .log-table .user-avatar {
             width: 32px; height: 32px; border-radius: 50%;
@@ -554,15 +581,15 @@ if ($result && $row = $result->fetch_assoc()) {
         .log-table .uid-cell {
             font-family: monospace;
             font-weight: 600;
-            color: #93c5fd;
-            background: #1a2a4a;
+            color: #93c5fd !important;
+            background: #1a2a4a !important;
             padding: 2px 8px;
             border-radius: 4px;
             font-size: 12px;
         }
         .log-table .uid-cell.denied-uid {
-            color: #f87171;
-            background: #3a1a1a;
+            color: #f87171 !important;
+            background: #3a1a1a !important;
         }
         .log-table .text-muted { color: #808090 !important; }
         
