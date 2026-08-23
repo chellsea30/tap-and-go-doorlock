@@ -4,6 +4,7 @@
  * COMPLETE - History of all alerts and unauthorized access
  * WITH PAGINATION - Show Entries
  * PURE DARK MODE - FIXED LAYOUT SAME AS DASHBOARD
+ * FIXED: Dark table with proper styling
  */
 
 session_start();
@@ -580,10 +581,18 @@ $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'alerts';
         }
         
         /* ============================================================
-           DARK TABLE
+           DARK TABLE - FIXED
            ============================================================ */
-        .log-table { font-size: 13px; }
-        .log-table th {
+        .log-table {
+            font-size: 13px;
+            background: #111827 !important;
+            border-radius: 8px;
+            overflow: hidden;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .log-table thead th {
             font-weight: 600;
             color: #808090 !important;
             border-bottom: 2px solid #1a2a4a !important;
@@ -591,16 +600,22 @@ $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'alerts';
             text-transform: uppercase;
             letter-spacing: 0.5px;
             padding: 10px 12px;
+            background: #0d1528 !important;
+            border-color: #1a2a4a !important;
         }
-        .log-table td {
+        
+        .log-table tbody td {
             vertical-align: middle;
             padding: 8px 12px;
             color: #e0e0e0 !important;
             border-bottom: 1px solid #1a2a4a !important;
+            background: #111827 !important;
         }
-        .log-table tr:hover td {
-            background: rgba(255,255,255,0.02) !important;
+        
+        .log-table tbody tr:hover td {
+            background: rgba(255,255,255,0.03) !important;
         }
+        
         .log-table .user-cell { display: flex; align-items: center; gap: 10px; }
         .log-table .user-avatar {
             width: 32px; height: 32px; border-radius: 50%;
@@ -625,6 +640,13 @@ $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'alerts';
             background: #2a1a1a !important;
         }
         .log-table .text-muted { color: #808090 !important; }
+        
+        .table-responsive {
+            background: #111827 !important;
+            border-radius: 8px;
+            border: 1px solid #1a2a4a !important;
+            overflow: hidden;
+        }
         
         /* ============================================================
            DARK BADGES
