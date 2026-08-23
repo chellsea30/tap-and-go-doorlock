@@ -1,7 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Staff Profile
- * PURE DARK MODE WITH PHOTO SUPPORT
+ * PURE DARK MODE WITH PHOTO SUPPORT - FIXED VERSION
  */
 
 // Start session
@@ -73,64 +73,54 @@ if ($result && $row = $result->fetch_assoc()) {
     $stats['total_visitors'] = (int)$row['count'];
 }
 
-// Check if avatar column exists
-$hasAvatar = false;
-$check = $conn->query("SHOW COLUMNS FROM staff_users LIKE 'avatar'");
-if ($check && $check->num_rows > 0) {
-    $hasAvatar = true;
-}
-
 // ============================================================
-// PHOTO PATH DETECTION - FIXED
+// PHOTO PATH DETECTION - FIXED VERSION
 // ============================================================
 $photoPath = $staff['avatar'] ?? '';
 $hasPhoto = false;
 $photoUrl = '';
-$photoFullPath = '';
+
+// Debug: Check what's in the database
+// echo "<!-- DEBUG: photoPath = " . $photoPath . " -->";
 
 if (!empty($photoPath)) {
-    // Try different path possibilities
-    $paths_to_try = [
-        // Relative paths from staff/pages/
-        '../../' . $photoPath,
-        '../' . $photoPath,
-        // Absolute paths
+    // Get the filename from the path
+    $filename = basename($photoPath);
+    
+    // Define the upload directory (where files are actually stored)
+    $upload_dir = __DIR__ . '/../../../uploads/staff_photos/';
+    $upload_dir2 = $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go/uploads/staff_photos/';
+    $upload_dir3 = $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go-doorlock/uploads/staff_photos/';
+    
+    // Check all possible locations
+    $possible_files = [
+        $upload_dir . $filename,
+        $upload_dir2 . $filename,
+        $upload_dir3 . $filename,
+        '../../uploads/staff_photos/' . $filename,
+        '../uploads/staff_photos/' . $filename,
         $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go/' . $photoPath,
         $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go-doorlock/' . $photoPath,
-        // Direct uploads path
-        $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go/uploads/staff_photos/' . basename($photoPath),
-        $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go-doorlock/uploads/staff_photos/' . basename($photoPath),
-        // Using __DIR__
-        __DIR__ . '/../../../uploads/staff_photos/' . basename($photoPath),
     ];
     
-    foreach ($paths_to_try as $path) {
-        if (file_exists($path)) {
+    foreach ($possible_files as $file_path) {
+        if (file_exists($file_path)) {
             $hasPhoto = true;
-            $photoFullPath = $path;
             
-            // Determine URL path
-            if (strpos($path, 'tap-and-go-doorlock') !== false) {
-                $photoUrl = '/tap-and-go-doorlock/' . $photoPath;
-            } elseif (strpos($path, 'tap-and-go') !== false) {
-                $photoUrl = '/tap-and-go/' . $photoPath;
+            // Determine the correct URL
+            if (strpos($file_path, 'tap-and-go-doorlock') !== false) {
+                $photoUrl = '/tap-and-go-doorlock/uploads/staff_photos/' . $filename;
+            } elseif (strpos($file_path, 'tap-and-go') !== false && strpos($file_path, 'tap-and-go-doorlock') === false) {
+                $photoUrl = '/tap-and-go/uploads/staff_photos/' . $filename;
+            } elseif (strpos($file_path, $_SERVER['DOCUMENT_ROOT']) === 0) {
+                // Convert absolute path to URL
+                $relative_path = str_replace($_SERVER['DOCUMENT_ROOT'], '', $file_path);
+                $photoUrl = $relative_path;
             } else {
                 // Fallback: use relative path
-                $photoUrl = '../../' . $photoPath;
+                $photoUrl = '../../uploads/staff_photos/' . $filename;
             }
             break;
-        }
-    }
-    
-    // If no path found, try one more time with direct URL
-    if (!$hasPhoto) {
-        // Check if file exists via URL (for remote servers)
-        $test_url = '/tap-and-go/' . $photoPath;
-        $full_test_path = $_SERVER['DOCUMENT_ROOT'] . '/tap-and-go/' . $photoPath;
-        if (file_exists($full_test_path)) {
-            $hasPhoto = true;
-            $photoUrl = $test_url;
-            $photoFullPath = $full_test_path;
         }
     }
 }
@@ -560,7 +550,7 @@ $conn->close();
                                     <?php if ($hasPhoto && !empty($photoUrl)): ?>
                                         <img src="<?php echo htmlspecialchars($photoUrl); ?>" 
                                              alt="Profile Photo"
-                                             onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex'">
+                                             onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex'; console.log('Image failed to load: <?php echo htmlspecialchars($photoUrl); ?>')">
                                         <span class="photo-badge">
                                             <i class="fas fa-check-circle"></i>
                                         </span>
@@ -580,8 +570,10 @@ $conn->close();
                                 <!-- Show photo status -->
                                 <?php if ($hasPhoto): ?>
                                     <div class="photo-upload-info">
-                                        <i class="fas fa-image me-1"></i> Photo uploaded
+                                        <i class="fas fa-image me-1"></i> Photo Uploaded
                                     </div>
+                                    <!-- Debug: Show the path being used -->
+                                    <!-- <div style="font-size:10px;color:#666;margin-top:2px;">URL: <?php echo htmlspecialchars($photoUrl); ?></div> -->
                                 <?php else: ?>
                                     <div class="photo-upload-info" style="color:#808090; border-color:#1a2a4a;">
                                         <i class="fas fa-camera me-1"></i> No photo uploaded
