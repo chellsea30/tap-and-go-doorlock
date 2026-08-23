@@ -1,8 +1,7 @@
 <?php
 /**
- * Tap-and-Go Doorlock - Password Reset Requests
- * DARK MODE - FULLY READABLE - FIXED LAYOUT SAME AS DASHBOARD
- * FIXED: Proper URL generation without port
+ * Tap-and-Go Doorlock - Password Reset Requests (Admin)
+ * FIXED: Proper URL generation for Railway
  */
 
 session_start();
@@ -23,18 +22,14 @@ $error = '';
 $generated_link = '';
 
 // ============================================================
-// FIXED: Get proper base URL
+// FIXED: Get proper base URL for Railway
 // ============================================================
 function getBaseUrl() {
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
     $host = $_SERVER['HTTP_HOST'];
     
-    if (strpos($host, ':3000') !== false) {
-        $host = 'localhost';
-    }
-    if (strpos($host, ':') !== false) {
-        $host = explode(':', $host)[0];
-    }
+    // Remove port if present
+    $host = preg_replace('/:\d+$/', '', $host);
     
     return $protocol . $host;
 }
@@ -75,8 +70,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
         $stmt->execute();
         $stmt->close();
         
+        // FIXED: Remove duplicate folder name
         $base_url = getBaseUrl();
-        $reset_link = $base_url . '/tap-and-go-doorlock/frontend/pages/student/reset-password.php?token=' . $reset_token;
+        $reset_link = $base_url . '/frontend/pages/student/reset-password.php?token=' . $reset_token;
         
         logAudit($_SESSION['admin_id'], 'Password Reset Approved', "Approved reset for student: {$student['full_name']} - Token generated");
         $success = "✅ Reset request approved!";
@@ -138,7 +134,7 @@ if (isset($_GET['regenerate']) && !empty($_GET['regenerate'])) {
     $stmt->close();
     
     $base_url = getBaseUrl();
-    $reset_link = $base_url . '/tap-and-go-doorlock/frontend/pages/student/reset-password.php?token=' . $reset_token;
+    $reset_link = $base_url . '/frontend/pages/student/reset-password.php?token=' . $reset_token;
     
     $success = "✅ New reset link generated!";
     $generated_link = $reset_link;
@@ -216,7 +212,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
         /* ============================================================
-           GLOBAL DARK THEME - SAME AS DASHBOARD
+           GLOBAL DARK THEME
            ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -228,9 +224,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             padding-top: 70px !important;
         }
         
-        /* ============================================================
-           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
-           ============================================================ */
         .container-fluid {
             padding-top: 10px !important;
         }
@@ -240,9 +233,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             margin-top: 0 !important;
         }
         
-        /* ============================================================
-           DARK NAVBAR OVERRIDE - SAME AS DASHBOARD
-           ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -258,9 +248,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           DARK SIDEBAR - SAME AS DASHBOARD
-           ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
@@ -281,9 +268,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           DARK STAT CARDS - SAME AS DASHBOARD
-           ============================================================ */
         .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -318,9 +302,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             100% { transform: scale(1); }
         }
         
-        /* ============================================================
-           DARK CARDS - SAME AS DASHBOARD
-           ============================================================ */
         .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -337,9 +318,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
         .card-header h5 { margin: 0; font-weight: 600; color: #e0e0e0; font-size: 16px; }
         .card-body { padding: 20px; background: #111827 !important; }
         
-        /* ============================================================
-           REQUEST CARD - DARK
-           ============================================================ */
         .request-card {
             background: #1a1a2e !important;
             border-radius: 12px;
@@ -418,17 +396,11 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             background: rgba(59, 130, 246, 0.3);
         }
         
-        /* ============================================================
-           DARK BADGES
-           ============================================================ */
         .badge-pending { background: rgba(245, 158, 11, 0.2) !important; color: #fbbf24 !important; }
         .badge-approved { background: rgba(255, 215, 0, 0.2) !important; color: #ffd700 !important; }
         .badge-denied { background: rgba(239, 68, 68, 0.2) !important; color: #fca5a5 !important; }
         .badge-completed { background: rgba(16, 185, 129, 0.2) !important; color: #6ee7b7 !important; }
         
-        /* ============================================================
-           DARK BUTTONS
-           ============================================================ */
         .btn-approve {
             background: rgba(16, 185, 129, 0.2) !important;
             color: #6ee7b7 !important;
@@ -474,9 +446,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             color: #93c5fd !important;
         }
         
-        /* ============================================================
-           DARK FORM ELEMENTS
-           ============================================================ */
         .form-control {
             background: #0d1220 !important;
             border: 1px solid #1a2a4a !important;
@@ -495,9 +464,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             color: #6b7280 !important;
         }
         
-        /* ============================================================
-           DARK ALERTS
-           ============================================================ */
         .alert-success {
             background: rgba(16, 185, 129, 0.15) !important;
             border-color: #10b981 !important;
@@ -510,9 +476,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
         }
         .btn-close { filter: invert(1) !important; }
         
-        /* ============================================================
-           BORDER & MISC
-           ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
         .text-muted { color: #6b7280 !important; }
@@ -536,26 +499,18 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             100% { opacity: 1; transform: scale(1); }
         }
         
-        /* ============================================================
-           SCROLLBAR
-           ============================================================ */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a0e1a; }
         ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
-        /* ============================================================
-           RESPONSIVE - SAME AS DASHBOARD
-           ============================================================ */
         @media (max-width: 768px) {
             body {
                 padding-top: 60px !important;
             }
-            
             .navbar {
                 height: 60px !important;
             }
-            
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
@@ -568,25 +523,9 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
             .stat-icon { width: 40px; height: 40px; font-size: 16px; }
-            
-            .request-card .row {
-                flex-direction: column;
-                gap: 10px;
-            }
-            .request-card .col-md-5.text-end {
-                text-align: left !important;
-            }
-            .request-card .d-flex.gap-1 {
-                justify-content: flex-start !important;
-            }
-            .request-card .row .col-md-8,
-            .request-card .row .col-md-4 {
-                width: 100%;
-            }
         }
     </style>
 </head>
@@ -600,9 +539,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 
-                <!-- ============================================================
-                HEADER - SAME AS DASHBOARD
-                ============================================================ -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-key me-2" style="color: #ffd700;"></i>
@@ -651,9 +587,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                     </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                STATS CARDS - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- STATS -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-4 col-xl-2">
                         <div class="stat-card">
@@ -712,9 +646,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                PENDING REQUESTS
-                ============================================================ -->
+                <!-- PENDING REQUESTS -->
                 <div class="card">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -767,7 +699,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                                     </div>
                                                     <div class="col-md-4">
                                                         <div class="d-flex gap-1">
-                                                            <button type="submit" name="approve" class="btn-approve" onclick="return confirm('Approve reset request for <?php echo htmlspecialchars($request['full_name']); ?>? A reset link will be generated.')">
+                                                            <button type="submit" name="approve" class="btn-approve" onclick="return confirm('Approve reset request for <?php echo htmlspecialchars($request['full_name']); ?>?')">
                                                                 <i class="fas fa-check"></i>
                                                             </button>
                                                             <button type="submit" name="deny" class="btn-deny" onclick="return confirm('Deny reset request for <?php echo htmlspecialchars($request['full_name']); ?>?')">
@@ -776,7 +708,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <small class="text-muted">Approve = Generate reset link for student</small>
+                                                <small class="text-muted">Approve = Generate reset link</small>
                                             </form>
                                         </div>
                                     </div>
@@ -786,9 +718,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                HISTORY
-                ============================================================ -->
+                <!-- HISTORY -->
                 <div class="card">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -813,7 +743,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                 $badgeClass = $isApproved ? 'badge-approved' : ($isCompleted ? 'badge-completed' : 'badge-denied');
                                 $cardClass = $isApproved ? 'history-approved' : ($isCompleted ? 'history-completed' : 'history-denied');
                                 $statusIcon = $isApproved ? 'fa-clock' : ($isCompleted ? 'fa-check-double' : 'fa-times-circle');
-                                $statusText = $isApproved ? 'Approved - Waiting for student' : ($isCompleted ? 'Completed' : 'Denied');
+                                $statusText = $isApproved ? 'Approved - Waiting' : ($isCompleted ? 'Completed' : 'Denied');
                             ?>
                                 <div class="request-card <?php echo $cardClass; ?>">
                                     <div class="row align-items-center">
@@ -829,9 +759,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                                 <i class="fas fa-id-card me-1"></i>
                                                 <?php echo htmlspecialchars($request['student_id_number']); ?>
                                                 <span class="mx-1">•</span>
-                                                <i class="fas fa-user me-1"></i>
-                                                <?php echo htmlspecialchars($request['username']); ?>
-                                                <span class="mx-1">•</span>
                                                 <i class="fas fa-envelope me-1"></i>
                                                 <?php echo htmlspecialchars($request['email']); ?>
                                             </div>
@@ -842,7 +769,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                             
                                             <?php if ($isApproved && !empty($request['reset_token'])): 
                                                 $base_url = getBaseUrl();
-                                                $reset_link = $base_url . '/tap-and-go-doorlock/frontend/pages/student/reset-password.php?token=' . $request['reset_token'];
+                                                $reset_link = $base_url . '/frontend/pages/student/reset-password.php?token=' . $request['reset_token'];
                                             ?>
                                                 <div class="reset-link-box">
                                                     <div class="d-flex justify-content-between align-items-center">
@@ -868,7 +795,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                             
                                             <?php if (!empty($request['admin_response'])): ?>
                                                 <div class="reset-link-box" style="border-color: #ffd700;">
-                                                    <strong style="color: #ffd700;"><i class="fas fa-reply me-1"></i> Admin Response:</strong>
+                                                    <strong style="color: #ffd700;"><i class="fas fa-reply me-1"></i> Admin:</strong>
                                                     <?php echo nl2br(htmlspecialchars($request['admin_response'])); ?>
                                                 </div>
                                             <?php endif; ?>
@@ -895,9 +822,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                FOOTER - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- FOOTER -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
@@ -910,18 +835,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                             <?php echo $stats['pending']; ?> pending
                         </span>
                     <?php endif; ?>
-                    <?php if ($stats['approved'] > 0): ?>
-                        <span class="text-success ms-3">
-                            <i class="fas fa-check-circle me-1"></i>
-                            <?php echo $stats['approved']; ?> approved
-                        </span>
-                    <?php endif; ?>
-                    <?php if ($stats['completed'] > 0): ?>
-                        <span class="text-success ms-3">
-                            <i class="fas fa-check-double me-1"></i>
-                            <?php echo $stats['completed']; ?> completed
-                        </span>
-                    <?php endif; ?>
                 </footer>
 
             </main>
@@ -932,9 +845,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // COPY LINK
-        // ============================================================
         function copyLink(link) {
             navigator.clipboard.writeText(link).then(function() {
                 const btn = event.target.closest('button');
@@ -954,9 +864,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             });
         }
 
-        // ============================================================
-        // UPDATE TIME - SAME AS DASHBOARD
-        // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
             const timeString = now.toLocaleTimeString('en-US', { 
@@ -982,9 +889,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
         setInterval(updateLastUpdateTime, 10000);
         document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
         
-        // ============================================================
-        // SIDEBAR TOGGLE
-        // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
