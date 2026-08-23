@@ -1,45 +1,78 @@
 <?php
 /**
- * Tap-and-Go Doorlock - Student Reset Password
- * Student sets new password using token from admin
+ * Tap-and-Go Doorlock - Student Password Reset
+ * No redirect loops - Fixed version
  */
 
 session_start();
 
-// Adjust path - from frontend/pages/student/ to backend/
-require_once '../../../backend/config/config.php';
-require_once '../../../backend/helpers/functions.php';
+// Load config and functions
+require_once __DIR__ . '/../../../backend/config/config.php';
+require_once __DIR__ . '/../../../backend/helpers/functions.php';
 
+// Get database connection
 $conn = getDBConnection();
+
 $error = '';
 $success = '';
-$token = isset($_GET['token']) ? trim($_GET['token']) : '';
-$valid_token = false;
-$student_id = null;
+$show_form = false;
+$token_valid = false;
+$student_id = 0;
 $student_name = '';
-$request_id = null;
+$student_email = '';
 
-// Check if token is valid
+// Check token
+$token = $_GET['token'] ?? '';
+$request_id = 0;
+
 if (!empty($token)) {
+    // Verify token
     $stmt = $conn->prepare("
-        SELECT r.*, s.full_name, s.student_id
+        SELECT r.*, s.full_name, s.email 
         FROM password_reset_requests r
         JOIN student_users s ON r.student_id = s.student_id
-        WHERE r.reset_token = ? 
-        AND r.status = 'approved'
-        AND r.token_expires_at > NOW()
+        WHERE r.reset_token = ? AND r.status = 'approved' AND r.token_expires_at > NOW()
     ");
     $stmt->bind_param("s", $token);
     $stmt->execute();
     $result = $stmt->get_result();
-    
-    if ($row = $result->fetch_assoc()) {
-        $valid_token = true;
-        $student_id = $row['student_id'];
-        $student_name = $row['full_name'];
-        $request_id = $row['request_id'];
-    }
+    $request = $result->fetch_assoc();
     $stmt->close();
+    
+    if ($request) {
+        $token_valid = true;
+        $show_form = true;
+        $student_id = $request['student_id'];
+        $student_name = $request['full_name'];
+        $student_email = $request['email'];
+        $request_id = $request['request_id'];
+    } else {
+        // Check if token is expired or invalid
+        $stmt = $conn->prepare("
+            SELECT status, token_expires_at 
+            FROM password_reset_requests 
+            WHERE reset_token = ?
+        ");
+        $stmt->bind_param("s", $token);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $check = $result->fetch_assoc();
+        $stmt->close();
+        
+        if ($check) {
+            if ($check['status'] == 'completed') {
+                $error = "This reset link has already been used. Please request a new one.";
+            } elseif (strtotime($check['token_expires_at']) < time()) {
+                $error = "This reset link has expired. Please request a new one.";
+            } else {
+                $error = "Invalid reset token. Please request a new one.";
+            }
+        } else {
+            $error = "Invalid reset token. Please request a new one.";
+        }
+    }
+} else {
+    $error = "No reset token provided.";
 }
 
 // Handle password reset
@@ -47,54 +80,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
     $new_password = $_POST['new_password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
     $token = $_POST['token'] ?? '';
+    $request_id = (int)($_POST['request_id'] ?? 0);
     
-    if (empty($new_password) || strlen($new_password) < 8) {
-        $error = 'Password must be at least 8 characters long.';
+    if (empty($new_password) || empty($confirm_password)) {
+        $error = "Please enter both password fields.";
     } elseif ($new_password !== $confirm_password) {
-        $error = 'Passwords do not match.';
+        $error = "Passwords do not match.";
+    } elseif (strlen($new_password) < 6) {
+        $error = "Password must be at least 6 characters.";
     } else {
         // Verify token again
         $stmt = $conn->prepare("
-            SELECT r.*, s.student_id
+            SELECT r.*, s.student_id 
             FROM password_reset_requests r
             JOIN student_users s ON r.student_id = s.student_id
-            WHERE r.reset_token = ? 
-            AND r.status = 'approved'
-            AND r.token_expires_at > NOW()
+            WHERE r.request_id = ? AND r.reset_token = ? AND r.status = 'approved' AND r.token_expires_at > NOW()
         ");
-        $stmt->bind_param("s", $token);
+        $stmt->bind_param("is", $request_id, $token);
         $stmt->execute();
         $result = $stmt->get_result();
-        
-        if ($row = $result->fetch_assoc()) {
-            // Update password
-            $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
-            $stmt2 = $conn->prepare("UPDATE student_users SET password_hash = ? WHERE student_id = ?");
-            $stmt2->bind_param("si", $new_hash, $row['student_id']);
-            
-            if ($stmt2->execute()) {
-                // Update request status to completed
-                $stmt3 = $conn->prepare("
-                    UPDATE password_reset_requests 
-                    SET status = 'completed' 
-                    WHERE request_id = ?
-                ");
-                $stmt3->bind_param("i", $row['request_id']);
-                $stmt3->execute();
-                $stmt3->close();
-                
-                $success = "✅ Password reset successfully! You can now login with your new password.";
-                $valid_token = false;
-            } else {
-                $error = "Failed to update password. Please try again.";
-            }
-            $stmt2->close();
-        } else {
-            $error = "Invalid or expired token. Please request a new reset link.";
-        }
+        $request = $result->fetch_assoc();
         $stmt->close();
+        
+        if ($request) {
+            // Hash new password
+            $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+            
+            // Update student password
+            $stmt = $conn->prepare("UPDATE student_users SET password_hash = ? WHERE student_id = ?");
+            $stmt->bind_param("si", $hashed_password, $request['student_id']);
+            $stmt->execute();
+            $stmt->close();
+            
+            // Mark request as completed
+            $stmt = $conn->prepare("UPDATE password_reset_requests SET status = 'completed', updated_at = NOW() WHERE request_id = ?");
+            $stmt->bind_param("i", $request_id);
+            $stmt->execute();
+            $stmt->close();
+            
+            logStudentAudit($request['student_id'], 'Password Reset', 'Password reset completed via link');
+            
+            $success = "✅ Password reset successfully! You can now login with your new password.";
+            $show_form = false;
+            $token_valid = false;
+        } else {
+            $error = "Invalid or expired reset token. Please request a new one.";
+        }
     }
 }
+
+$conn->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -108,13 +143,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0a1628 0%, #1a2a4a 50%, #0d1f3c 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
-            background: linear-gradient(135deg, #0a1628, #1a2a4a);
-            margin: 0;
         }
         .reset-card {
             background: rgba(255,255,255,0.06);
@@ -126,30 +160,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
             width: 100%;
             box-shadow: 0 40px 80px rgba(0,0,0,0.6);
         }
-        .logo-circle {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 15px;
-            font-size: 32px;
-            color: #ffd700;
-            box-shadow: 0 15px 40px rgba(26,86,168,0.4);
+        .reset-card h2 {
+            color: #ffffff;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 10px;
         }
-        h2 { 
-            color: #ffffff; 
-            font-weight: 700; 
-            text-align: center; 
-            margin-bottom: 5px;
+        .reset-card h2 span {
+            background: linear-gradient(135deg, #ffd700, #f0e6b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-        .subtitle { 
-            color: rgba(255,255,255,0.5); 
-            text-align: center; 
+        .reset-card .subtitle {
+            color: rgba(255,255,255,0.5);
+            text-align: center;
             font-size: 14px;
-            margin-bottom: 25px;
+            margin-bottom: 30px;
         }
         .form-control {
             background: rgba(255,255,255,0.06);
@@ -166,134 +192,158 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
             box-shadow: 0 0 0 4px rgba(255,215,0,0.06);
             color: #ffffff;
         }
-        .form-control::placeholder { color: rgba(255,255,255,0.3); }
-        .form-label { 
-            color: rgba(255,255,255,0.6); 
-            font-size: 13px; 
+        .form-control::placeholder {
+            color: rgba(255,255,255,0.3);
+        }
+        .form-label {
+            color: rgba(255,255,255,0.6);
+            font-size: 13px;
             font-weight: 500;
+            margin-bottom: 6px;
         }
         .btn-reset {
-            width: 100%; 
-            padding: 16px; 
-            font-size: 16px; 
+            width: 100%;
+            padding: 16px;
+            font-size: 16px;
             font-weight: 600;
-            border-radius: 14px; 
+            border-radius: 14px;
             background: linear-gradient(135deg, #ffd700, #f59e0b);
-            border: none; 
-            color: #0a1628; 
+            border: none;
+            color: #0a0e1a;
             height: 54px;
+            margin-top: 10px;
             transition: all 0.3s ease;
         }
-        .btn-reset:hover { 
-            transform: translateY(-2px); 
-            box-shadow: 0 15px 35px rgba(255,215,0,0.3); 
+        .btn-reset:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(255,215,0,0.3);
         }
-        .btn-back {
-            color: rgba(255,255,255,0.3); 
-            text-decoration: none; 
-            font-size: 14px;
-            transition: all 0.3s ease;
+        .btn-reset:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
         }
-        .btn-back:hover { color: rgba(255,255,255,0.6); }
         .alert-success {
-            background: rgba(16,185,129,0.12);
-            border: 1px solid rgba(16,185,129,0.15);
+            background: rgba(16,185,129,0.15);
+            border: 1px solid #10b981;
             color: #6ee7b7;
             border-radius: 14px;
             padding: 14px 18px;
         }
         .alert-danger {
-            background: rgba(239,68,68,0.12);
-            border: 1px solid rgba(239,68,68,0.15);
+            background: rgba(239,68,68,0.15);
+            border: 1px solid #ef4444;
             color: #fca5a5;
             border-radius: 14px;
             padding: 14px 18px;
         }
-        .student-name {
+        .text-muted {
+            color: rgba(255,255,255,0.4) !important;
+        }
+        .btn-back {
+            color: rgba(255,255,255,0.3);
+            text-decoration: none;
+            font-size: 13px;
+            transition: color 0.3s;
+        }
+        .btn-back:hover {
+            color: rgba(255,255,255,0.6);
+        }
+        .user-info-box {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 12px 16px;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .user-info-box .name {
             color: #ffd700;
             font-weight: 600;
-            text-align: center;
-            margin: 10px 0 20px 0;
-            font-size: 16px;
         }
-        .student-name i {
-            margin-right: 8px;
+        .user-info-box .email {
+            color: rgba(255,255,255,0.4);
+            font-size: 13px;
         }
-        .text-center {
-            text-align: center;
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #34d399;
+            animation: pulse 1.5s infinite;
         }
-        .mt-3 { margin-top: 15px; }
-        .mt-2 { margin-top: 10px; }
-        .mb-3 { margin-bottom: 15px; }
-        .mb-4 { margin-bottom: 20px; }
-        @media (max-width: 480px) {
-            .reset-card { padding: 30px 20px; border-radius: 24px; }
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .password-requirements {
+            color: rgba(255,255,255,0.3);
+            font-size: 12px;
+            margin-top: 5px;
         }
     </style>
 </head>
 <body>
     <div class="reset-card">
-        <div class="logo-circle"><i class="fas fa-key"></i></div>
-        <h2>Reset Password</h2>
-        <p class="subtitle">Set a new password for your account</p>
+        <h2><span>Reset Password</span></h2>
+        <p class="subtitle">
+            <span class="live-indicator me-1"></span> 
+            <?php echo !empty($error) ? 'Something went wrong' : 'Create a new password'; ?>
+        </p>
 
         <?php if (!empty($success)): ?>
-            <div class="alert alert-success">
+            <div class="alert-success p-3 rounded">
                 <i class="fas fa-check-circle me-2"></i> <?php echo $success; ?>
-            </div>
-            <div class="text-center mt-3">
-                <!-- FIXED: ../login.php (from student/ folder, go up one level) -->
-                <a href="../login.php" class="btn-back">
-                    <i class="fas fa-arrow-left me-1"></i> Back to Login
-                </a>
-            </div>
-        <?php elseif (!empty($error)): ?>
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-circle me-2"></i> <?php echo $error; ?>
-            </div>
-            <?php if (strpos($error, 'expired') !== false || strpos($error, 'Invalid') !== false): ?>
-                <div class="text-center mt-3">
-                    <!-- FIXED: ../login.php -->
+                <div class="mt-2">
                     <a href="../login.php" class="btn-back">
                         <i class="fas fa-arrow-left me-1"></i> Back to Login
                     </a>
                 </div>
-            <?php endif; ?>
-        <?php elseif (!$valid_token): ?>
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-circle me-2"></i> Invalid or expired reset link. Please request a new one from admin.
             </div>
-            <div class="text-center mt-3">
-                <!-- FIXED: ../login.php -->
-                <a href="../login.php" class="btn-back">
-                    <i class="fas fa-arrow-left me-1"></i> Back to Login
-                </a>
+        <?php elseif (!empty($error)): ?>
+            <div class="alert-danger p-3 rounded">
+                <i class="fas fa-exclamation-circle me-2"></i> <?php echo $error; ?>
+                <div class="mt-2">
+                    <a href="request-reset.php" class="btn-back">
+                        <i class="fas fa-key me-1"></i> Request New Reset Link
+                    </a>
+                    <span class="text-muted mx-1">|</span>
+                    <a href="../login.php" class="btn-back">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Login
+                    </a>
+                </div>
             </div>
-        <?php else: ?>
-            <div class="student-name">
-                <i class="fas fa-user me-2"></i> <?php echo htmlspecialchars($student_name); ?>
+        <?php endif; ?>
+
+        <?php if ($show_form && $token_valid): ?>
+            <div class="user-info-box">
+                <div class="name"><i class="fas fa-user me-2"></i><?php echo htmlspecialchars($student_name); ?></div>
+                <div class="email"><i class="fas fa-envelope me-1"></i><?php echo htmlspecialchars($student_email); ?></div>
             </div>
             
             <form method="POST">
                 <input type="hidden" name="token" value="<?php echo htmlspecialchars($token); ?>">
-                
-                <div class="mb-3">
-                    <label class="form-label"><i class="fas fa-lock me-1"></i> New Password</label>
-                    <input type="password" class="form-control" name="new_password" placeholder="Enter new password (min 8 chars)" required minlength="8">
-                </div>
+                <input type="hidden" name="request_id" value="<?php echo $request_id; ?>">
                 
                 <div class="mb-4">
+                    <label class="form-label"><i class="fas fa-lock me-1"></i> New Password</label>
+                    <input type="password" class="form-control" name="new_password" placeholder="Enter new password" required minlength="6">
+                    <div class="password-requirements">
+                        <i class="fas fa-info-circle me-1"></i> Minimum 6 characters
+                    </div>
+                </div>
+                <div class="mb-4">
                     <label class="form-label"><i class="fas fa-check-circle me-1"></i> Confirm Password</label>
-                    <input type="password" class="form-control" name="confirm_password" placeholder="Confirm new password" required>
+                    <input type="password" class="form-control" name="confirm_password" placeholder="Re-enter new password" required minlength="6">
                 </div>
                 
                 <button type="submit" name="reset_password" class="btn-reset">
-                    <i class="fas fa-save me-1"></i> Reset Password
+                    <i class="fas fa-key me-2"></i> Reset Password
                 </button>
             </form>
             
             <div class="text-center mt-3">
-                <!-- FIXED: ../login.php -->
                 <a href="../login.php" class="btn-back">
                     <i class="fas fa-arrow-left me-1"></i> Back to Login
                 </a>
