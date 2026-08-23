@@ -2,6 +2,7 @@
 /**
  * Tap-and-Go Doorlock - Edit Resident
  * FIXED LAYOUT SAME AS DASHBOARD
+ * FIXED: Double close() error
  */
 
 // Start session
@@ -81,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
         try {
             $conn = getDBConnection();
             
+            // Update users table
             $stmt = $conn->prepare("
                 UPDATE users 
                 SET full_name = ?, room_number = ?, contact_number = ? 
@@ -88,8 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
             ");
             $stmt->bind_param("sssi", $full_name, $room_number, $contact_number, $user_id);
             $stmt->execute();
-            $stmt->close();
+            $stmt->close(); // CLOSE AFTER EXECUTION
             
+            // Update or insert resident_profiles
             if ($profile) {
                 $stmt = $conn->prepare("
                     UPDATE resident_profiles 
@@ -127,6 +130,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
             if ($stmt->execute()) {
                 $success = 'Resident updated successfully!';
                 
+                // Refresh data - use new statements
+                $stmt->close();
+                
+                // Reload resident data
                 $stmt = $conn->prepare("SELECT * FROM users WHERE user_id = ?");
                 $stmt->bind_param("i", $user_id);
                 $stmt->execute();
@@ -134,6 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
                 $resident = $result->fetch_assoc();
                 $stmt->close();
                 
+                // Reload profile data
                 $stmt = $conn->prepare("SELECT * FROM resident_profiles WHERE user_id = ?");
                 $stmt->bind_param("i", $user_id);
                 $stmt->execute();
@@ -142,8 +150,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
                 $stmt->close();
             } else {
                 $error = 'Failed to update: ' . $stmt->error;
+                $stmt->close();
             }
-            $stmt->close();
             
         } catch (Exception $e) {
             $error = 'Error: ' . $e->getMessage();
