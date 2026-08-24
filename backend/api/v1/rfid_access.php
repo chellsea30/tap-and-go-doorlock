@@ -1,8 +1,9 @@
 <?php
 /**
  * Tap-and-Go Doorlock - RFID Access API
- * COMPLETE - WITH REAL-TIME ALERT NOTIFICATIONS
- * WITH ACCESS CONTROL - FULL VERSION
+ * COMPLETE - WITH ALL FUNCTIONS FIXED
+ * WITH REAL-TIME ALERT NOTIFICATIONS
+ * WITH ACCESS CONTROL
  */
 
 header('Content-Type: application/json');
@@ -48,6 +49,45 @@ function tableExists($table) {
     global $conn;
     $result = $conn->query("SHOW TABLES LIKE '$table'");
     return $result && $result->num_rows > 0;
+}
+
+// ============================================================
+// GET USER ID FROM UID - HELPER FUNCTION
+// ============================================================
+function getUserIdFromUID($uid) {
+    global $conn;
+    $stmt = $conn->prepare("SELECT user_id FROM rfid_cards WHERE card_uid = ?");
+    $stmt->bind_param("s", $uid);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
+        $stmt->close();
+        return $row['user_id'];
+    }
+    $stmt->close();
+    return null;
+}
+
+// ============================================================
+// GET USER NAME FROM UID - HELPER FUNCTION
+// ============================================================
+function getUserNameFromUID($uid) {
+    global $conn;
+    $stmt = $conn->prepare("
+        SELECT u.full_name 
+        FROM rfid_cards c
+        LEFT JOIN users u ON c.user_id = u.user_id
+        WHERE c.card_uid = ?
+    ");
+    $stmt->bind_param("s", $uid);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
+        $stmt->close();
+        return $row['full_name'] ?? 'Unknown';
+    }
+    $stmt->close();
+    return 'Unknown';
 }
 
 // ============================================================
@@ -175,13 +215,14 @@ switch ($action) {
         break;
     
     // ============================================================
-    // LOG ACCESS ATTEMPT - FULL VERSION WITH ALL VALIDATIONS
+    // LOG ACCESS ATTEMPT - FULL VERSION WITH FIXED INSERT
     // ============================================================
     case 'log_access':
         $uid = isset($input['uid']) ? strtoupper(trim($input['uid'])) : '';
         $type = isset($input['type']) ? $input['type'] : 'entry';
         $granted = isset($input['granted']) ? (bool)$input['granted'] : false;
         $power_source = isset($input['power_source']) ? $input['power_source'] : 'main';
+        $user_name_from_esp = isset($input['user_name']) ? $input['user_name'] : '';
         
         if (empty($uid)) {
             sendResponse(false, 'Card UID required');
@@ -361,12 +402,12 @@ switch ($action) {
         }
         
         // ------------------------------------------------------------
-        // INSERT ACCESS LOG - FIXED BINDING
+        // INSERT ACCESS LOG - ✅ FIXED BINDING
         // ------------------------------------------------------------
         $status = $granted ? 'granted' : 'denied';
         $alert_triggered = $granted ? 0 : 1;
         
-        // FIXED: Handle user_id properly
+        // ✅ FIX: Handle user_id properly
         if ($user_id !== null) {
             $stmt = $conn->prepare("
                 INSERT INTO access_logs (
