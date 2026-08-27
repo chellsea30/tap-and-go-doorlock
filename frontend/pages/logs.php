@@ -1,13 +1,11 @@
-[file name]: php.txt
-[file content begin]
 <?php
 /**
  * Tap-and-Go Doorlock - Access Logs / Attendance
  * COMPLETE - With same layout as dashboard.php
  * PURE DARK MODE - Fixed navbar, sidebar, footer
- * FIXED: Complete dark table
- * UPDATED: Print layout for Residents and Visitors with Signature column
- * UPDATED: Added "Show entries" dropdown for Alerts, Residents, and Visitors tables
+ * WITH PRINT VIEW - Residents: Date/Time | RFID UID | Tenant | Room | Type | Signature
+ * WITH PRINT VIEW - Visitors: Date/Time | RFID UID | Name | Person to Visit | Reason/Purpose | Room | Type | Signature
+ * WITH PROFILE PHOTO DISPLAY IN TABLE
  */
 
 session_start();
@@ -25,8 +23,17 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
         exit();
     }
 }
-// Include header
-include '../includes/header.php'; 
+
+// Handle Print Request
+$printMode = isset($_GET['print']) && $_GET['print'] === '1';
+
+// If print mode, use minimal layout
+if ($printMode) {
+    // No header/footer for print
+} else {
+    include '../includes/header.php';
+}
+
 $conn = getDBConnection();
 
 // ============================================================
@@ -57,6 +64,7 @@ $alertQuery = "
         c.resident_visited,
         u.full_name as user_name,
         u.room_number,
+        u.profile_photo,
         ru.full_name as resident_visited_name
     FROM alert_logs alog
     LEFT JOIN rfid_cards c ON alog.card_uid = c.card_uid
@@ -146,6 +154,7 @@ $residentQuery = "
         u.full_name as user_name,
         u.room_number,
         u.student_id,
+        u.profile_photo,
         rp.course,
         rp.year_level,
         ru.full_name as resident_visited_name
@@ -234,7 +243,8 @@ $unauthorizedQuery = "
         c.card_type,
         c.visitor_name,
         u.full_name as user_name,
-        u.room_number
+        u.room_number,
+        u.profile_photo
     FROM access_logs al
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
     LEFT JOIN users u ON c.user_id = u.user_id
@@ -345,6 +355,26 @@ $result = $conn->query("
 if ($result && $row = $result->fetch_assoc()) {
     $stats['critical_alerts'] = (int)$row['count'];
 }
+
+// ============================================================
+// Helper function to get profile photo HTML
+// ============================================================
+function getProfilePhoto($photoPath, $name, $size = 32) {
+    $fullPath = '../../' . $photoPath;
+    if (!empty($photoPath) && file_exists($fullPath)) {
+        return '<img src="' . $fullPath . '" alt="Photo" style="width:' . $size . 'px;height:' . $size . 'px;border-radius:50%;object-fit:cover;border:2px solid #2a2a4a;">';
+    } else {
+        $nameParts = explode(' ', $name);
+        $initials = '';
+        foreach ($nameParts as $part) {
+            if (!empty($part)) {
+                $initials .= strtoupper($part[0]);
+            }
+        }
+        $initials = substr($initials, 0, 2) ?: '?';
+        return '<div style="width:' . $size . 'px;height:' . $size . 'px;border-radius:50%;background:linear-gradient(135deg,#1a3a6a,#2a5a9a);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:' . ($size/2) . 'px;border:2px solid #2a2a4a;flex-shrink:0;">' . $initials . '</div>';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -352,14 +382,123 @@ if ($result && $row = $result->fetch_assoc()) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Access Logs - Tap-and-Go Doorlock</title>
+    <?php if (!$printMode): ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <?php else: ?>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Print Styles */
+        body { 
+            background: white !important; 
+            color: black !important;
+            font-family: 'Arial', sans-serif;
+            padding: 20px;
+        }
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+        .table { 
+            font-size: 11px; 
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .table th, .table td { 
+            border: 1px solid #333 !important; 
+            padding: 6px 8px !important;
+            text-align: left;
+            vertical-align: middle;
+        }
+        .table th { 
+            background: #f0f0f0 !important; 
+            font-weight: 700;
+            color: #000 !important;
+        }
+        .table td { color: #000 !important; }
+        .print-header { 
+            text-align: center; 
+            margin-bottom: 20px; 
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        .print-header h2 { font-weight: 700; margin: 0; }
+        .print-header p { margin: 5px 0 0 0; color: #555; font-size: 13px; }
+        .print-footer { 
+            text-align: center; 
+            margin-top: 20px; 
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+            font-size: 11px;
+            color: #666;
+        }
+        .signature-cell { 
+            min-width: 80px; 
+            height: 30px;
+            border-bottom: 1px solid #000;
+        }
+        .signature-line {
+            display: inline-block;
+            width: 100px;
+            border-bottom: 1px solid #000;
+            margin-top: 15px;
+            padding-bottom: 2px;
+        }
+        .signature-label {
+            font-size: 9px;
+            color: #666;
+            display: block;
+            text-align: center;
+        }
+        .badge-print {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .badge-print-granted { background: #d4edda; color: #155724; }
+        .badge-print-denied { background: #f8d7da; color: #721c24; }
+        .badge-print-entry { background: #cce5ff; color: #004085; }
+        .badge-print-exit { background: #e2e3e5; color: #383d41; }
+        .table-responsive { overflow: visible !important; }
+        .photo-thumb {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid #ccc;
+        }
+        .photo-thumb-placeholder {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #6c757d;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid #ccc;
+        }
+        .page-break {
+            page-break-after: always;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { padding: 10px !important; }
+            .table th { background: #e9ecef !important; }
+        }
+    </style>
+    <?php endif; ?>
     <style>
         /* ============================================================
-           GLOBAL DARK THEME - SAME AS DASHBOARD
+           GLOBAL DARK THEME - SAME AS DASHBOARD (for non-print)
            ============================================================ */
+        <?php if (!$printMode): ?>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
@@ -370,9 +509,6 @@ if ($result && $row = $result->fetch_assoc()) {
             padding-top: 70px !important;
         }
         
-        /* ============================================================
-           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
-           ============================================================ */
         .container-fluid {
             padding-top: 10px !important;
         }
@@ -382,9 +518,6 @@ if ($result && $row = $result->fetch_assoc()) {
             margin-top: 0 !important;
         }
         
-        /* ============================================================
-           DARK NAVBAR OVERRIDE - SAME AS DASHBOARD
-           ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -400,9 +533,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           DARK SIDEBAR - SAME AS DASHBOARD
-           ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
@@ -423,9 +553,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           DARK STAT CARDS - SAME AS DASHBOARD
-           ============================================================ */
         .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -461,9 +588,6 @@ if ($result && $row = $result->fetch_assoc()) {
             100% { transform: scale(1); }
         }
         
-        /* ============================================================
-           DARK CARDS - SAME AS DASHBOARD
-           ============================================================ */
         .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -480,9 +604,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .card-header h5 { margin: 0; font-weight: 600; color: #e0e0e0; font-size: 16px; }
         .card-body { padding: 20px; background: #111827 !important; }
         
-        /* ============================================================
-           DARK FILTERS
-           ============================================================ */
         .filter-section {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -518,9 +639,6 @@ if ($result && $row = $result->fetch_assoc()) {
             box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
         
-        /* ============================================================
-           DARK TABLE - COMPLETE FIX
-           ============================================================ */
         .log-table {
             font-size: 13px;
             background: #111827 !important;
@@ -572,6 +690,12 @@ if ($result && $row = $result->fetch_assoc()) {
             background: linear-gradient(135deg, #4a5a8a, #5a3a7a);
             display: flex; align-items: center; justify-content: center;
             color: white; font-weight: 700; font-size: 12px; flex-shrink: 0;
+            overflow: hidden;
+        }
+        .log-table .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
         .log-table .user-avatar.visitor {
             background: linear-gradient(135deg, #2a3a6a, #3a2a7a);
@@ -597,9 +721,6 @@ if ($result && $row = $result->fetch_assoc()) {
         }
         .log-table .text-muted { color: #808090 !important; }
         
-        /* ============================================================
-           DARK BADGES
-           ============================================================ */
         .badge-granted { background: #065f46 !important; color: #34d399 !important; }
         .badge-denied { background: #7a2a2a !important; color: #f87171 !important; }
         .badge-entry { background: #1a3a6a !important; color: #93c5fd !important; }
@@ -624,9 +745,6 @@ if ($result && $row = $result->fetch_assoc()) {
         .badge-info { background: #1a3a6a !important; color: #93c5fd !important; }
         .badge-light { background: #2a2a4a !important; color: #b0b0c0 !important; }
         
-        /* ============================================================
-           DARK ALERT ITEMS
-           ============================================================ */
         .alert-item {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -671,9 +789,6 @@ if ($result && $row = $result->fetch_assoc()) {
         }
         .btn-resolve:hover { background: #059669 !important; color: white !important; }
         
-        /* ============================================================
-           DARK BORDER & MISC
-           ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .border-top { border-top-color: #1a2a4a !important; }
         hr { border-color: #1a2a4a !important; }
@@ -733,9 +848,6 @@ if ($result && $row = $result->fetch_assoc()) {
             margin-left: 4px;
         }
         
-        /* ============================================================
-           PAGINATION - DARK
-           ============================================================ */
         .pagination-container {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -783,9 +895,6 @@ if ($result && $row = $result->fetch_assoc()) {
         }
         .per-page-selector label { color: #808090 !important; font-size: 13px; margin: 0; }
         
-        /* ============================================================
-           SECTION HEADER
-           ============================================================ */
         .section-header {
             display: flex;
             align-items: center;
@@ -809,163 +918,22 @@ if ($result && $row = $result->fetch_assoc()) {
             gap: 10px;
         }
         
-        /* ============================================================
-           PRINT STYLES - UPDATED LAYOUT
-           ============================================================ */
-        @media print {
-            /* Hide everything except main content */
-            body * {
-                visibility: hidden !important;
-            }
-            #printable-area, #printable-area * {
-                visibility: visible !important;
-            }
-            #printable-area {
-                position: absolute !important;
-                top: 20px !important;
-                left: 20px !important;
-                right: 20px !important;
-                width: auto !important;
-                background: white !important;
-                color: black !important;
-                padding: 20px !important;
-                border: none !important;
-                border-radius: 0 !important;
-                box-shadow: none !important;
-            }
-            #printable-area .card {
-                background: white !important;
-                border: 1px solid #ddd !important;
-                box-shadow: none !important;
-                margin-bottom: 20px !important;
-            }
-            #printable-area .card-header {
-                background: #f8f9fa !important;
-                border-bottom: 1px solid #ddd !important;
-                color: #333 !important;
-            }
-            #printable-area .card-header h5 {
-                color: #333 !important;
-            }
-            #printable-area .log-table {
-                background: white !important;
-                border-collapse: collapse !important;
-                width: 100% !important;
-                font-size: 12px !important;
-            }
-            #printable-area .log-table thead th {
-                background: #f0f0f0 !important;
-                color: #333 !important;
-                border: 1px solid #ddd !important;
-                padding: 6px 8px !important;
-                text-transform: uppercase;
-                font-size: 10px !important;
-            }
-            #printable-area .log-table tbody td {
-                background: white !important;
-                color: #333 !important;
-                border: 1px solid #ddd !important;
-                padding: 5px 8px !important;
-            }
-            #printable-area .log-table tbody tr:nth-child(even) td {
-                background: #f9f9f9 !important;
-            }
-            #printable-area .log-table .user-avatar {
-                display: none !important;
-            }
-            #printable-area .log-table .badge {
-                background: #f0f0f0 !important;
-                color: #333 !important;
-                border: 1px solid #ddd !important;
-                padding: 2px 8px !important;
-                font-size: 10px !important;
-            }
-            #printable-area .log-table .badge-granted { background: #d4edda !important; color: #155724 !important; border-color: #c3e6cb !important; }
-            #printable-area .log-table .badge-denied { background: #f8d7da !important; color: #721c24 !important; border-color: #f5c6cb !important; }
-            #printable-area .log-table .badge-entry { background: #cce5ff !important; color: #004085 !important; border-color: #b8daff !important; }
-            #printable-area .log-table .badge-exit { background: #e2e3e5 !important; color: #383d41 !important; border-color: #d6d8db !important; }
-            #printable-area .log-table .uid-cell {
-                background: #f0f0f0 !important;
-                color: #333 !important;
-                border: 1px solid #ddd !important;
-                padding: 1px 6px !important;
-                border-radius: 3px !important;
-                font-family: monospace !important;
-            }
-            #printable-area .log-table .resident-tag,
-            #printable-area .log-table .staff-tag,
-            #printable-area .log-table .visitor-tag {
-                background: #f0f0f0 !important;
-                color: #333 !important;
-                border: 1px solid #ddd !important;
-                padding: 0 4px !important;
-                border-radius: 3px !important;
-                font-size: 8px !important;
-            }
-            #printable-area .log-table .text-muted { color: #666 !important; }
-            #printable-area .log-table .text-danger { color: #dc3545 !important; }
-            #printable-area .log-table .text-success { color: #28a745 !important; }
-            #printable-area .log-table .text-warning { color: #856404 !important; }
-            
-            /* Hide print button and pagination */
-            .no-print, .no-print * {
-                display: none !important;
-            }
-            .pagination-container {
-                display: none !important;
-            }
-            .filter-section {
-                display: none !important;
-            }
-            .stat-card {
-                display: none !important;
-            }
-            .alert-item {
-                display: none !important;
-            }
-            .sidebar {
-                display: none !important;
-            }
-            .navbar {
-                display: none !important;
-            }
-            footer {
-                display: none !important;
-            }
-            .card-header .log-header-actions .btn {
-                display: none !important;
-            }
-            .card-header .log-header-actions .text-muted {
-                display: none !important;
-            }
-            #printable-area .card-header .log-header-actions .left {
-                width: 100% !important;
-            }
-            #printable-area .card-header .log-header-actions .left .section-header .count {
-                color: #666 !important;
-            }
-            
-            /* Table print specific */
-            #printable-area .table-responsive {
-                border: none !important;
-                overflow: visible !important;
-            }
-            #printable-area .card {
-                page-break-inside: avoid !important;
-            }
-            #printable-area .card-body {
-                padding: 10px !important;
-            }
-            
-            /* Hide per-page selector in print */
-            .per-page-selector {
-                display: none !important;
-            }
+        .btn-print {
+            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px;
+            padding: 6px 16px;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+        .btn-print:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
+            color: white !important;
         }
         
-        /* ============================================================
-           RESPONSIVE - SAME AS DASHBOARD
-           ============================================================ */
         @media (max-width: 768px) {
             body {
                 padding-top: 60px !important;
@@ -1028,18 +996,37 @@ if ($result && $row = $result->fetch_assoc()) {
                 padding: 1px 4px;
             }
         }
+        <?php endif; ?>
     </style>
 </head>
-<body>
+<body <?php echo $printMode ? 'onload="window.print();"' : ''; ?>>
     
+    <?php if (!$printMode): ?>
     <?php include '../includes/navbar.php'; ?>
+    <?php endif; ?>
+    
+    <?php if ($printMode): ?>
+    <!-- PRINT HEADER -->
+    <div class="print-header">
+        <h2>📋 Access Logs Report</h2>
+        <p>
+            ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>
+            Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?>
+            <?php if (!empty($statusFilter)): ?> | Status: <?php echo ucfirst($statusFilter); ?><?php endif; ?>
+            <?php if (!empty($typeFilter)): ?> | Type: <?php echo ucfirst($typeFilter); ?><?php endif; ?>
+        </p>
+    </div>
+    <?php endif; ?>
     
     <div class="container-fluid">
         <div class="row">
+            <?php if (!$printMode): ?>
             <?php include '../includes/sidebar.php'; ?>
+            <?php endif; ?>
             
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+            <main class="<?php echo $printMode ? 'col-12' : 'col-md-9 ms-sm-auto col-lg-10 px-md-4'; ?>">
                 
+                <?php if (!$printMode): ?>
                 <!-- ============================================================
                 HEADER - SAME AS DASHBOARD
                 ============================================================ -->
@@ -1068,13 +1055,16 @@ if ($result && $row = $result->fetch_assoc()) {
                         <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()">
                             <i class="fas fa-sync-alt"></i>
                         </button>
+                        <a href="?print=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" class="btn btn-print ms-2" target="_blank">
+                            <i class="fas fa-print me-1"></i> Print
+                        </a>
                     </div>
                 </div>
 
                 <!-- ============================================================
                 STATS ROW 1 - SAME AS DASHBOARD
                 ============================================================ -->
-                <div class="row g-3 mb-4 no-print">
+                <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #667eea;"><i class="fas fa-list"></i></div>
@@ -1139,7 +1129,7 @@ if ($result && $row = $result->fetch_assoc()) {
                 <!-- ============================================================
                 STATS ROW 2 - SAME AS DASHBOARD
                 ============================================================ -->
-                <div class="row g-3 mb-4 no-print">
+                <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #ef4444;"><i class="fas fa-times-circle"></i></div>
@@ -1189,7 +1179,7 @@ if ($result && $row = $result->fetch_assoc()) {
                 <!-- ============================================================
                 FILTERS
                 ============================================================ -->
-                <div class="filter-section no-print">
+                <div class="filter-section">
                     <form method="GET" action="" class="row g-2 align-items-end">
                         <div class="col-md-2">
                             <label class="form-label">Date</label>
@@ -1226,460 +1216,457 @@ if ($result && $row = $result->fetch_assoc()) {
                 </div>
 
                 <!-- ============================================================
-                PRINTABLE AREA
+                ALERTS TABLE
                 ============================================================ -->
-                <div id="printable-area">
-                    <!-- ============================================================
-                    ALERTS TABLE (Hidden in print) - WITH SHOW ENTRIES DROPDOWN
-                    ============================================================ -->
-                    <div class="card mb-4 no-print">
-                        <div class="card-header">
-                            <div class="log-header-actions">
-                                <div class="left">
-                                    <div class="section-header">
-                                        <span class="icon">🚨</span>
-                                        <span class="title" style="<?php echo $stats['critical_alerts'] > 0 ? 'color: #f87171;' : ''; ?>">Alerts</span>
-                                        <span class="count badge <?php echo $stats['pending_alerts'] > 0 ? 'badge-pending' : 'badge-resolved'; ?>">
-                                            <?php echo count($alertLogs); ?> logs
-                                            <?php if ($stats['pending_alerts'] > 0): ?>
-                                                | <?php echo $stats['pending_alerts']; ?> pending
-                                            <?php endif; ?>
-                                        </span>
-                                    </div>
-                                </div>
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="per-page-selector d-flex align-items-center gap-2">
-                                        <label style="color: #808090; font-size: 13px;">Show:</label>
-                                        <select onchange="changeAlertPerPage(this.value)" style="background: #1a1a2e; border: 1px solid #2a2a4a; color: #e0e0e0; border-radius: 8px; padding: 4px 8px; font-size: 13px;">
-                                            <?php foreach ($perPageOptions as $option): ?>
-                                                <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                                    <?php echo $option; ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <a href="alerts.php" class="btn btn-<?php echo $stats['critical_alerts'] > 0 ? 'btn-danger' : 'btn-outline-secondary'; ?> btn-sm">
-                                        <i class="fas fa-eye me-1"></i> View All Alerts
-                                    </a>
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="log-header-actions">
+                            <div class="left">
+                                <div class="section-header">
+                                    <span class="icon">🚨</span>
+                                    <span class="title" style="<?php echo $stats['critical_alerts'] > 0 ? 'color: #f87171;' : ''; ?>">Alerts</span>
+                                    <span class="count badge <?php echo $stats['pending_alerts'] > 0 ? 'badge-pending' : 'badge-resolved'; ?>">
+                                        <?php echo count($alertLogs); ?> logs
+                                        <?php if ($stats['pending_alerts'] > 0): ?>
+                                            | <?php echo $stats['pending_alerts']; ?> pending
+                                        <?php endif; ?>
+                                    </span>
                                 </div>
                             </div>
+                            <div>
+                                <a href="alerts.php" class="btn btn-<?php echo $stats['critical_alerts'] > 0 ? 'btn-danger' : 'btn-outline-secondary'; ?> btn-sm">
+                                    <i class="fas fa-eye me-1"></i> View All Alerts
+                                </a>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <?php if (empty($alertLogs)): ?>
-                                <div class="text-center text-muted py-4">
-                                    <i class="fas fa-check-circle fa-2x d-block mb-2 text-success"></i>
-                                    <h5>All Clear! ✅</h5>
-                                    <p>No alerts found. Your system is secure.</p>
-                                </div>
-                            <?php else: ?>
-                                <?php 
-                                $alertDisplayCount = count($alertLogs);
-                                $alertDisplayOffset = 0;
-                                $alertDisplayLimit = $perPage;
-                                
-                                if ($alertDisplayCount > $perPage) {
-                                    $alertDisplayLimit = $perPage;
-                                } else {
-                                    $alertDisplayLimit = $alertDisplayCount;
+                    </div>
+                    <div class="card-body">
+                        <?php if (empty($alertLogs)): ?>
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-check-circle fa-2x d-block mb-2 text-success"></i>
+                                <h5>All Clear! ✅</h5>
+                                <p>No alerts found. Your system is secure.</p>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($alertLogs as $alert): 
+                                $isPending = $alert['delivery_status'] == 'pending';
+                                $isResolved = $alert['delivery_status'] == 'resolved';
+                                $isCritical = $isPending && $alert['alert_type'] == 'unauthorized';
+                                $displayName = !empty($alert['display_name']) ? $alert['display_name'] : 'Unknown';
+                                $cardUid = $alert['card_uid'] ?? 'N/A';
+                                $alertType = $alert['alert_type'] ?? 'unauthorized';
+                                $reason = $alert['reason'] ?? 'Unauthorized access attempt';
+                                $roomDisplay = $alert['room_number'] ?? 'N/A';
+                                if (!empty($alert['rfid_card_type']) && $alert['rfid_card_type'] == 'visitor' && !empty($alert['resident_visited_name'])) {
+                                    $roomDisplay = 'Visit: ' . $alert['resident_visited_name'];
                                 }
-                                
-                                $alertDisplayLogs = array_slice($alertLogs, 0, $alertDisplayLimit);
-                                ?>
-                                <?php foreach ($alertDisplayLogs as $alert): 
-                                    $isPending = $alert['delivery_status'] == 'pending';
-                                    $isResolved = $alert['delivery_status'] == 'resolved';
-                                    $isCritical = $isPending && $alert['alert_type'] == 'unauthorized';
-                                    $displayName = !empty($alert['display_name']) ? $alert['display_name'] : 'Unknown';
-                                    $cardUid = $alert['card_uid'] ?? 'N/A';
-                                    $alertType = $alert['alert_type'] ?? 'unauthorized';
-                                    $reason = $alert['reason'] ?? 'Unauthorized access attempt';
-                                    $roomDisplay = $alert['room_number'] ?? 'N/A';
-                                    if (!empty($alert['rfid_card_type']) && $alert['rfid_card_type'] == 'visitor' && !empty($alert['resident_visited_name'])) {
-                                        $roomDisplay = 'Visit: ' . $alert['resident_visited_name'];
-                                    }
-                                ?>
-                                <div class="alert-item <?php echo $isResolved ? 'resolved' : ''; ?> <?php echo $isCritical ? 'critical' : ''; ?>">
-                                    <div class="row align-items-center">
-                                        <div class="col-md-8">
-                                            <div class="d-flex align-items-start">
-                                                <?php if ($isCritical): ?>
-                                                    <span class="pulse-red me-2" style="font-size: 20px;">🚨</span>
-                                                <?php elseif ($isPending): ?>
-                                                    <span class="pulse-red me-2" style="font-size: 16px;">🔴</span>
-                                                <?php else: ?>
-                                                    <span class="me-2" style="font-size: 16px;">✅</span>
-                                                <?php endif; ?>
-                                                <div>
-                                                    <div class="d-flex align-items-center flex-wrap gap-2">
-                                                        <span class="alert-uid"><?php echo htmlspecialchars($cardUid); ?></span>
-                                                        <?php if ($isCritical): ?>
-                                                            <span class="badge bg-danger">CRITICAL</span>
-                                                        <?php endif; ?>
-                                                        <span class="badge <?php echo $isPending ? 'badge-pending' : 'badge-resolved'; ?>">
-                                                            <?php echo ucfirst($alert['delivery_status']); ?>
-                                                        </span>
-                                                        <span class="badge <?php echo $alertType == 'unauthorized' ? 'badge-unauthorized' : 'badge-buzzer'; ?>">
-                                                            <?php echo ucfirst($alertType); ?>
-                                                        </span>
-                                                        <?php if (!empty($alert['rfid_card_type'])): ?>
-                                                            <span class="badge bg-secondary"><?php echo ucfirst($alert['rfid_card_type']); ?></span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                    <div class="alert-reason mt-1">
-                                                        <i class="fas fa-info-circle me-1"></i>
-                                                        <?php echo htmlspecialchars($reason); ?>
-                                                    </div>
-                                                    <div class="alert-meta mt-1">
-                                                        <i class="fas fa-user me-1"></i>
-                                                        <span class="alert-user"><?php echo htmlspecialchars($displayName); ?></span>
-                                                        <span class="mx-2">|</span>
-                                                        <i class="fas fa-door-open me-1"></i>
-                                                        <?php echo htmlspecialchars($roomDisplay); ?>
-                                                        <span class="mx-2">|</span>
-                                                        <i class="fas fa-clock me-1"></i>
-                                                        <?php echo date('M d, Y h:i A', strtotime($alert['timestamp'])); ?>
-                                                    </div>
+                            ?>
+                            <div class="alert-item <?php echo $isResolved ? 'resolved' : ''; ?> <?php echo $isCritical ? 'critical' : ''; ?>">
+                                <div class="row align-items-center">
+                                    <div class="col-md-8">
+                                        <div class="d-flex align-items-start">
+                                            <?php if ($isCritical): ?>
+                                                <span class="pulse-red me-2" style="font-size: 20px;">🚨</span>
+                                            <?php elseif ($isPending): ?>
+                                                <span class="pulse-red me-2" style="font-size: 16px;">🔴</span>
+                                            <?php else: ?>
+                                                <span class="me-2" style="font-size: 16px;">✅</span>
+                                            <?php endif; ?>
+                                            <div>
+                                                <div class="d-flex align-items-center flex-wrap gap-2">
+                                                    <span class="alert-uid"><?php echo htmlspecialchars($cardUid); ?></span>
+                                                    <?php if ($isCritical): ?>
+                                                        <span class="badge bg-danger">CRITICAL</span>
+                                                    <?php endif; ?>
+                                                    <span class="badge <?php echo $isPending ? 'badge-pending' : 'badge-resolved'; ?>">
+                                                        <?php echo ucfirst($alert['delivery_status']); ?>
+                                                    </span>
+                                                    <span class="badge <?php echo $alertType == 'unauthorized' ? 'badge-unauthorized' : 'badge-buzzer'; ?>">
+                                                        <?php echo ucfirst($alertType); ?>
+                                                    </span>
+                                                    <?php if (!empty($alert['rfid_card_type'])): ?>
+                                                        <span class="badge bg-secondary"><?php echo ucfirst($alert['rfid_card_type']); ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div class="alert-reason mt-1">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    <?php echo htmlspecialchars($reason); ?>
+                                                </div>
+                                                <div class="alert-meta mt-1">
+                                                    <i class="fas fa-user me-1"></i>
+                                                    <span class="alert-user"><?php echo htmlspecialchars($displayName); ?></span>
+                                                    <span class="mx-2">|</span>
+                                                    <i class="fas fa-door-open me-1"></i>
+                                                    <?php echo htmlspecialchars($roomDisplay); ?>
+                                                    <span class="mx-2">|</span>
+                                                    <i class="fas fa-clock me-1"></i>
+                                                    <?php echo date('M d, Y h:i A', strtotime($alert['timestamp'])); ?>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="col-md-4 text-end">
-                                            <div class="d-flex gap-2 justify-content-end flex-wrap">
-                                                <?php if ($isPending): ?>
-                                                    <a href="alerts.php?resolve=<?php echo $alert['alert_id']; ?>" class="btn btn-resolve btn-sm">
-                                                        <i class="fas fa-check me-1"></i> Resolve
-                                                    </a>
-                                                <?php endif; ?>
-                                                <a href="logs.php?search=<?php echo urlencode($cardUid); ?>" class="btn btn-sm btn-outline-secondary">
-                                                    <i class="fas fa-history me-1"></i> View Logs
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <div class="d-flex gap-2 justify-content-end flex-wrap">
+                                            <?php if ($isPending): ?>
+                                                <a href="alerts.php?resolve=<?php echo $alert['alert_id']; ?>" class="btn btn-resolve btn-sm">
+                                                    <i class="fas fa-check me-1"></i> Resolve
                                                 </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <?php endforeach; ?>
-                                <?php if ($alertDisplayCount > $perPage): ?>
-                                    <div class="text-center text-muted mt-3">
-                                        <small>Showing <?php echo $alertDisplayLimit; ?> of <?php echo $alertDisplayCount; ?> alerts. <a href="alerts.php" class="text-primary">View all alerts</a></small>
-                                    </div>
-                                <?php endif; ?>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <!-- ============================================================
-                    RESIDENTS TABLE - UPDATED COLUMNS: Date/Time | RFID UID | Tenant | Room | Type | Signature
-                    WITH SHOW ENTRIES DROPDOWN
-                    ============================================================ -->
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="log-header-actions">
-                                <div class="left">
-                                    <div class="section-header">
-                                        <span class="icon">🏠</span>
-                                        <span class="title">Residents / Staff</span>
-                                        <span class="count badge badge-resident-header"><?php echo count($residentLogs); ?> logs</span>
-                                    </div>
-                                </div>
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="per-page-selector d-flex align-items-center gap-2">
-                                        <label style="color: #808090; font-size: 13px;">Show:</label>
-                                        <select onchange="changePerPage(this.value)" style="background: #1a1a2e; border: 1px solid #2a2a4a; color: #e0e0e0; border-radius: 8px; padding: 4px 8px; font-size: 13px;">
-                                            <?php foreach ($perPageOptions as $option): ?>
-                                                <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                                    <?php echo $option; ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <span class="text-muted small no-print">
-                                        <?php if ($residentTotal > 0): ?>
-                                            Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $residentTotal); ?> of <?php echo $residentTotal; ?>
-                                        <?php endif; ?>
-                                    </span>
-                                    <button class="btn btn-primary btn-sm no-print ms-2" onclick="window.print()">
-                                        <i class="fas fa-print me-1"></i> Print Residents
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-hover log-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Date/Time</th>
-                                            <th>RFID UID</th>
-                                            <th>Tenant</th>
-                                            <th>Room</th>
-                                            <th>Type</th>
-                                            <th>Signature</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php if (empty($residentLogs)): ?>
-                                            <tr>
-                                                <td colspan="6" class="text-center text-muted py-4">
-                                                    <i class="fas fa-inbox fa-2x d-block mb-2"></i>
-                                                    No resident/staff access logs found
-                                                </td>
-                                            </tr>
-                                        <?php else: ?>
-                                            <?php foreach ($residentLogs as $log): 
-                                                $displayName = $log['user_name'] ?? 'Unknown';
-                                                $cardType = $log['card_type'] ?? 'resident';
-                                                $avatarClass = '';
-                                                $userTypeTag = '';
-                                                
-                                                if ($cardType == 'staff') {
-                                                    $avatarClass = 'staff';
-                                                    $userTypeTag = '<span class="staff-tag">Staff</span>';
-                                                } else {
-                                                    $userTypeTag = '<span class="resident-tag">Resident</span>';
-                                                }
-                                                
-                                                $roomDisplay = $log['room_number'] ?? 'N/A';
-                                                
-                                                $initials = '';
-                                                $nameParts = explode(' ', $displayName);
-                                                foreach ($nameParts as $p) {
-                                                    if (!empty($p)) $initials .= strtoupper($p[0]);
-                                                }
-                                                $initials = substr($initials, 0, 2);
-                                            ?>
-                                                <tr>
-                                                    <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
-                                                    <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
-                                                    <td>
-                                                        <div class="user-cell">
-                                                            <div class="user-avatar <?php echo $avatarClass; ?>">
-                                                                <?php echo $initials ?: '?'; ?>
-                                                            </div>
-                                                            <div>
-                                                                <div><?php echo htmlspecialchars($displayName); ?> <?php echo $userTypeTag; ?></div>
-                                                                <?php if (!empty($log['student_id'])): ?>
-                                                                    <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['student_id']); ?></div>
-                                                                <?php endif; ?>
-                                                                <?php if (!empty($log['course'])): ?>
-                                                                    <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['course']); ?></div>
-                                                                <?php endif; ?>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td><?php echo htmlspecialchars($roomDisplay); ?></td>
-                                                    <td>
-                                                        <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
-                                                            <i class="fas <?php echo $log['access_type'] == 'entry' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
-                                                            <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <!-- Signature column - placeholder for actual signature -->
-                                                        <span class="text-muted">Not Available</span>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                            
-                            <!-- PAGINATION -->
-                            <?php if ($residentPages > 1): ?>
-                            <div class="pagination-container no-print">
-                                <div class="row align-items-center">
-                                    <div class="col-md-6">
-                                        <div class="page-info">
-                                            <i class="fas fa-info-circle me-1"></i>
-                                            Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $residentTotal); ?> of <?php echo $residentTotal; ?> entries
-                                            <span class="mx-1 text-muted">|</span>
-                                            <span class="text-muted">Page <?php echo $page; ?> of <?php echo $residentPages; ?></span>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="d-flex align-items-center justify-content-end gap-3 flex-wrap">
-                                            <nav aria-label="Page navigation">
-                                                <ul class="pagination justify-content-end mb-0">
-                                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                        <a class="page-link" href="?page=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                            <i class="fas fa-angle-double-left"></i>
-                                                        </a>
-                                                    </li>
-                                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                        <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                            <i class="fas fa-angle-left"></i>
-                                                        </a>
-                                                    </li>
-                                                    <?php
-                                                    $startPage = max(1, $page - 2);
-                                                    $endPage = min($residentPages, $page + 2);
-                                                    if ($startPage > 1) {
-                                                        echo '<li class="page-item"><span class="page-link">...</span></li>';
-                                                    }
-                                                    for ($i = $startPage; $i <= $endPage; $i++):
-                                                    ?>
-                                                        <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                            <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                                <?php echo $i; ?>
-                                                            </a>
-                                                        </li>
-                                                    <?php endfor; ?>
-                                                    <?php if ($endPage < $residentPages): ?>
-                                                        <li class="page-item"><span class="page-link">...</span></li>
-                                                    <?php endif; ?>
-                                                    <li class="page-item <?php echo ($page >= $residentPages) ? 'disabled' : ''; ?>">
-                                                        <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                            <i class="fas fa-angle-right"></i>
-                                                        </a>
-                                                    </li>
-                                                    <li class="page-item <?php echo ($page >= $residentPages) ? 'disabled' : ''; ?>">
-                                                        <a class="page-link" href="?page=<?php echo $residentPages; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                            <i class="fas fa-angle-double-right"></i>
-                                                        </a>
-                                                    </li>
-                                                </ul>
-                                            </nav>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <!-- ============================================================
-                    VISITORS TABLE - UPDATED COLUMNS: Date/Time | RFID UID | Name | Person to Visit | Reason/Purpose | Room | Type | Signature
-                    WITH SHOW ENTRIES DROPDOWN
-                    ============================================================ -->
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="log-header-actions">
-                                <div class="left">
-                                    <div class="section-header">
-                                        <span class="icon">👤</span>
-                                        <span class="title">Visitors</span>
-                                        <span class="count badge badge-visitor-header"><?php echo count($visitorLogs); ?> logs</span>
-                                    </div>
-                                </div>
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="per-page-selector d-flex align-items-center gap-2">
-                                        <label style="color: #808090; font-size: 13px;">Show:</label>
-                                        <select onchange="changeVisitorPerPage(this.value)" style="background: #1a1a2e; border: 1px solid #2a2a4a; color: #e0e0e0; border-radius: 8px; padding: 4px 8px; font-size: 13px;">
-                                            <?php foreach ($perPageOptions as $option): ?>
-                                                <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                                    <?php echo $option; ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <span class="text-muted small no-print">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        Showing <?php echo count($visitorLogs); ?> visitor logs
-                                    </span>
-                                    <button class="btn btn-primary btn-sm no-print ms-2" onclick="window.print()">
-                                        <i class="fas fa-print me-1"></i> Print Visitors
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-hover log-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Date/Time</th>
-                                            <th>RFID UID</th>
-                                            <th>Name</th>
-                                            <th>Person to Visit</th>
-                                            <th>Reason/Purpose</th>
-                                            <th>Room</th>
-                                            <th>Type</th>
-                                            <th>Signature</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php if (empty($visitorLogs)): ?>
-                                            <tr>
-                                                <td colspan="8" class="text-center text-muted py-4">
-                                                    <i class="fas fa-inbox fa-2x d-block mb-2"></i>
-                                                    No visitor access logs found
-                                                </td>
-                                            </tr>
-                                        <?php else: ?>
-                                            <?php 
-                                            $visitorDisplayCount = count($visitorLogs);
-                                            $visitorDisplayLimit = $perPage;
-                                            $visitorDisplayLogs = array_slice($visitorLogs, 0, $visitorDisplayLimit);
-                                            ?>
-                                            <?php foreach ($visitorDisplayLogs as $log): 
-                                                $visitorName = $log['visitor_name'] ?? 'Unknown Visitor';
-                                                $residentVisited = $log['resident_visited_name'] ?? 'Unknown';
-                                                $purpose = $log['purpose_of_visit'] ?? 'N/A';
-                                                $roomDisplay = $log['resident_room'] ?? 'N/A';
-                                                
-                                                $initials = '';
-                                                $nameParts = explode(' ', $visitorName);
-                                                foreach ($nameParts as $p) {
-                                                    if (!empty($p)) $initials .= strtoupper($p[0]);
-                                                }
-                                                $initials = substr($initials, 0, 2);
-                                            ?>
-                                                <tr>
-                                                    <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
-                                                    <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
-                                                    <td>
-                                                        <div class="user-cell">
-                                                            <div class="user-avatar visitor">
-                                                                <?php echo $initials ?: '?'; ?>
-                                                            </div>
-                                                            <div>
-                                                                <div><?php echo htmlspecialchars($visitorName); ?> <span class="visitor-tag">Visitor</span></div>
-                                                                <?php if (!empty($log['validity_end'])): ?>
-                                                                    <div style="font-size: 10px; color: #808090;">
-                                                                        Valid until: <?php echo date('M d, Y', strtotime($log['validity_end'])); ?>
-                                                                    </div>
-                                                                <?php endif; ?>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <span style="font-weight: 600;"><?php echo htmlspecialchars($residentVisited); ?></span>
-                                                    </td>
-                                                    <td>
-                                                        <span style="font-size: 12px;"><?php echo htmlspecialchars($purpose); ?></span>
-                                                    </td>
-                                                    <td><?php echo htmlspecialchars($roomDisplay); ?></td>
-                                                    <td>
-                                                        <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
-                                                            <i class="fas <?php echo $log['access_type'] == 'entry' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
-                                                            <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
-                                                        </span>
-                                                    </td>
-                                                    <td>
-                                                        <!-- Signature column - placeholder for actual signature -->
-                                                        <span class="text-muted">Not Available</span>
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                            <?php if ($visitorDisplayCount > $perPage): ?>
-                                                <tr>
-                                                    <td colspan="8" class="text-center text-muted py-2">
-                                                        <small>Showing <?php echo $visitorDisplayLimit; ?> of <?php echo $visitorDisplayCount; ?> visitors</small>
-                                                    </td>
-                                                </tr>
                                             <?php endif; ?>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
+                                            <a href="logs.php?search=<?php echo urlencode($cardUid); ?>" class="btn btn-sm btn-outline-secondary">
+                                                <i class="fas fa-history me-1"></i> View Logs
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; // end !printMode ?>
+
+                <!-- ============================================================
+                RESIDENTS TABLE
+                ============================================================ -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="log-header-actions">
+                            <div class="left">
+                                <div class="section-header">
+                                    <span class="icon">🏠</span>
+                                    <span class="title">Residents / Staff</span>
+                                    <span class="count badge badge-resident-header"><?php echo count($residentLogs); ?> logs</span>
+                                </div>
+                            </div>
+                            <div>
+                                <?php if (!$printMode): ?>
+                                <span class="text-muted small">
+                                    <?php if ($residentTotal > 0): ?>
+                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $residentTotal); ?> of <?php echo $residentTotal; ?>
+                                    <?php endif; ?>
+                                </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover log-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date/Time</th>
+                                        <th>RFID UID</th>
+                                        <th>Tenant</th>
+                                        <th>Room</th>
+                                        <th>Type</th>
+                                        <?php if ($printMode): ?>
+                                        <th>Signature</th>
+                                        <?php else: ?>
+                                        <th>Status</th>
+                                        <th>Power</th>
+                                        <?php endif; ?>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($residentLogs)): ?>
+                                        <tr>
+                                            <td colspan="<?php echo $printMode ? '6' : '7'; ?>" class="text-center text-muted py-4">
+                                                <i class="fas fa-inbox fa-2x d-block mb-2"></i>
+                                                No resident/staff access logs found
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($residentLogs as $log): 
+                                            $displayName = $log['user_name'] ?? 'Unknown';
+                                            $cardType = $log['card_type'] ?? 'resident';
+                                            $avatarClass = '';
+                                            $userTypeTag = '';
+                                            
+                                            if ($cardType == 'staff') {
+                                                $avatarClass = 'staff';
+                                                $userTypeTag = '<span class="staff-tag">Staff</span>';
+                                            } else {
+                                                $userTypeTag = '<span class="resident-tag">Resident</span>';
+                                            }
+                                            
+                                            $roomDisplay = $log['room_number'] ?? 'N/A';
+                                            
+                                            $initials = '';
+                                            $nameParts = explode(' ', $displayName);
+                                            foreach ($nameParts as $p) {
+                                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                                            }
+                                            $initials = substr($initials, 0, 2);
+                                        ?>
+                                            <tr>
+                                                <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
+                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                                                <td>
+                                                    <div class="user-cell">
+                                                        <div class="user-avatar <?php echo $avatarClass; ?>">
+                                                            <?php if (!empty($log['profile_photo']) && file_exists('../../' . $log['profile_photo'])): ?>
+                                                                <img src="../../<?php echo htmlspecialchars($log['profile_photo']); ?>" alt="Photo">
+                                                            <?php else: ?>
+                                                                <?php echo $initials ?: '?'; ?>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <div>
+                                                            <div><?php echo htmlspecialchars($displayName); ?> <?php echo $userTypeTag; ?></div>
+                                                            <?php if (!empty($log['student_id'])): ?>
+                                                                <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['student_id']); ?></div>
+                                                            <?php endif; ?>
+                                                            <?php if (!empty($log['course'])): ?>
+                                                                <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['course']); ?></div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($roomDisplay); ?></td>
+                                                <td>
+                                                    <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
+                                                        <i class="fas <?php echo $log['access_type'] == 'entry' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
+                                                        <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
+                                                    </span>
+                                                </td>
+                                                <?php if ($printMode): ?>
+                                                <td>
+                                                    <div style="text-align:center; padding: 4px 0;">
+                                                        <span style="display:inline-block; width:80px; border-bottom:1px solid #000; margin-top:8px;"></span>
+                                                        <span style="display:block; font-size:8px; color:#666;">Signature</span>
+                                                    </div>
+                                                </td>
+                                                <?php else: ?>
+                                                <td>
+                                                    <span class="badge <?php echo $log['access_status'] == 'granted' ? 'badge-granted' : 'badge-denied'; ?>">
+                                                        <i class="fas <?php echo $log['access_status'] == 'granted' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
+                                                        <?php echo ucfirst($log['access_status'] ?? 'N/A'); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?php echo isset($log['power_source']) && $log['power_source'] == 'main' ? 'badge-main' : 'badge-battery'; ?>">
+                                                        <i class="fas <?php echo isset($log['power_source']) && $log['power_source'] == 'main' ? 'fa-bolt' : 'fa-battery-quarter'; ?> me-1"></i>
+                                                        <?php echo isset($log['power_source']) ? ucfirst($log['power_source']) : 'N/A'; ?>
+                                                    </span>
+                                                </td>
+                                                <?php endif; ?>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <?php if (!$printMode && $residentPages > 1): ?>
+                        <!-- PAGINATION -->
+                        <div class="pagination-container">
+                            <div class="row align-items-center">
+                                <div class="col-md-6">
+                                    <div class="page-info">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $residentTotal); ?> of <?php echo $residentTotal; ?> entries
+                                        <span class="mx-1 text-muted">|</span>
+                                        <span class="text-muted">Page <?php echo $page; ?> of <?php echo $residentPages; ?></span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center justify-content-end gap-3 flex-wrap">
+                                        <div class="per-page-selector d-flex align-items-center gap-2">
+                                            <label>Show:</label>
+                                            <select onchange="changePerPage(this.value)">
+                                                <?php foreach ($perPageOptions as $option): ?>
+                                                    <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
+                                                        <?php echo $option; ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <nav aria-label="Page navigation">
+                                            <ul class="pagination justify-content-end mb-0">
+                                                <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                                    <a class="page-link" href="?page=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                        <i class="fas fa-angle-double-left"></i>
+                                                    </a>
+                                                </li>
+                                                <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                                    <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                        <i class="fas fa-angle-left"></i>
+                                                    </a>
+                                                </li>
+                                                <?php
+                                                $startPage = max(1, $page - 2);
+                                                $endPage = min($residentPages, $page + 2);
+                                                if ($startPage > 1) {
+                                                    echo '<li class="page-item"><span class="page-link">...</span></li>';
+                                                }
+                                                for ($i = $startPage; $i <= $endPage; $i++):
+                                                ?>
+                                                    <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
+                                                        <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                            <?php echo $i; ?>
+                                                        </a>
+                                                    </li>
+                                                <?php endfor; ?>
+                                                <?php if ($endPage < $residentPages): ?>
+                                                    <li class="page-item"><span class="page-link">...</span></li>
+                                                <?php endif; ?>
+                                                <li class="page-item <?php echo ($page >= $residentPages) ? 'disabled' : ''; ?>">
+                                                    <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                        <i class="fas fa-angle-right"></i>
+                                                    </a>
+                                                </li>
+                                                <li class="page-item <?php echo ($page >= $residentPages) ? 'disabled' : ''; ?>">
+                                                    <a class="page-link" href="?page=<?php echo $residentPages; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                        <i class="fas fa-angle-double-right"></i>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                VISITORS TABLE
+                ============================================================ -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="log-header-actions">
+                            <div class="left">
+                                <div class="section-header">
+                                    <span class="icon">👤</span>
+                                    <span class="title">Visitors</span>
+                                    <span class="count badge badge-visitor-header"><?php echo count($visitorLogs); ?> logs</span>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-muted small">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Showing <?php echo count($visitorLogs); ?> visitor logs
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover log-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date/Time</th>
+                                        <th>RFID UID</th>
+                                        <th>Name</th>
+                                        <th>Person to Visit</th>
+                                        <th>Reason/Purpose</th>
+                                        <th>Room</th>
+                                        <th>Type</th>
+                                        <?php if ($printMode): ?>
+                                        <th>Signature</th>
+                                        <?php else: ?>
+                                        <th>Status</th>
+                                        <?php endif; ?>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($visitorLogs)): ?>
+                                        <tr>
+                                            <td colspan="<?php echo $printMode ? '8' : '8'; ?>" class="text-center text-muted py-4">
+                                                <i class="fas fa-inbox fa-2x d-block mb-2"></i>
+                                                No visitor access logs found
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($visitorLogs as $log): 
+                                            $visitorName = $log['visitor_name'] ?? 'Unknown Visitor';
+                                            $residentVisited = $log['resident_visited_name'] ?? 'Unknown';
+                                            $purpose = $log['purpose_of_visit'] ?? 'N/A';
+                                            $roomDisplay = $log['resident_room'] ?? 'N/A';
+                                            
+                                            $initials = '';
+                                            $nameParts = explode(' ', $visitorName);
+                                            foreach ($nameParts as $p) {
+                                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                                            }
+                                            $initials = substr($initials, 0, 2);
+                                        ?>
+                                            <tr>
+                                                <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
+                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                                                <td>
+                                                    <div class="user-cell">
+                                                        <div class="user-avatar visitor">
+                                                            <?php echo $initials ?: '?'; ?>
+                                                        </div>
+                                                        <div>
+                                                            <div><?php echo htmlspecialchars($visitorName); ?> <span class="visitor-tag">Visitor</span></div>
+                                                            <?php if (!empty($log['validity_end'])): ?>
+                                                                <div style="font-size: 10px; color: #808090;">
+                                                                    Valid until: <?php echo date('M d, Y', strtotime($log['validity_end'])); ?>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div>
+                                                        <span style="font-weight: 600;"><?php echo htmlspecialchars($residentVisited); ?></span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span style="font-size: 12px;"><?php echo htmlspecialchars($purpose); ?></span>
+                                                </td>
+                                                <td><?php echo htmlspecialchars($roomDisplay); ?></td>
+                                                <td>
+                                                    <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
+                                                        <i class="fas <?php echo $log['access_type'] == 'entry' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
+                                                        <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
+                                                    </span>
+                                                </td>
+                                                <?php if ($printMode): ?>
+                                                <td>
+                                                    <div style="text-align:center; padding: 4px 0;">
+                                                        <span style="display:inline-block; width:80px; border-bottom:1px solid #000; margin-top:8px;"></span>
+                                                        <span style="display:block; font-size:8px; color:#666;">Signature</span>
+                                                    </div>
+                                                </td>
+                                                <?php else: ?>
+                                                <td>
+                                                    <span class="badge <?php echo $log['access_status'] == 'granted' ? 'badge-granted' : 'badge-denied'; ?>">
+                                                        <i class="fas <?php echo $log['access_status'] == 'granted' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
+                                                        <?php echo ucfirst($log['access_status'] ?? 'N/A'); ?>
+                                                    </span>
+                                                </td>
+                                                <?php endif; ?>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
-                <!-- END PRINTABLE AREA -->
 
+                <?php if ($printMode): ?>
+                <!-- PRINT FOOTER -->
+                <div class="print-footer">
+                    <p>
+                        Printed on: <?php echo date('F d, Y h:i A'); ?> | 
+                        Total Residents/Staff: <?php echo count($residentLogs); ?> | 
+                        Total Visitors: <?php echo count($visitorLogs); ?>
+                    </p>
+                    <p style="font-size: 10px; color: #999;">
+                        ISU-Echague Dormitory - Tap-and-Go Doorlock System
+                    </p>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!$printMode): ?>
                 <!-- ============================================================
                 FOOTER - SAME AS DASHBOARD
                 ============================================================ -->
-                <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3 no-print">
+                <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
                     <span id="serverTime">Server Time: <?php echo date('F d, Y h:i A'); ?></span>
@@ -1696,35 +1683,20 @@ if ($result && $row = $result->fetch_assoc()) {
                         </span>
                     <?php endif; ?>
                 </footer>
+                <?php endif; ?>
             </main>
         </div>
     </div>
 
+    <?php if (!$printMode): ?>
     <?php include '../includes/footer.php'; ?>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
-        // CHANGE PER PAGE FOR RESIDENTS
+        // CHANGE PER PAGE
         // ============================================================
         function changePerPage(value) {
-            const urlParams = new URLSearchParams(window.location.search);
-            urlParams.set('per_page', value);
-            urlParams.set('page', 1);
-            window.location.href = '?' + urlParams.toString();
-        }
-        
-        // ============================================================
-        // CHANGE PER PAGE FOR ALERTS (redirects to alerts.php with per_page)
-        // ============================================================
-        function changeAlertPerPage(value) {
-            window.location.href = 'alerts.php?per_page=' + value;
-        }
-        
-        // ============================================================
-        // CHANGE PER PAGE FOR VISITORS (reload current page with per_page)
-        // ============================================================
-        function changeVisitorPerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
             urlParams.set('page', 1);
@@ -1766,6 +1738,6 @@ if ($result && $row = $result->fetch_assoc()) {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
     </script>
+    <?php endif; ?>
 </body>
 </html>
-[file content end]
