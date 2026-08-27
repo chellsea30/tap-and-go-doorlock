@@ -5,8 +5,7 @@
  * PURE DARK MODE - Fixed navbar, sidebar, footer
  * FIXED: Complete dark table
  * ADDED: Print buttons and show entries dropdown
- * UPDATED: Print layout - Entry/Exit with Signature columns
- * ADDED: Picture display in Residents table (with fallback)
+ * UPDATED: Print layout - Custom columns for Residents and Visitors
  */
 
 session_start();
@@ -27,19 +26,6 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
 // Include header
 include '../includes/header.php'; 
 $conn = getDBConnection();
-
-// ============================================================
-// CHECK IF PROFILE_PICTURE COLUMN EXISTS
-// ============================================================
-$hasProfilePicture = false;
-try {
-    $checkColumn = $conn->query("SHOW COLUMNS FROM users LIKE 'profile_picture'");
-    if ($checkColumn && $checkColumn->num_rows > 0) {
-        $hasProfilePicture = true;
-    }
-} catch (Exception $e) {
-    $hasProfilePicture = false;
-}
 
 // ============================================================
 // PAGINATION SETTINGS
@@ -147,7 +133,6 @@ if ($page > $residentPages) $page = $residentPages;
 if ($page < 1) $page = 1;
 $offset = ($page - 1) * $perPage;
 
-// Build resident query with or without profile_picture
 $residentQuery = "
     SELECT 
         al.*,
@@ -162,14 +147,6 @@ $residentQuery = "
         rp.course,
         rp.year_level,
         ru.full_name as resident_visited_name
-";
-
-// Only add profile_picture if column exists
-if ($hasProfilePicture) {
-    $residentQuery .= ", u.profile_picture";
-}
-
-$residentQuery .= "
     FROM access_logs al
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
     LEFT JOIN users u ON c.user_id = u.user_id
@@ -591,19 +568,8 @@ if ($result && $row = $result->fetch_assoc()) {
         .log-table .user-avatar {
             width: 32px; height: 32px; border-radius: 50%;
             background: linear-gradient(135deg, #4a5a8a, #5a3a7a);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 12px;
-            flex-shrink: 0;
-            overflow: hidden;
-        }
-        .log-table .user-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 700; font-size: 12px; flex-shrink: 0;
         }
         .log-table .user-avatar.visitor {
             background: linear-gradient(135deg, #2a3a6a, #3a2a7a);
@@ -984,9 +950,6 @@ if ($result && $row = $result->fetch_assoc()) {
             .log-table .user-avatar {
                 background: #e9ecef !important;
                 color: #495057 !important;
-            }
-            .log-table .user-avatar img {
-                display: none !important;
             }
         }
         
@@ -1430,7 +1393,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                     <tr>
                                         <th>Date/Time</th>
                                         <th>RFID UID</th>
-                                        <th>Tenant</th>
+                                        <th>User</th>
                                         <th>Room</th>
                                         <th>Type</th>
                                         <th>Status</th>
@@ -1451,7 +1414,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                             $cardType = $log['card_type'] ?? 'resident';
                                             $avatarClass = '';
                                             $userTypeTag = '';
-                                            $profilePic = isset($log['profile_picture']) ? $log['profile_picture'] : '';
                                             
                                             if ($cardType == 'staff') {
                                                 $avatarClass = 'staff';
@@ -1468,12 +1430,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 if (!empty($p)) $initials .= strtoupper($p[0]);
                                             }
                                             $initials = substr($initials, 0, 2);
-                                            
-                                            // Determine avatar content
-                                            $avatarContent = $initials ?: '?';
-                                            if ($hasProfilePicture && !empty($profilePic) && file_exists('../../uploads/profile/' . $profilePic)) {
-                                                $avatarContent = '<img src="../../uploads/profile/' . htmlspecialchars($profilePic) . '" alt="Profile">';
-                                            }
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
@@ -1481,7 +1437,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 <td>
                                                     <div class="user-cell">
                                                         <div class="user-avatar <?php echo $avatarClass; ?>">
-                                                            <?php echo $avatarContent; ?>
+                                                            <?php echo $initials ?: '?'; ?>
                                                         </div>
                                                         <div>
                                                             <div><?php echo htmlspecialchars($displayName); ?> <?php echo $userTypeTag; ?></div>
@@ -1756,14 +1712,13 @@ if ($result && $row = $result->fetch_assoc()) {
         // CHANGE PER PAGE - VISITORS
         // ============================================================
         function changeVisitorPerPage(value) {
-            // For visitors, we reload the page with a visitor-specific limit
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('visitor_limit', value);
             window.location.href = '?' + urlParams.toString();
         }
         
         // ============================================================
-        // PRINT TABLE FUNCTION
+        // PRINT TABLE FUNCTION - UPDATED FOR CUSTOM COLUMNS
         // ============================================================
         function printTable(tableId) {
             var printContents = document.getElementById(tableId).innerHTML;
@@ -1772,7 +1727,7 @@ if ($result && $row = $result->fetch_assoc()) {
             var cardHeader = document.getElementById(tableId).closest('.card').querySelector('.card-header .title');
             var tableTitle = cardHeader ? cardHeader.textContent.trim() : 'Access Logs';
             
-            // Check if this is the resident table or visitor table
+            // Check which table is being printed
             var isResidentTable = tableId === 'residentTable';
             var isVisitorTable = tableId === 'visitorTable';
             
@@ -1815,17 +1770,6 @@ if ($result && $row = $result->fetch_assoc()) {
                 .badge-denied { background: #f8d7da; color: #721c24; }
                 .badge-entry { background: #d1ecf1; color: #0c5460; }
                 .badge-exit { background: #e2e3e5; color: #383d41; }
-                .badge-main { background: #d4edda; color: #155724; }
-                .badge-battery { background: #fff3cd; color: #856404; }
-                .resident-tag, .staff-tag, .visitor-tag {
-                    font-size: 8px;
-                    padding: 1px 5px;
-                    border-radius: 10px;
-                    background: #e9ecef;
-                    color: #495057;
-                    border: 1px solid #ced4da;
-                    margin-left: 3px;
-                }
                 .user-avatar {
                     width: 28px;
                     height: 28px;
@@ -1838,12 +1782,6 @@ if ($result && $row = $result->fetch_assoc()) {
                     font-size: 10px;
                     color: #495057;
                     margin-right: 6px;
-                    overflow: hidden;
-                }
-                .user-avatar img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
                 }
                 .user-cell { display: flex; align-items: center; }
                 .uid-cell {
@@ -1861,7 +1799,6 @@ if ($result && $row = $result->fetch_assoc()) {
                     color: #888; 
                     font-size: 11px;
                 }
-                .entry-count { color: #666; font-size: 12px; }
                 .print-meta { 
                     display: flex; 
                     justify-content: space-between; 
@@ -1874,29 +1811,29 @@ if ($result && $row = $result->fetch_assoc()) {
                 .signature-cell {
                     text-align: center;
                     min-width: 80px;
-                    height: 40px;
-                    padding: 0 5px;
+                    height: 35px;
                 }
-                .signature-cell .signature-line {
+                .signature-line {
                     display: block;
                     width: 100%;
                     border-bottom: 1px solid #999;
                     margin-top: 15px;
-                    height: 20px;
                 }
-                .signature-cell .type-label {
+                .resident-tag, .staff-tag, .visitor-tag {
                     font-size: 8px;
-                    color: #999;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    display: block;
-                    margin-top: 2px;
+                    padding: 1px 5px;
+                    border-radius: 10px;
+                    background: #e9ecef;
+                    color: #495057;
+                    border: 1px solid #ced4da;
+                    margin-left: 3px;
                 }
+                .badge-main { background: #d4edda; color: #155724; }
+                .badge-battery { background: #fff3cd; color: #856404; }
                 @media print {
                     body { padding: 10px; }
                     .no-print { display: none !important; }
                     .table-toolbar { display: none !important; }
-                    .user-avatar img { display: block !important; }
                 }
             `);
             printWindow.document.write('</style>');
@@ -1930,141 +1867,137 @@ if ($result && $row = $result->fetch_assoc()) {
                 </div>
             `);
             
-            // Parse and modify the table
+            // Parse the table HTML
+            var tableHtml = printContents;
             var tempDiv = document.createElement('div');
-            tempDiv.innerHTML = printContents;
+            tempDiv.innerHTML = tableHtml;
             var table = tempDiv.querySelector('table');
             
             if (table) {
-                // For Residents: Date/Time | RFID UID | Tenant | Room | Type (Entry) | Signature In | Type (Exit) | Signature Out
                 if (isResidentTable) {
+                    // RESIDENT TABLE: Date/Time | RFID UID | Tenant | Room | Type | Signature
                     // Replace thead
                     var thead = table.querySelector('thead');
                     if (thead) {
-                        var headerRow = thead.querySelector('tr');
-                        if (headerRow) {
-                            // Get all headers
-                            var headers = headerRow.querySelectorAll('th');
-                            if (headers.length >= 7) {
-                                // Keep: Date/Time, RFID UID, Tenant (User), Room
-                                // Replace: Type -> Type (Entry) | Status -> Signature In | Power -> Type (Exit) | add Signature Out
-                                
-                                // Modify headers
-                                headers[0].textContent = 'Date/Time';
-                                headers[1].textContent = 'RFID UID';
-                                headers[2].textContent = 'Tenant';
-                                headers[3].textContent = 'Room';
-                                headers[4].textContent = 'Type (Entry)';
-                                headers[5].textContent = 'Signature In';
-                                headers[6].textContent = 'Type (Exit)';
-                                
-                                // Add extra header for Signature Out
+                        var headers = thead.querySelectorAll('th');
+                        if (headers.length >= 7) {
+                            // Update header texts
+                            var headerTexts = ['Date/Time', 'RFID UID', 'Tenant', 'Room', 'Type', 'Signature'];
+                            var ths = thead.querySelectorAll('th');
+                            for (var i = 0; i < Math.min(ths.length, headerTexts.length); i++) {
+                                ths[i].textContent = headerTexts[i];
+                            }
+                            // Remove extra headers if any
+                            while (ths.length > 6) {
+                                thead.removeChild(ths[ths.length - 1]);
+                                ths = thead.querySelectorAll('th');
+                            }
+                            // Add Signature if missing
+                            if (ths.length < 6) {
                                 var newTh = document.createElement('th');
-                                newTh.textContent = 'Signature Out';
-                                headerRow.appendChild(newTh);
+                                newTh.textContent = 'Signature';
+                                thead.appendChild(newTh);
                             }
                         }
                     }
                     
-                    // Modify tbody rows
+                    // Replace tbody cells
                     var rows = table.querySelectorAll('tbody tr');
                     rows.forEach(function(row) {
                         var cells = row.querySelectorAll('td');
                         if (cells.length >= 7) {
-                            // Get the type cell (index 4)
-                            var typeCell = cells[4];
-                            var typeText = typeCell.textContent.trim();
-                            var isEntry = typeText.toLowerCase().includes('entry');
+                            // Keep: Date/Time (0), UID (1), User (2), Room (3), Type (4)
+                            // Remove: Status (5), Power (6)
+                            // Add: Signature (5)
+                            var newCells = [];
+                            for (var i = 0; i < 5; i++) {
+                                newCells.push(cells[i]);
+                            }
+                            // Create signature cell with line
+                            var sigCell = document.createElement('td');
+                            sigCell.className = 'signature-cell';
+                            sigCell.innerHTML = '<span class="signature-line"></span>';
+                            newCells.push(sigCell);
                             
-                            // Keep first 5 cells: Date/Time, RFID UID, User, Room, Type
-                            // Cell 4 (Type) - show Entry/Exit
-                            // Cell 5 (Status) -> Signature In
-                            // Cell 6 (Power) -> Type (Exit)
-                            // Add new cell for Signature Out
-                            
-                            // Determine if it's Entry or Exit for the new Type (Exit) column
-                            var exitType = isEntry ? 'Exit' : 'Entry';
-                            
-                            // Cell 4: Keep as Type (Entry)
-                            // Cell 5: Signature In
-                            var sigInCell = cells[5];
-                            sigInCell.innerHTML = '<div class="signature-cell"><span class="signature-line"></span><span class="type-label">Signature In</span></div>';
-                            sigInCell.className = 'signature-cell';
-                            
-                            // Cell 6: Type (Exit)
-                            var exitTypeCell = cells[6];
-                            exitTypeCell.innerHTML = '<span class="badge ' + (isEntry ? 'badge-exit' : 'badge-entry') + '">' + exitType + '</span>';
-                            exitTypeCell.style.textAlign = 'center';
-                            
-                            // Add new cell for Signature Out
-                            var newTd = document.createElement('td');
-                            newTd.className = 'signature-cell';
-                            newTd.innerHTML = '<span class="signature-line"></span><span class="type-label">Signature Out</span>';
-                            row.appendChild(newTd);
+                            // Remove all cells and add new ones
+                            while (row.firstChild) {
+                                row.removeChild(row.firstChild);
+                            }
+                            newCells.forEach(function(cell) {
+                                row.appendChild(cell);
+                            });
                         }
                     });
-                }
-                
-                // For Visitors: Date/Time | RFID UID | Visitor | Visiting | Purpose | Type (Entry) | Signature In | Type (Exit) | Signature Out
-                if (isVisitorTable) {
-                    // Replace thead
+                } else if (isVisitorTable) {
+                    // VISITOR TABLE: Date/Time | RFID UID | Name | Person to Visit | Reason/Purpose | Room | Type | Signature
                     var thead = table.querySelector('thead');
                     if (thead) {
-                        var headerRow = thead.querySelector('tr');
-                        if (headerRow) {
-                            var headers = headerRow.querySelectorAll('th');
-                            if (headers.length >= 7) {
-                                headers[0].textContent = 'Date/Time';
-                                headers[1].textContent = 'RFID UID';
-                                headers[2].textContent = 'Visitor';
-                                headers[3].textContent = 'Visiting';
-                                headers[4].textContent = 'Purpose';
-                                headers[5].textContent = 'Type (Entry)';
-                                headers[6].textContent = 'Signature In';
-                                
-                                var newTh1 = document.createElement('th');
-                                newTh1.textContent = 'Type (Exit)';
-                                headerRow.appendChild(newTh1);
-                                
-                                var newTh2 = document.createElement('th');
-                                newTh2.textContent = 'Signature Out';
-                                headerRow.appendChild(newTh2);
-                            }
+                        var headerTexts = ['Date/Time', 'RFID UID', 'Name', 'Person to Visit', 'Reason/Purpose', 'Room', 'Type', 'Signature'];
+                        var ths = thead.querySelectorAll('th');
+                        // Update existing headers
+                        for (var i = 0; i < Math.min(ths.length, headerTexts.length); i++) {
+                            ths[i].textContent = headerTexts[i];
+                        }
+                        // Add missing headers
+                        while (ths.length < 8) {
+                            var newTh = document.createElement('th');
+                            newTh.textContent = headerTexts[ths.length] || 'Signature';
+                            thead.appendChild(newTh);
+                            ths = thead.querySelectorAll('th');
                         }
                     }
                     
-                    // Modify tbody rows
+                    // Replace tbody cells
                     var rows = table.querySelectorAll('tbody tr');
                     rows.forEach(function(row) {
                         var cells = row.querySelectorAll('td');
                         if (cells.length >= 7) {
-                            var typeCell = cells[5];
-                            var typeText = typeCell.textContent.trim();
-                            var isEntry = typeText.toLowerCase().includes('entry');
+                            // Keep: Date/Time (0), UID (1), Visitor (2), Visiting (3), Purpose (4)
+                            // Room: extract from visiting or use N/A (will be inserted at position 5)
+                            // Type (5), Status (6) -> Type becomes index 6, Signature becomes index 7
+                            var newCells = [];
+                            // Date/Time
+                            newCells.push(cells[0]);
+                            // RFID UID
+                            newCells.push(cells[1]);
+                            // Name (Visitor)
+                            newCells.push(cells[2]);
+                            // Person to Visit (Visiting)
+                            newCells.push(cells[3]);
+                            // Reason/Purpose
+                            newCells.push(cells[4]);
+                            // Room - extract from visiting cell or use N/A
+                            var roomCell = document.createElement('td');
+                            var visitingText = cells[3] ? cells[3].textContent : '';
+                            var roomMatch = visitingText.match(/Room\s*(\d+)/i);
+                            roomCell.textContent = roomMatch ? 'Room ' + roomMatch[1] : (visitingText || 'N/A');
+                            newCells.push(roomCell);
+                            // Type
+                            if (cells[5]) {
+                                newCells.push(cells[5]);
+                            } else {
+                                var typeCell = document.createElement('td');
+                                typeCell.textContent = 'N/A';
+                                newCells.push(typeCell);
+                            }
+                            // Signature
+                            var sigCell = document.createElement('td');
+                            sigCell.className = 'signature-cell';
+                            sigCell.innerHTML = '<span class="signature-line"></span>';
+                            newCells.push(sigCell);
                             
-                            // Keep cells 0-4: Date/Time, RFID UID, Visitor, Visiting, Purpose
-                            // Cell 5: Type (Entry) - keep as is
-                            // Cell 6: Signature In
-                            var sigInCell = cells[6];
-                            sigInCell.innerHTML = '<div class="signature-cell"><span class="signature-line"></span><span class="type-label">Signature In</span></div>';
-                            sigInCell.className = 'signature-cell';
-                            
-                            // Add Type (Exit)
-                            var exitType = isEntry ? 'Exit' : 'Entry';
-                            var newTd1 = document.createElement('td');
-                            newTd1.style.textAlign = 'center';
-                            newTd1.innerHTML = '<span class="badge ' + (isEntry ? 'badge-exit' : 'badge-entry') + '">' + exitType + '</span>';
-                            row.appendChild(newTd1);
-                            
-                            // Add Signature Out
-                            var newTd2 = document.createElement('td');
-                            newTd2.className = 'signature-cell';
-                            newTd2.innerHTML = '<span class="signature-line"></span><span class="type-label">Signature Out</span>';
-                            row.appendChild(newTd2);
+                            // Remove all cells and add new ones
+                            while (row.firstChild) {
+                                row.removeChild(row.firstChild);
+                            }
+                            newCells.forEach(function(cell) {
+                                row.appendChild(cell);
+                            });
                         }
                     });
                 }
                 
+                // Get the modified HTML
                 printContents = tempDiv.innerHTML;
             }
             
