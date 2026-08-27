@@ -5,7 +5,8 @@
  * PURE DARK MODE - Fixed navbar, sidebar, footer
  * FIXED: Complete dark table
  * ADDED: Print buttons and show entries dropdown
- * UPDATED: Print layout - replaced Status & Power with Signature In/Out
+ * UPDATED: Print layout - Entry/Exit with Signature columns
+ * ADDED: Picture display in Residents table
  */
 
 session_start();
@@ -144,6 +145,7 @@ $residentQuery = "
         u.full_name as user_name,
         u.room_number,
         u.student_id,
+        u.profile_picture,
         rp.course,
         rp.year_level,
         ru.full_name as resident_visited_name
@@ -191,6 +193,7 @@ $visitorQuery = "
         c.resident_visited,
         ru.full_name as resident_visited_name,
         ru.room_number as resident_room,
+        ru.profile_picture as resident_picture,
         vl.validity_end
     FROM access_logs al
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
@@ -570,6 +573,12 @@ if ($result && $row = $result->fetch_assoc()) {
             background: linear-gradient(135deg, #4a5a8a, #5a3a7a);
             display: flex; align-items: center; justify-content: center;
             color: white; font-weight: 700; font-size: 12px; flex-shrink: 0;
+            overflow: hidden;
+        }
+        .log-table .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
         .log-table .user-avatar.visitor {
             background: linear-gradient(135deg, #2a3a6a, #3a2a7a);
@@ -950,6 +959,9 @@ if ($result && $row = $result->fetch_assoc()) {
             .log-table .user-avatar {
                 background: #e9ecef !important;
                 color: #495057 !important;
+            }
+            .log-table .user-avatar img {
+                display: none !important;
             }
         }
         
@@ -1393,7 +1405,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                     <tr>
                                         <th>Date/Time</th>
                                         <th>RFID UID</th>
-                                        <th>User</th>
+                                        <th>Tenant</th>
                                         <th>Room</th>
                                         <th>Type</th>
                                         <th>Status</th>
@@ -1414,6 +1426,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                             $cardType = $log['card_type'] ?? 'resident';
                                             $avatarClass = '';
                                             $userTypeTag = '';
+                                            $profilePic = $log['profile_picture'] ?? '';
                                             
                                             if ($cardType == 'staff') {
                                                 $avatarClass = 'staff';
@@ -1430,6 +1443,12 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 if (!empty($p)) $initials .= strtoupper($p[0]);
                                             }
                                             $initials = substr($initials, 0, 2);
+                                            
+                                            // Determine avatar content
+                                            $avatarContent = $initials ?: '?';
+                                            if (!empty($profilePic) && file_exists('../../uploads/profile/' . $profilePic)) {
+                                                $avatarContent = '<img src="../../uploads/profile/' . htmlspecialchars($profilePic) . '" alt="Profile">';
+                                            }
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
@@ -1437,7 +1456,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 <td>
                                                     <div class="user-cell">
                                                         <div class="user-avatar <?php echo $avatarClass; ?>">
-                                                            <?php echo $initials ?: '?'; ?>
+                                                            <?php echo $avatarContent; ?>
                                                         </div>
                                                         <div>
                                                             <div><?php echo htmlspecialchars($displayName); ?> <?php echo $userTypeTag; ?></div>
@@ -1612,6 +1631,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                             $visitorName = $log['visitor_name'] ?? 'Unknown Visitor';
                                             $residentVisited = $log['resident_visited_name'] ?? 'Unknown';
                                             $purpose = $log['purpose_of_visit'] ?? 'N/A';
+                                            $residentPic = $log['resident_picture'] ?? '';
                                             
                                             $initials = '';
                                             $nameParts = explode(' ', $visitorName);
@@ -1723,14 +1743,14 @@ if ($result && $row = $result->fetch_assoc()) {
         // ============================================================
         function printTable(tableId) {
             var printContents = document.getElementById(tableId).innerHTML;
-            var originalContents = document.body.innerHTML;
             
             // Get the table title from the card header
             var cardHeader = document.getElementById(tableId).closest('.card').querySelector('.card-header .title');
             var tableTitle = cardHeader ? cardHeader.textContent.trim() : 'Access Logs';
             
-            // Check if this is the resident table to use signature columns
+            // Check if this is the resident table or visitor table
             var isResidentTable = tableId === 'residentTable';
+            var isVisitorTable = tableId === 'visitorTable';
             
             var printWindow = window.open('', '_blank', 'width=1200,height=800');
             printWindow.document.write('<html><head><title>Print - ' + tableTitle + '</title>');
@@ -1794,6 +1814,12 @@ if ($result && $row = $result->fetch_assoc()) {
                     font-size: 10px;
                     color: #495057;
                     margin-right: 6px;
+                    overflow: hidden;
+                }
+                .user-avatar img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
                 }
                 .user-cell { display: flex; align-items: center; }
                 .uid-cell {
@@ -1825,26 +1851,28 @@ if ($result && $row = $result->fetch_assoc()) {
                     text-align: center;
                     min-width: 80px;
                     height: 40px;
-                    border-bottom: 1px solid #999 !important;
-                    padding-bottom: 5px;
+                    padding: 0 5px;
                 }
-                .signature-label {
+                .signature-cell .signature-line {
+                    display: block;
+                    width: 100%;
+                    border-bottom: 1px solid #999;
+                    margin-top: 15px;
+                    height: 20px;
+                }
+                .signature-cell .type-label {
                     font-size: 8px;
                     color: #999;
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
-                }
-                .signature-line {
                     display: block;
-                    width: 100%;
-                    border-bottom: 1px solid #ccc;
-                    margin-top: 5px;
-                    height: 20px;
+                    margin-top: 2px;
                 }
                 @media print {
                     body { padding: 10px; }
                     .no-print { display: none !important; }
                     .table-toolbar { display: none !important; }
+                    .user-avatar img { display: block !important; }
                 }
             `);
             printWindow.document.write('</style>');
@@ -1852,7 +1880,6 @@ if ($result && $row = $result->fetch_assoc()) {
             
             // Get the selected date from the filter
             var selectedDate = document.querySelector('input[name="date"]')?.value || 'All Dates';
-            // Format the date for display
             var displayDate = selectedDate;
             if (selectedDate && selectedDate !== 'All Dates') {
                 var dateObj = new Date(selectedDate + 'T00:00:00');
@@ -1879,49 +1906,145 @@ if ($result && $row = $result->fetch_assoc()) {
                 </div>
             `);
             
-            // Modify the table for resident prints - replace Status and Power with Signature In/Out
-            if (isResidentTable) {
-                // Parse the table HTML and replace columns
-                var tableHtml = printContents;
-                // Replace thead: remove Status and Power columns, add Signature In and Signature Out
-                tableHtml = tableHtml.replace(
-                    /<th>Status<\/th>/i,
-                    '<th>Signature In</th>'
-                );
-                tableHtml = tableHtml.replace(
-                    /<th>Power<\/th>/i,
-                    '<th>Signature Out</th>'
-                );
-                
-                // For each row, replace status and power cells with signature cells
-                // We'll use a more robust approach - find all rows and replace the last two cells
-                var tempDiv = document.createElement('div');
-                tempDiv.innerHTML = tableHtml;
-                var table = tempDiv.querySelector('table');
-                if (table) {
+            // Parse and modify the table
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = printContents;
+            var table = tempDiv.querySelector('table');
+            
+            if (table) {
+                // For Residents: Date/Time | RFID UID | Tenant | Room | Type (Entry) | Signature In | Type (Exit) | Signature Out
+                if (isResidentTable) {
+                    // Replace thead
+                    var thead = table.querySelector('thead');
+                    if (thead) {
+                        var headerRow = thead.querySelector('tr');
+                        if (headerRow) {
+                            // Get all headers
+                            var headers = headerRow.querySelectorAll('th');
+                            if (headers.length >= 7) {
+                                // Keep: Date/Time, RFID UID, Tenant (User), Room
+                                // Replace: Type -> Type (Entry) | Status -> Signature In | Power -> Type (Exit) | add Signature Out
+                                
+                                // Modify headers
+                                headers[0].textContent = 'Date/Time';
+                                headers[1].textContent = 'RFID UID';
+                                headers[2].textContent = 'Tenant';
+                                headers[3].textContent = 'Room';
+                                headers[4].textContent = 'Type (Entry)';
+                                headers[5].textContent = 'Signature In';
+                                headers[6].textContent = 'Type (Exit)';
+                                
+                                // Add extra header for Signature Out
+                                var newTh = document.createElement('th');
+                                newTh.textContent = 'Signature Out';
+                                headerRow.appendChild(newTh);
+                            }
+                        }
+                    }
+                    
+                    // Modify tbody rows
                     var rows = table.querySelectorAll('tbody tr');
                     rows.forEach(function(row) {
                         var cells = row.querySelectorAll('td');
-                        if (cells.length >= 6) {
-                            // Replace status cell (index 5) with signature in
-                            var statusCell = cells[5];
-                            statusCell.innerHTML = '<div class="signature-cell"><span class="signature-line"></span></div>';
-                            statusCell.className = 'signature-cell';
+                        if (cells.length >= 7) {
+                            // Get the type cell (index 4)
+                            var typeCell = cells[4];
+                            var typeText = typeCell.textContent.trim();
+                            var isEntry = typeText.toLowerCase().includes('entry');
                             
-                            // Replace power cell (index 6) with signature out
-                            var powerCell = cells[6];
-                            powerCell.innerHTML = '<div class="signature-cell"><span class="signature-line"></span></div>';
-                            powerCell.className = 'signature-cell';
+                            // Keep first 5 cells: Date/Time, RFID UID, User, Room, Type
+                            // Cell 4 (Type) - show Entry/Exit
+                            // Cell 5 (Status) -> Signature In
+                            // Cell 6 (Power) -> Type (Exit)
+                            // Add new cell for Signature Out
+                            
+                            // Determine if it's Entry or Exit for the new Type (Exit) column
+                            var exitType = isEntry ? 'Exit' : 'Entry';
+                            
+                            // Cell 4: Keep as Type (Entry)
+                            // Cell 5: Signature In
+                            var sigInCell = cells[5];
+                            sigInCell.innerHTML = '<div class="signature-cell"><span class="signature-line"></span><span class="type-label">Signature In</span></div>';
+                            sigInCell.className = 'signature-cell';
+                            
+                            // Cell 6: Type (Exit)
+                            var exitTypeCell = cells[6];
+                            exitTypeCell.innerHTML = '<span class="badge ' + (isEntry ? 'badge-exit' : 'badge-entry') + '">' + exitType + '</span>';
+                            exitTypeCell.style.textAlign = 'center';
+                            
+                            // Add new cell for Signature Out
+                            var newTd = document.createElement('td');
+                            newTd.className = 'signature-cell';
+                            newTd.innerHTML = '<span class="signature-line"></span><span class="type-label">Signature Out</span>';
+                            row.appendChild(newTd);
                         }
                     });
-                    tableHtml = tempDiv.innerHTML;
                 }
                 
-                printWindow.document.write(tableHtml);
-            } else {
-                printWindow.document.write(printContents);
+                // For Visitors: Date/Time | RFID UID | Visitor | Visiting | Purpose | Type (Entry) | Signature In | Type (Exit) | Signature Out
+                if (isVisitorTable) {
+                    // Replace thead
+                    var thead = table.querySelector('thead');
+                    if (thead) {
+                        var headerRow = thead.querySelector('tr');
+                        if (headerRow) {
+                            var headers = headerRow.querySelectorAll('th');
+                            if (headers.length >= 7) {
+                                headers[0].textContent = 'Date/Time';
+                                headers[1].textContent = 'RFID UID';
+                                headers[2].textContent = 'Visitor';
+                                headers[3].textContent = 'Visiting';
+                                headers[4].textContent = 'Purpose';
+                                headers[5].textContent = 'Type (Entry)';
+                                headers[6].textContent = 'Signature In';
+                                
+                                var newTh1 = document.createElement('th');
+                                newTh1.textContent = 'Type (Exit)';
+                                headerRow.appendChild(newTh1);
+                                
+                                var newTh2 = document.createElement('th');
+                                newTh2.textContent = 'Signature Out';
+                                headerRow.appendChild(newTh2);
+                            }
+                        }
+                    }
+                    
+                    // Modify tbody rows
+                    var rows = table.querySelectorAll('tbody tr');
+                    rows.forEach(function(row) {
+                        var cells = row.querySelectorAll('td');
+                        if (cells.length >= 7) {
+                            var typeCell = cells[5];
+                            var typeText = typeCell.textContent.trim();
+                            var isEntry = typeText.toLowerCase().includes('entry');
+                            
+                            // Keep cells 0-4: Date/Time, RFID UID, Visitor, Visiting, Purpose
+                            // Cell 5: Type (Entry) - keep as is
+                            // Cell 6: Signature In
+                            var sigInCell = cells[6];
+                            sigInCell.innerHTML = '<div class="signature-cell"><span class="signature-line"></span><span class="type-label">Signature In</span></div>';
+                            sigInCell.className = 'signature-cell';
+                            
+                            // Add Type (Exit)
+                            var exitType = isEntry ? 'Exit' : 'Entry';
+                            var newTd1 = document.createElement('td');
+                            newTd1.style.textAlign = 'center';
+                            newTd1.innerHTML = '<span class="badge ' + (isEntry ? 'badge-exit' : 'badge-entry') + '">' + exitType + '</span>';
+                            row.appendChild(newTd1);
+                            
+                            // Add Signature Out
+                            var newTd2 = document.createElement('td');
+                            newTd2.className = 'signature-cell';
+                            newTd2.innerHTML = '<span class="signature-line"></span><span class="type-label">Signature Out</span>';
+                            row.appendChild(newTd2);
+                        }
+                    });
+                }
+                
+                printContents = tempDiv.innerHTML;
             }
             
+            printWindow.document.write(printContents);
             printWindow.document.write(`
                 <div class="footer">
                     &copy; ${new Date().getFullYear()} Tap-and-Go Doorlock System &bull; Generated on ${new Date().toLocaleString()}
