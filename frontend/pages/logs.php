@@ -5,7 +5,7 @@
  * PURE DARK MODE - Fixed navbar, sidebar, footer
  * FIXED: Complete dark table
  * ADDED: Print buttons and show entries dropdown
- * UPDATED: Removed Status & Power columns, added Signature columns
+ * UPDATED: Signature columns only visible when printing
  */
 
 session_start();
@@ -874,11 +874,10 @@ if ($result && $row = $result->fetch_assoc()) {
         .entry-count strong { color: #93c5fd !important; }
         
         /* ============================================================
-           SIGNATURE CELL STYLES
+           SIGNATURE CELL STYLES - ONLY VISIBLE IN PRINT
            ============================================================ */
         .signature-cell {
-            min-width: 80px;
-            text-align: center;
+            display: none !important;
         }
         .signature-cell .sig-line {
             display: inline-block;
@@ -974,6 +973,11 @@ if ($result && $row = $result->fetch_assoc()) {
             .log-table .user-avatar {
                 background: #e9ecef !important;
                 color: #495057 !important;
+            }
+            
+            /* SHOW SIGNATURE CELLS ONLY IN PRINT */
+            .signature-cell {
+                display: table-cell !important;
             }
             .signature-cell .sig-line {
                 border-bottom: 1px solid #ccc !important;
@@ -1371,8 +1375,7 @@ if ($result && $row = $result->fetch_assoc()) {
 
                 <!-- ============================================================
                 RESIDENTS TABLE WITH PRINT & SHOW ENTRIES
-                REMOVED: Status & Power columns
-                ADDED: Signature columns (Time In Signature & Time Out Signature)
+                SIGNATURE COLUMNS HIDDEN UNTIL PRINT
                 ============================================================ -->
                 <div class="card">
                     <div class="card-header">
@@ -1431,8 +1434,9 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <th>User</th>
                                         <th>Room</th>
                                         <th>Type</th>
-                                        <th>Time In Signature</th>
-                                        <th>Time Out Signature</th>
+                                        <!-- Signature columns only visible when printing -->
+                                        <th class="signature-cell">Time In Signature</th>
+                                        <th class="signature-cell">Time Out Signature</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1467,8 +1471,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                             }
                                             $initials = substr($initials, 0, 2);
                                             
-                                            // Generate a signature-like display (initials with date)
-                                            $sigDate = date('m/d/y', strtotime($log['timestamp']));
+                                            // Generate a signature-like display (initials with time)
                                             $sigTime = date('h:i A', strtotime($log['timestamp']));
                                             $signatureDisplay = $initials . ' ' . $sigTime;
                                         ?>
@@ -1588,6 +1591,7 @@ if ($result && $row = $result->fetch_assoc()) {
 
                 <!-- ============================================================
                 VISITORS TABLE WITH PRINT & SHOW ENTRIES
+                SIGNATURE COLUMNS HIDDEN UNTIL PRINT
                 ============================================================ -->
                 <div class="card">
                     <div class="card-header">
@@ -1643,8 +1647,9 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <th>Visiting</th>
                                         <th>Purpose</th>
                                         <th>Type</th>
-                                        <th>Time In Signature</th>
-                                        <th>Time Out Signature</th>
+                                        <!-- Signature columns only visible when printing -->
+                                        <th class="signature-cell">Time In Signature</th>
+                                        <th class="signature-cell">Time Out Signature</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1786,7 +1791,6 @@ if ($result && $row = $result->fetch_assoc()) {
         // ============================================================
         function printTable(tableId) {
             var printContents = document.getElementById(tableId).innerHTML;
-            var originalContents = document.body.innerHTML;
             
             var cardHeader = document.getElementById(tableId).closest('.card').querySelector('.card-header .title');
             var tableTitle = cardHeader ? cardHeader.textContent.trim() : 'Access Logs';
@@ -1826,12 +1830,8 @@ if ($result && $row = $result->fetch_assoc()) {
                     font-weight: 600;
                     display: inline-block;
                 }
-                .badge-granted { background: #d4edda; color: #155724; }
-                .badge-denied { background: #f8d7da; color: #721c24; }
                 .badge-entry { background: #d1ecf1; color: #0c5460; }
                 .badge-exit { background: #e2e3e5; color: #383d41; }
-                .badge-main { background: #d4edda; color: #155724; }
-                .badge-battery { background: #fff3cd; color: #856404; }
                 .resident-tag, .staff-tag, .visitor-tag {
                     font-size: 8px;
                     padding: 1px 5px;
@@ -1884,7 +1884,6 @@ if ($result && $row = $result->fetch_assoc()) {
                     color: #888; 
                     font-size: 11px;
                 }
-                .entry-count { color: #666; font-size: 12px; }
                 .print-meta { 
                     display: flex; 
                     justify-content: space-between; 
