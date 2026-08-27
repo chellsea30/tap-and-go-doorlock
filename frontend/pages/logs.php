@@ -5,6 +5,7 @@
  * PURE DARK MODE - Fixed navbar, sidebar, footer
  * FIXED: Complete dark table
  * ADDED: Print buttons and show entries dropdown
+ * UPDATED: Removed Status & Power columns, added Signature columns
  */
 
 session_start();
@@ -873,6 +874,30 @@ if ($result && $row = $result->fetch_assoc()) {
         .entry-count strong { color: #93c5fd !important; }
         
         /* ============================================================
+           SIGNATURE CELL STYLES
+           ============================================================ */
+        .signature-cell {
+            min-width: 80px;
+            text-align: center;
+        }
+        .signature-cell .sig-line {
+            display: inline-block;
+            width: 70px;
+            border-bottom: 1px solid #2a2a4a;
+            margin: 0 auto;
+            height: 20px;
+        }
+        .signature-cell .sig-line.filled {
+            border-bottom: 1px solid #34d399;
+        }
+        .signature-cell .sig-label {
+            font-size: 9px;
+            color: #606070;
+            display: block;
+            margin-top: 2px;
+        }
+        
+        /* ============================================================
            PRINT STYLES
            ============================================================ */
         @media print {
@@ -949,6 +974,12 @@ if ($result && $row = $result->fetch_assoc()) {
             .log-table .user-avatar {
                 background: #e9ecef !important;
                 color: #495057 !important;
+            }
+            .signature-cell .sig-line {
+                border-bottom: 1px solid #ccc !important;
+            }
+            .signature-cell .sig-label {
+                color: #999 !important;
             }
         }
         
@@ -1027,6 +1058,9 @@ if ($result && $row = $result->fetch_assoc()) {
             .log-table .uid-cell {
                 font-size: 10px;
                 padding: 1px 4px;
+            }
+            .signature-cell .sig-line {
+                width: 40px;
             }
         }
     </style>
@@ -1337,6 +1371,8 @@ if ($result && $row = $result->fetch_assoc()) {
 
                 <!-- ============================================================
                 RESIDENTS TABLE WITH PRINT & SHOW ENTRIES
+                REMOVED: Status & Power columns
+                ADDED: Signature columns (Time In Signature & Time Out Signature)
                 ============================================================ -->
                 <div class="card">
                     <div class="card-header">
@@ -1395,8 +1431,8 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <th>User</th>
                                         <th>Room</th>
                                         <th>Type</th>
-                                        <th>Status</th>
-                                        <th>Power</th>
+                                        <th>Time In Signature</th>
+                                        <th>Time Out Signature</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1413,6 +1449,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                             $cardType = $log['card_type'] ?? 'resident';
                                             $avatarClass = '';
                                             $userTypeTag = '';
+                                            $isEntry = ($log['access_type'] ?? '') == 'entry';
                                             
                                             if ($cardType == 'staff') {
                                                 $avatarClass = 'staff';
@@ -1429,6 +1466,11 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 if (!empty($p)) $initials .= strtoupper($p[0]);
                                             }
                                             $initials = substr($initials, 0, 2);
+                                            
+                                            // Generate a signature-like display (initials with date)
+                                            $sigDate = date('m/d/y', strtotime($log['timestamp']));
+                                            $sigTime = date('h:i A', strtotime($log['timestamp']));
+                                            $signatureDisplay = $initials . ' ' . $sigTime;
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
@@ -1451,22 +1493,28 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 </td>
                                                 <td><?php echo htmlspecialchars($roomDisplay); ?></td>
                                                 <td>
-                                                    <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
-                                                        <i class="fas <?php echo $log['access_type'] == 'entry' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
+                                                    <span class="badge <?php echo $isEntry ? 'badge-entry' : 'badge-exit'; ?>">
+                                                        <i class="fas <?php echo $isEntry ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
                                                         <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    <span class="badge <?php echo $log['access_status'] == 'granted' ? 'badge-granted' : 'badge-denied'; ?>">
-                                                        <i class="fas <?php echo $log['access_status'] == 'granted' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
-                                                        <?php echo ucfirst($log['access_status'] ?? 'N/A'); ?>
-                                                    </span>
+                                                <td class="signature-cell">
+                                                    <?php if ($isEntry): ?>
+                                                        <span class="sig-line filled"></span>
+                                                        <span class="sig-label"><?php echo htmlspecialchars($signatureDisplay); ?></span>
+                                                    <?php else: ?>
+                                                        <span class="sig-line"></span>
+                                                        <span class="sig-label">—</span>
+                                                    <?php endif; ?>
                                                 </td>
-                                                <td>
-                                                    <span class="badge <?php echo isset($log['power_source']) && $log['power_source'] == 'main' ? 'badge-main' : 'badge-battery'; ?>">
-                                                        <i class="fas <?php echo isset($log['power_source']) && $log['power_source'] == 'main' ? 'fa-bolt' : 'fa-battery-quarter'; ?> me-1"></i>
-                                                        <?php echo isset($log['power_source']) ? ucfirst($log['power_source']) : 'N/A'; ?>
-                                                    </span>
+                                                <td class="signature-cell">
+                                                    <?php if (!$isEntry): ?>
+                                                        <span class="sig-line filled"></span>
+                                                        <span class="sig-label"><?php echo htmlspecialchars($signatureDisplay); ?></span>
+                                                    <?php else: ?>
+                                                        <span class="sig-line"></span>
+                                                        <span class="sig-label">—</span>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -1595,13 +1643,14 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <th>Visiting</th>
                                         <th>Purpose</th>
                                         <th>Type</th>
-                                        <th>Status</th>
+                                        <th>Time In Signature</th>
+                                        <th>Time Out Signature</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($visitorLogs)): ?>
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted py-4">
+                                            <td colspan="8" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                                 No visitor access logs found
                                             </td>
@@ -1611,6 +1660,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                             $visitorName = $log['visitor_name'] ?? 'Unknown Visitor';
                                             $residentVisited = $log['resident_visited_name'] ?? 'Unknown';
                                             $purpose = $log['purpose_of_visit'] ?? 'N/A';
+                                            $isEntry = ($log['access_type'] ?? '') == 'entry';
                                             
                                             $initials = '';
                                             $nameParts = explode(' ', $visitorName);
@@ -1618,6 +1668,9 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 if (!empty($p)) $initials .= strtoupper($p[0]);
                                             }
                                             $initials = substr($initials, 0, 2);
+                                            
+                                            $sigTime = date('h:i A', strtotime($log['timestamp']));
+                                            $signatureDisplay = $initials . ' ' . $sigTime;
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
@@ -1649,16 +1702,28 @@ if ($result && $row = $result->fetch_assoc()) {
                                                     <span style="font-size: 12px;"><?php echo htmlspecialchars($purpose); ?></span>
                                                 </td>
                                                 <td>
-                                                    <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
-                                                        <i class="fas <?php echo $log['access_type'] == 'entry' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
+                                                    <span class="badge <?php echo $isEntry ? 'badge-entry' : 'badge-exit'; ?>">
+                                                        <i class="fas <?php echo $isEntry ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
                                                         <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
                                                     </span>
                                                 </td>
-                                                <td>
-                                                    <span class="badge <?php echo $log['access_status'] == 'granted' ? 'badge-granted' : 'badge-denied'; ?>">
-                                                        <i class="fas <?php echo $log['access_status'] == 'granted' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
-                                                        <?php echo ucfirst($log['access_status'] ?? 'N/A'); ?>
-                                                    </span>
+                                                <td class="signature-cell">
+                                                    <?php if ($isEntry): ?>
+                                                        <span class="sig-line filled"></span>
+                                                        <span class="sig-label"><?php echo htmlspecialchars($signatureDisplay); ?></span>
+                                                    <?php else: ?>
+                                                        <span class="sig-line"></span>
+                                                        <span class="sig-label">—</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="signature-cell">
+                                                    <?php if (!$isEntry): ?>
+                                                        <span class="sig-line filled"></span>
+                                                        <span class="sig-label"><?php echo htmlspecialchars($signatureDisplay); ?></span>
+                                                    <?php else: ?>
+                                                        <span class="sig-line"></span>
+                                                        <span class="sig-label">—</span>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -1711,7 +1776,6 @@ if ($result && $row = $result->fetch_assoc()) {
         // CHANGE PER PAGE - VISITORS
         // ============================================================
         function changeVisitorPerPage(value) {
-            // For visitors, we reload the page with a visitor-specific limit
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('visitor_limit', value);
             window.location.href = '?' + urlParams.toString();
@@ -1724,7 +1788,6 @@ if ($result && $row = $result->fetch_assoc()) {
             var printContents = document.getElementById(tableId).innerHTML;
             var originalContents = document.body.innerHTML;
             
-            // Get the table title from the card header
             var cardHeader = document.getElementById(tableId).closest('.card').querySelector('.card-header .title');
             var tableTitle = cardHeader ? cardHeader.textContent.trim() : 'Access Logs';
             
@@ -1798,6 +1861,20 @@ if ($result && $row = $result->fetch_assoc()) {
                     padding: 2px 6px;
                     border-radius: 3px;
                     font-size: 11px;
+                }
+                .signature-cell { text-align: center; min-width: 80px; }
+                .signature-cell .sig-line {
+                    display: inline-block;
+                    width: 60px;
+                    border-bottom: 1px solid #999;
+                    height: 18px;
+                }
+                .signature-cell .sig-line.filled { border-bottom: 1px solid #333; }
+                .signature-cell .sig-label {
+                    font-size: 9px;
+                    color: #666;
+                    display: block;
+                    margin-top: 2px;
                 }
                 .footer { 
                     text-align: center; 
