@@ -4,6 +4,7 @@
  * COMPLETE - With same layout as dashboard.php
  * PURE DARK MODE - Fixed navbar, sidebar, footer
  * FIXED: Complete dark table
+ * ADDED: Print buttons and show entries dropdown
  */
 
 session_start();
@@ -806,6 +807,152 @@ if ($result && $row = $result->fetch_assoc()) {
         }
         
         /* ============================================================
+           PRINT BUTTONS & SHOW ENTRIES
+           ============================================================ */
+        .table-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: #0d1528 !important;
+            border-radius: 10px;
+            border: 1px solid #1a2a4a !important;
+        }
+        .table-toolbar .left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .table-toolbar .right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .btn-print {
+            background: #1a3a6a !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px;
+            padding: 6px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .btn-print:hover {
+            background: #2a5a9a !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
+        }
+        .btn-print i { margin-right: 6px; }
+        
+        .show-entries-select {
+            background: #1a1a2e !important;
+            border: 1px solid #2a2a4a !important;
+            color: #e0e0e0 !important;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 13px;
+        }
+        .show-entries-select:focus {
+            border-color: #2a5a9a !important;
+            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
+        }
+        .show-entries-label {
+            color: #808090 !important;
+            font-size: 13px;
+            margin: 0;
+        }
+        .entry-count {
+            color: #606070 !important;
+            font-size: 13px;
+        }
+        .entry-count strong { color: #93c5fd !important; }
+        
+        /* ============================================================
+           PRINT STYLES
+           ============================================================ */
+        @media print {
+            body {
+                background: white !important;
+                color: #000 !important;
+                padding-top: 0 !important;
+            }
+            .navbar, .sidebar, .sidebar-footer, .filter-section, 
+            .stat-card, .card-header .log-header-actions .right,
+            .table-toolbar .right, .table-toolbar .left .show-entries-wrapper,
+            .pagination-container, footer, .btn, .badge, .no-print {
+                display: none !important;
+            }
+            .card {
+                border: 1px solid #ddd !important;
+                box-shadow: none !important;
+                background: white !important;
+            }
+            .card-header {
+                background: white !important;
+                border-bottom: 1px solid #ddd !important;
+            }
+            .card-body {
+                background: white !important;
+            }
+            .log-table thead th {
+                background: #f0f0f0 !important;
+                color: #000 !important;
+                border-bottom: 2px solid #ddd !important;
+            }
+            .log-table tbody td {
+                color: #000 !important;
+                background: white !important;
+                border-bottom: 1px solid #eee !important;
+            }
+            .log-table tbody tr:nth-child(even) td {
+                background: #f9f9f9 !important;
+            }
+            .log-table .uid-cell {
+                color: #0066cc !important;
+                background: #f0f0f0 !important;
+            }
+            .container-fluid {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            main {
+                padding: 20px !important;
+                margin: 0 !important;
+            }
+            .table-toolbar {
+                background: #f0f0f0 !important;
+                border: 1px solid #ddd !important;
+            }
+            .table-toolbar .left .entry-count {
+                color: #333 !important;
+            }
+            .section-header .title { color: #000 !important; }
+            .section-header .count { color: #666 !important; }
+            .h1, .h2, h1, h2 { color: #000 !important; }
+            .text-muted { color: #666 !important; }
+            .badge-granted { background: #d4edda !important; color: #155724 !important; }
+            .badge-denied { background: #f8d7da !important; color: #721c24 !important; }
+            .badge-entry { background: #d1ecf1 !important; color: #0c5460 !important; }
+            .badge-exit { background: #e2e3e5 !important; color: #383d41 !important; }
+            .badge-resident-header { background: #d1ecf1 !important; color: #0c5460 !important; }
+            .badge-visitor-header { background: #d1ecf1 !important; color: #0c5460 !important; }
+            .staff-tag, .resident-tag, .visitor-tag { 
+                background: #e9ecef !important; 
+                color: #495057 !important;
+                border: 1px solid #ced4da !important;
+            }
+            .log-table .user-avatar {
+                background: #e9ecef !important;
+                color: #495057 !important;
+            }
+        }
+        
+        /* ============================================================
            RESPONSIVE - SAME AS DASHBOARD
            ============================================================ */
         @media (max-width: 768px) {
@@ -844,6 +991,18 @@ if ($result && $row = $result->fetch_assoc()) {
             }
             .pagination {
                 justify-content: center !important;
+            }
+            
+            .table-toolbar {
+                flex-direction: column;
+                align-items: stretch !important;
+            }
+            .table-toolbar .left {
+                flex-direction: column;
+                align-items: stretch !important;
+            }
+            .table-toolbar .right {
+                justify-content: center;
             }
         }
         
@@ -1177,7 +1336,7 @@ if ($result && $row = $result->fetch_assoc()) {
                 </div>
 
                 <!-- ============================================================
-                RESIDENTS TABLE
+                RESIDENTS TABLE WITH PRINT & SHOW ENTRIES
                 ============================================================ -->
                 <div class="card">
                     <div class="card-header">
@@ -1199,7 +1358,35 @@ if ($result && $row = $result->fetch_assoc()) {
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
+                        <!-- TABLE TOOLBAR: PRINT + SHOW ENTRIES -->
+                        <div class="table-toolbar">
+                            <div class="left">
+                                <div class="show-entries-wrapper d-flex align-items-center gap-2">
+                                    <span class="show-entries-label">Show entries:</span>
+                                    <select class="show-entries-select" onchange="changeResidentPerPage(this.value)">
+                                        <?php foreach ([10, 25, 50, 100] as $option): ?>
+                                            <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
+                                                <?php echo $option; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <span class="entry-count">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    <strong><?php echo count($residentLogs); ?></strong> entries shown
+                                    <?php if ($residentTotal > count($residentLogs)): ?>
+                                        (of <strong><?php echo $residentTotal; ?></strong> total)
+                                    <?php endif; ?>
+                                </span>
+                            </div>
+                            <div class="right no-print">
+                                <button class="btn-print" onclick="printTable('residentTable')">
+                                    <i class="fas fa-print"></i> Print Residents
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive" id="residentTable">
                             <table class="table table-hover log-table">
                                 <thead>
                                     <tr>
@@ -1302,16 +1489,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                 </div>
                                 <div class="col-md-6">
                                     <div class="d-flex align-items-center justify-content-end gap-3 flex-wrap">
-                                        <div class="per-page-selector d-flex align-items-center gap-2">
-                                            <label>Show:</label>
-                                            <select onchange="changePerPage(this.value)">
-                                                <?php foreach ($perPageOptions as $option): ?>
-                                                    <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                                        <?php echo $option; ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
                                         <nav aria-label="Page navigation">
                                             <ul class="pagination justify-content-end mb-0">
                                                 <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
@@ -1362,7 +1539,7 @@ if ($result && $row = $result->fetch_assoc()) {
                 </div>
 
                 <!-- ============================================================
-                VISITORS TABLE
+                VISITORS TABLE WITH PRINT & SHOW ENTRIES
                 ============================================================ -->
                 <div class="card">
                     <div class="card-header">
@@ -1383,7 +1560,32 @@ if ($result && $row = $result->fetch_assoc()) {
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
+                        <!-- TABLE TOOLBAR: PRINT + SHOW ENTRIES -->
+                        <div class="table-toolbar">
+                            <div class="left">
+                                <div class="show-entries-wrapper d-flex align-items-center gap-2">
+                                    <span class="show-entries-label">Show entries:</span>
+                                    <select class="show-entries-select" onchange="changeVisitorPerPage(this.value)">
+                                        <?php foreach ([10, 25, 50, 100] as $option): ?>
+                                            <option value="<?php echo $option; ?>" <?php echo $option == 10 ? 'selected' : ''; ?>>
+                                                <?php echo $option; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <span class="entry-count">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    <strong><?php echo count($visitorLogs); ?></strong> entries shown
+                                </span>
+                            </div>
+                            <div class="right no-print">
+                                <button class="btn-print" onclick="printTable('visitorTable')">
+                                    <i class="fas fa-print"></i> Print Visitors
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive" id="visitorTable">
                             <table class="table table-hover log-table">
                                 <thead>
                                     <tr>
@@ -1496,13 +1698,156 @@ if ($result && $row = $result->fetch_assoc()) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
-        // CHANGE PER PAGE
+        // CHANGE PER PAGE - RESIDENTS
         // ============================================================
-        function changePerPage(value) {
+        function changeResidentPerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
             urlParams.set('page', 1);
             window.location.href = '?' + urlParams.toString();
+        }
+        
+        // ============================================================
+        // CHANGE PER PAGE - VISITORS
+        // ============================================================
+        function changeVisitorPerPage(value) {
+            // For visitors, we reload the page with a visitor-specific limit
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('visitor_limit', value);
+            window.location.href = '?' + urlParams.toString();
+        }
+        
+        // ============================================================
+        // PRINT TABLE FUNCTION
+        // ============================================================
+        function printTable(tableId) {
+            var printContents = document.getElementById(tableId).innerHTML;
+            var originalContents = document.body.innerHTML;
+            
+            // Get the table title from the card header
+            var cardHeader = document.getElementById(tableId).closest('.card').querySelector('.card-header .title');
+            var tableTitle = cardHeader ? cardHeader.textContent.trim() : 'Access Logs';
+            
+            var printWindow = window.open('', '_blank', 'width=1200,height=800');
+            printWindow.document.write('<html><head><title>Print - ' + tableTitle + '</title>');
+            printWindow.document.write('<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">');
+            printWindow.document.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">');
+            printWindow.document.write('<style>');
+            printWindow.document.write(`
+                body { font-family: Arial, sans-serif; padding: 20px; background: white; color: #000; }
+                .print-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                .print-header h2 { margin: 0; font-size: 22px; }
+                .print-header .sub { color: #666; font-size: 14px; }
+                .print-header .date { color: #888; font-size: 12px; margin-top: 5px; }
+                table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                thead th { 
+                    background: #f0f0f0; 
+                    color: #000; 
+                    font-weight: 700; 
+                    border: 1px solid #ddd; 
+                    padding: 8px 10px; 
+                    text-align: left;
+                    text-transform: uppercase;
+                    font-size: 10px;
+                }
+                tbody td { 
+                    border: 1px solid #ddd; 
+                    padding: 6px 10px; 
+                    color: #000;
+                }
+                tbody tr:nth-child(even) { background: #f9f9f9; }
+                .badge { 
+                    padding: 2px 8px; 
+                    border-radius: 4px; 
+                    font-size: 10px; 
+                    font-weight: 600;
+                    display: inline-block;
+                }
+                .badge-granted { background: #d4edda; color: #155724; }
+                .badge-denied { background: #f8d7da; color: #721c24; }
+                .badge-entry { background: #d1ecf1; color: #0c5460; }
+                .badge-exit { background: #e2e3e5; color: #383d41; }
+                .badge-main { background: #d4edda; color: #155724; }
+                .badge-battery { background: #fff3cd; color: #856404; }
+                .resident-tag, .staff-tag, .visitor-tag {
+                    font-size: 8px;
+                    padding: 1px 5px;
+                    border-radius: 10px;
+                    background: #e9ecef;
+                    color: #495057;
+                    border: 1px solid #ced4da;
+                    margin-left: 3px;
+                }
+                .user-avatar {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 50%;
+                    background: #e9ecef;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: 700;
+                    font-size: 10px;
+                    color: #495057;
+                    margin-right: 6px;
+                }
+                .user-cell { display: flex; align-items: center; }
+                .uid-cell {
+                    font-family: monospace;
+                    background: #f0f0f0;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 11px;
+                }
+                .footer { 
+                    text-align: center; 
+                    margin-top: 20px; 
+                    padding-top: 10px; 
+                    border-top: 1px solid #ddd; 
+                    color: #888; 
+                    font-size: 11px;
+                }
+                .entry-count { color: #666; font-size: 12px; }
+                .print-meta { 
+                    display: flex; 
+                    justify-content: space-between; 
+                    margin-bottom: 15px; 
+                    font-size: 12px; 
+                    color: #666;
+                    flex-wrap: wrap;
+                }
+                .print-meta span { margin-right: 15px; }
+                @media print {
+                    body { padding: 10px; }
+                    .no-print { display: none !important; }
+                    .table-toolbar { display: none !important; }
+                }
+            `);
+            printWindow.document.write('</style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(`
+                <div class="print-header">
+                    <h2>ISU ECHAGUE DORMITORY</h2>
+                    <div class="sub">${tableTitle}</div>
+                    <div class="date">Printed: ${new Date().toLocaleString()}</div>
+                </div>
+                <div class="print-meta">
+                    <span><i class="fas fa-calendar-alt"></i> ${document.querySelector('input[name="date"]')?.value || 'All Dates'}</span>
+                    <span><i class="fas fa-filter"></i> Status: ${document.querySelector('select[name="status"]')?.value || 'All'}</span>
+                    <span><i class="fas fa-tag"></i> Type: ${document.querySelector('select[name="type"]')?.value || 'All'}</span>
+                    <span><i class="fas fa-search"></i> Search: ${document.querySelector('input[name="search"]')?.value || 'None'}</span>
+                </div>
+            `);
+            printWindow.document.write(printContents);
+            printWindow.document.write(`
+                <div class="footer">
+                    &copy; ${new Date().getFullYear()} Tap-and-Go Doorlock System &bull; Generated on ${new Date().toLocaleString()}
+                </div>
+            `);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            printWindow.print();
         }
         
         // ============================================================
