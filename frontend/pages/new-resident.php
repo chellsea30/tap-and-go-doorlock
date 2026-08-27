@@ -634,7 +634,7 @@ $formData = $_POST ?? [];
         }
         
         /* ============================================================
-           PRINT - CLEAN FORM NO BORDERS OR UNDERLINES
+           PRINT - EXACT MATCH OF OFFICIAL FORM
            ============================================================ */
         @media print {
             .no-print { display: none !important; }
@@ -644,7 +644,7 @@ $formData = $_POST ?? [];
                 color: #000 !important;
                 font-family: 'Times New Roman', 'Arial', serif !important;
                 font-size: 11px !important;
-                padding: 20px !important;
+                padding: 30px !important;
             }
             
             .main-content {
@@ -670,128 +670,91 @@ $formData = $_POST ?? [];
                 display: none !important;
             }
             
-            /* PRINT HEADER */
+            /* ============================================================
+               PRINT HEADER
+               ============================================================ */
             .print-header {
-                display: flex !important;
-                align-items: flex-start !important;
-                justify-content: space-between !important;
-                padding-bottom: 8px !important;
-                margin-bottom: 10px !important;
-            }
-            
-            .print-header-left {
-                display: flex !important;
-                align-items: flex-start !important;
-                gap: 8px !important;
-                flex: 1 !important;
-            }
-            
-            .print-logo {
-                width: 28px !important;
-                height: 28px !important;
-                border: 1px solid #000 !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                font-size: 12px !important;
-                font-weight: bold !important;
-                background: #f0f0f0 !important;
-                flex-shrink: 0 !important;
-            }
-            
-            .print-header-center {
-                text-align: left !important;
-                line-height: 1.2 !important;
-            }
-            
-            .print-header-center h2 {
-                font-size: 14px !important;
-                margin: 0 !important;
-                font-weight: 700 !important;
-                letter-spacing: 1px !important;
-            }
-            
-            .print-header-center .sub-text {
-                font-size: 10px !important;
-                margin: 0 !important;
-                line-height: 1.2 !important;
-            }
-            
-            .print-header-center .form-title {
-                font-size: 12px !important;
-                font-weight: 700 !important;
-                margin: 2px 0 !important;
-            }
-            
-            .print-header-center .dorm-name {
-                font-size: 10px !important;
-                font-weight: 600 !important;
-                margin: 0 !important;
-            }
-            
-            .print-photo-box {
-                width: 80px !important;
-                height: 95px !important;
-                border: 2px solid #000 !important;
-                flex-shrink: 0 !important;
-                display: flex !important;
-                flex-direction: column !important;
-                align-items: center !important;
-                justify-content: center !important;
-                font-size: 9px !important;
                 text-align: center !important;
-                background: #f9f9f9 !important;
+                border-bottom: 2px solid #000 !important;
+                padding-bottom: 8px !important;
+                margin-bottom: 12px !important;
             }
             
-            .print-photo-box strong {
-                font-size: 9px !important;
+            .print-header h2 {
+                font-size: 16px !important;
+                margin: 0 !important;
+                font-weight: 700 !important;
+                letter-spacing: 2px !important;
             }
             
-            /* FORM LINES - NO BORDERS OR UNDERLINES */
-            .print-line {
-                display: flex !important;
-                align-items: baseline !important;
-                padding: 1px 0 !important;
-                line-height: 1.5 !important;
+            .print-header .sub-text {
+                font-size: 11px !important;
+                margin: 0 !important;
+                line-height: 1.3 !important;
             }
             
-            .print-line .label {
+            .print-header .form-title {
+                font-size: 13px !important;
+                font-weight: 700 !important;
+                margin: 3px 0 !important;
+            }
+            
+            .print-header .dorm-name {
+                font-size: 11px !important;
                 font-weight: 600 !important;
-                min-width: 200px !important;
-                flex-shrink: 0 !important;
+                margin: 0 !important;
+            }
+            
+            .print-header .photo-label {
+                font-size: 10px !important;
+                font-weight: 600 !important;
+                margin: 0 !important;
+            }
+            
+            /* ============================================================
+               PRINT TABLE LAYOUT
+               ============================================================ */
+            .print-table {
+                width: 100% !important;
+                border-collapse: collapse !important;
                 font-size: 11px !important;
             }
             
-            .print-line .label-sm {
-                min-width: 120px !important;
+            .print-table td {
+                padding: 2px 4px !important;
+                vertical-align: top !important;
+                border: none !important;
             }
             
-            .print-line .label-md {
-                min-width: 160px !important;
+            .print-table .label {
+                font-weight: 600 !important;
+                white-space: nowrap !important;
             }
             
-            .print-line .value {
-                flex: 1 !important;
-                font-size: 11px !important;
-                padding-left: 3px !important;
+            .print-table .value {
+                font-weight: normal !important;
             }
             
-            .print-line .value-inline {
-                flex: 1 !important;
-                display: flex !important;
-                flex-wrap: wrap !important;
-                gap: 10px !important;
-                align-items: center !important;
+            .print-table .value-line {
+                border-bottom: 1px solid #000 !important;
+                min-width: 80px !important;
+                padding: 0 5px !important;
             }
             
-            .print-line .checkbox-item {
-                display: flex !important;
+            .print-table .value-line-sm {
+                border-bottom: 1px solid #000 !important;
+                min-width: 60px !important;
+                padding: 0 3px !important;
+            }
+            
+            .print-table .checkbox-item {
+                display: inline-flex !important;
                 align-items: center !important;
                 gap: 2px !important;
-                font-size: 11px !important;
+                margin-right: 8px !important;
             }
             
-            .print-line .checkbox-item .box {
+            .print-table .checkbox-item .box {
                 width: 12px !important;
                 height: 12px !important;
                 border: 1px solid #000 !important;
@@ -799,90 +762,62 @@ $formData = $_POST ?? [];
                 flex-shrink: 0 !important;
             }
             
-            .print-line .checkbox-item .box.checked {
+            .print-table .checkbox-item .box.checked {
                 background: #000 !important;
             }
             
-            .print-line .inline-value {
-                flex: 1 !important;
-                font-size: 11px !important;
-                padding-left: 3px !important;
-            }
-            
-            .print-group {
-                display: flex !important;
-                flex-wrap: wrap !important;
-                gap: 2px 15px !important;
-                padding: 1px 0 !important;
-                line-height: 1.5 !important;
-            }
-            
-            .print-group .field-item {
-                display: flex !important;
-                align-items: baseline !important;
-                gap: 3px !important;
-            }
-            
-            .print-group .field-item .label {
-                font-weight: 600 !important;
+            .print-table .checkbox-item .box-text {
                 font-size: 11px !important;
             }
             
-            .print-group .field-item .value {
-                font-size: 11px !important;
-            }
-            
-            /* SPACING */
-            .print-spacer {
-                height: 3px !important;
-            }
-            
-            .print-section-title {
+            /* ============================================================
+               SECTION HEADERS
+               ============================================================ */
+            .print-section-label {
                 font-weight: 700 !important;
-                font-size: 12px !important;
+                font-size: 11px !important;
                 margin: 5px 0 2px 0 !important;
             }
             
-            /* FORM NUMBER */
+            /* ============================================================
+               SPACING
+               ============================================================ */
+            .print-spacer {
+                height: 4px !important;
+            }
+            
+            /* ============================================================
+               FORM NUMBER
+               ============================================================ */
             .print-form-number {
                 text-align: center !important;
                 font-size: 10px !important;
                 margin-top: 15px !important;
                 padding-top: 8px !important;
                 font-weight: 600 !important;
+                border-top: 1px solid #000 !important;
             }
             
             .print-form-number .rev {
                 font-weight: normal !important;
             }
             
-            /* Hide screen elements */
+            /* ============================================================
+               HIDE/SHOW
+               ============================================================ */
             .screen-only {
                 display: none !important;
             }
             
-            /* Show print elements */
             .print-only {
                 display: block !important;
             }
             
-            /* Override any bootstrap spacing */
-            .row {
-                margin: 0 !important;
-            }
-            
-            .col-md-3, .col-md-4, .col-md-5, .col-md-6, .col-md-8, .col-md-12 {
-                padding: 0 !important;
-            }
-            
-            .d-flex.flex-wrap.gap-2 {
-                gap: 0 !important;
-            }
-            
-            .form-check {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
+            /* Bootstrap overrides */
+            .row { margin: 0 !important; }
+            .col-md-3, .col-md-4, .col-md-5, .col-md-6, .col-md-8, .col-md-12 { padding: 0 !important; }
+            .d-flex.flex-wrap.gap-2 { gap: 0 !important; }
+            .form-check { margin: 0 !important; padding: 0 !important; }
         }
         
         /* ============================================================
@@ -963,251 +898,319 @@ $formData = $_POST ?? [];
                         </div>
 
                         <!-- ============================================================
-                             PRINT VERSION - CLEAN NO BORDERS
+                             PRINT VERSION - EXACT MATCH OF OFFICIAL FORM
                              ============================================================ -->
                         <div class="form-section print-only" style="display:none;">
                             
                             <!-- HEADER -->
                             <div class="print-header">
-                                <div class="print-header-left">
-                                    <div class="print-logo">ISU</div>
-                                    <div class="print-header-center">
-                                        <h2>ISABELA STATE UNIVERSITY</h2>
-                                        <p class="sub-text">Echague, Isabela</p>
-                                        <p class="sub-text">OFFICE OF STUDENT AFFAIRS &amp; SERVICES</p>
-                                        <p class="sub-text">STUDENT HOUSING UNIT</p>
-                                        <p class="form-title">Student Boarder's Data Profile</p>
-                                        <p class="dorm-name">ISU-ECHAGUE CAMPUS DORMITORY</p>
-                                    </div>
-                                </div>
-                                <div class="print-photo-box">
-                                    <strong>ID Passport Size</strong>
-                                    <span>(2x2 photo)</span>
-                                </div>
+                                <h2>ISABELA STATE UNIVERSITY</h2>
+                                <p class="sub-text">Echague, Isabela</p>
+                                <p class="sub-text">OFFICE OF STUDENT AFFAIRS &amp; SERVICES</p>
+                                <p class="sub-text">STUDENT HOUSING UNIT</p>
+                                <p class="photo-label">ID Passport Size</p>
+                                <p class="form-title">Student Boarder's Data Profile</p>
+                                <p class="dorm-name">ISU-ECHAGUE CAMPUS DORMITORY</p>
                             </div>
 
                             <!-- NAME OF DORM OCCUPANT & DATE -->
-                            <div class="print-line">
-                                <span class="label">Name of Dorm Occupant:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['full_name'] ?? ''); ?></span>
-                            </div>
-                            <div class="print-line">
-                                <span class="label">Date:</span>
-                                <span class="value"><?php echo date('Y-m-d'); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:180px;">Name of Dorm Occupant:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?></td>
+                                    <td class="label" style="width:60px; padding-left:20px;">Date:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo date('Y-m-d'); ?></td>
+                                </tr>
+                            </table>
 
                             <div class="print-spacer"></div>
 
                             <!-- NAME -->
-                            <div class="print-line">
-                                <span class="label">Name:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['full_name'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:80px;"><strong>Name:</strong></td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:300px;">&nbsp;<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- GENDER -->
-                            <div class="print-line">
-                                <span class="label">Gender:</span>
-                                <span class="value-inline">
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['gender']) && $formData['gender'] == 'Female') ? 'checked' : ''; ?>"></span> Female
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['gender']) && $formData['gender'] == 'Male') ? 'checked' : ''; ?>"></span> Male
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['gender']) && $formData['gender'] == 'LGBT') ? 'checked' : ''; ?>"></span> LGBTQ:
-                                    </span>
-                                    <span class="inline-value"><?php echo htmlspecialchars($formData['gender_other'] ?? ''); ?></span>
-                                </span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:80px;"><strong>Gender:</strong></td>
+                                    <td class="value">
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['gender']) && $formData['gender'] == 'Female') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Female</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['gender']) && $formData['gender'] == 'Male') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Male</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['gender']) && $formData['gender'] == 'LGBT') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">LGBTQ:</span>
+                                        </span>
+                                        <span style="border-bottom:1px solid #000; min-width:100px; display:inline-block; padding:0 5px;"><?php echo htmlspecialchars($formData['gender_other'] ?? ''); ?></span>
+                                        <span style="font-size:9px; margin-left:2px;">(Pls. specify)</span>
+                                    </td>
+                                </tr>
+                            </table>
 
-                            <!-- BIRTHDAY & AGE -->
-                            <div class="print-line">
-                                <span class="label">Birthday:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['birth_date'] ?? ''); ?></span>
-                                <span class="label" style="min-width:60px; margin-left:20px;">Age:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['age'] ?? ''); ?></span>
-                            </div>
+                            <!-- BIRTHDAY, AGE, NO. OF SIBLINGS, BIRTH NO -->
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:70px;">Birthday:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:80px;">&nbsp;<?php echo htmlspecialchars($formData['birth_date'] ?? ''); ?></td>
+                                    <td class="label" style="width:40px; padding-left:15px;">Age:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:40px;">&nbsp;<?php echo htmlspecialchars($formData['age'] ?? ''); ?></td>
+                                    <td class="label" style="width:100px; padding-left:15px;">No. of Siblings:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:60px;">&nbsp;<?php echo htmlspecialchars($formData['no_siblings'] ?? ''); ?></td>
+                                    <td class="label" style="width:70px; padding-left:15px;">Birth No.:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:80px;">&nbsp;<?php echo htmlspecialchars($formData['birth_no'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
-                            <!-- COURSE & YEAR LEVEL -->
-                            <div class="print-line">
-                                <span class="label">Course:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['course'] ?? ''); ?></span>
-                                <span class="label" style="min-width:80px; margin-left:20px;">Year Level:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['year_level'] ?? ''); ?></span>
-                            </div>
+                            <!-- COURSE, YEAR LEVEL, SCHOLARSHIP -->
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:60px;">Course:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['course'] ?? ''); ?></td>
+                                    <td class="label" style="width:80px; padding-left:15px;">Year Level:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:80px;">&nbsp;<?php echo htmlspecialchars($formData['year_level'] ?? ''); ?></td>
+                                    <td class="label" style="width:110px; padding-left:15px;">Scholarship grant:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['scholarship'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- OTHER SOURCES -->
-                            <div class="print-line">
-                                <span class="label">Other sources of allowance for school:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['allowance_source'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:180px;"><strong>Other sources of allowance for school</strong></td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['allowance_source'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- SCHOOL LAST ATTENDED -->
-                            <div class="print-line">
-                                <span class="label">School last attended:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['school_last'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:140px;">School last attended:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['school_last'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- SCHOOL ADDRESS -->
-                            <div class="print-line">
-                                <span class="label">School Address:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['school_address'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:140px;">School Address:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['school_address'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- CULTURAL ORIGIN & RELIGION -->
-                            <div class="print-line">
-                                <span class="label">Cultural Origin (Pinanggalinan na Lahi):</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['cultural_origin'] ?? ''); ?></span>
-                                <span class="label" style="min-width:70px; margin-left:20px;">Religion:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['religion'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:180px;">Cultural Origin</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:120px;">&nbsp;<?php echo htmlspecialchars($formData['cultural_origin'] ?? ''); ?></td>
+                                    <td class="label" style="width:70px; padding-left:15px;">Religion:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['religion'] ?? ''); ?></td>
+                                </tr>
+                                <tr>
+                                    <td class="label" style="font-size:9px; padding-top:0;">(Pinanggalinan na Lahi):</td>
+                                    <td colspan="3"></td>
+                                </tr>
+                            </table>
 
                             <!-- DIALECT & CP NO -->
-                            <div class="print-line">
-                                <span class="label">Dialect spoken:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['dialect'] ?? ''); ?></span>
-                                <span class="label" style="min-width:70px; margin-left:20px;">CP No.:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['cp_no'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:110px;">Dialect spoken:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:120px;">&nbsp;<?php echo htmlspecialchars($formData['dialect'] ?? ''); ?></td>
+                                    <td class="label" style="width:60px; padding-left:15px;">CP No.:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['cp_no'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- COMPLETE HOME ADDRESS -->
-                            <div class="print-line">
-                                <span class="label">Complete Home Address:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['home_address'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:160px;"><strong>Complete Home Address:</strong></td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:250px;">&nbsp;<?php echo htmlspecialchars($formData['home_address'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- CIVIL STATUS -->
-                            <div class="print-line">
-                                <span class="label">Civil Status:</span>
-                                <span class="value-inline">
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Married') ? 'checked' : ''; ?>"></span> Married
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Single') ? 'checked' : ''; ?>"></span> Single
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Separated') ? 'checked' : ''; ?>"></span> Separated
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Abandoned') ? 'checked' : ''; ?>"></span> Abandoned
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Live-in') ? 'checked' : ''; ?>"></span> Live-in
-                                    </span>
-                                </span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:100px;"><strong>Civil Status:</strong></td>
+                                    <td class="value">
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Married') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Married</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Single') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Single</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Separated') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Separated</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Abandoned') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Abandoned</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Live-in') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Live-in</span>
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
 
                             <!-- FATHER'S EDUCATION -->
-                            <div class="print-line">
-                                <span class="label">Father's highest educational attainment:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['father_education'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:220px;">Father's highest educational attainment</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['father_education'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- MOTHER'S EDUCATION -->
-                            <div class="print-line">
-                                <span class="label">Mother's highest educational attainment:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['mother_education'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:220px;">Mother's highest educational attainment</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['mother_education'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- FATHER'S OCCUPATION -->
-                            <div class="print-line">
-                                <span class="label">Father's Occupation:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['father_occupation'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:150px;">Father's Occupation</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['father_occupation'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- MOTHER'S OCCUPATION -->
-                            <div class="print-line">
-                                <span class="label">Mother's Occupation:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['mother_occupation'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:150px;">Mother's Occupation</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['mother_occupation'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- PERSON TO CONTACT -->
-                            <div class="print-line" style="margin-top:3px;">
-                                <span class="label" style="font-weight:700;">Person to be contacted in case of emergency:</span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:220px;"><strong>Person to be contacted in case of emergency:</strong></td>
+                                    <td></td>
+                                </tr>
+                            </table>
 
-                            <!-- EMERGENCY NAME & RELATIONSHIP -->
-                            <div class="print-line">
-                                <span class="label">Name:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['emergency_name'] ?? ''); ?></span>
-                                <span class="label" style="min-width:80px; margin-left:20px;">Relationship:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['emergency_relationship'] ?? ''); ?></span>
-                            </div>
+                            <!-- NAME & RELATIONSHIP -->
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:60px;">Name:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:150px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_name'] ?? ''); ?></td>
+                                    <td class="label" style="width:90px; padding-left:15px;">Relationship:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_relationship'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
-                            <!-- EMERGENCY ADDRESS -->
-                            <div class="print-line">
-                                <span class="label">Address:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['emergency_address'] ?? ''); ?></span>
-                            </div>
+                            <!-- ADDRESS -->
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:60px;">Address:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:300px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_address'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
-                            <!-- EMERGENCY CONTACT -->
-                            <div class="print-line">
-                                <span class="label">Contact No.:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['emergency_contact'] ?? ''); ?></span>
-                            </div>
+                            <!-- CONTACT NO -->
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:90px;">Contact No.:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:150px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_contact'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- PARENT'S MARITAL STATUS -->
-                            <div class="print-line">
-                                <span class="label">Parent's Marital Status:</span>
-                                <span class="value-inline">
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Living Together') ? 'checked' : ''; ?>"></span> Living together
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Separated') ? 'checked' : ''; ?>"></span> Separated
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Abandoned') ? 'checked' : ''; ?>"></span> Abandoned mother/father
-                                    </span>
-                                </span>
-                            </div>
-                            <div class="print-line" style="padding-left:200px;">
-                                <span class="value-inline">
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Mother with Other Family') ? 'checked' : ''; ?>"></span> Mother -- with other family
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Father with Other Family') ? 'checked' : ''; ?>"></span> Father -- with other family
-                                    </span>
-                                </span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:160px;"><strong>Parent's Marital Status:</strong></td>
+                                    <td class="value">
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Living Together') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Living together</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Separated') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Separated</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Abandoned') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Abandoned mother/father</span>
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td></td>
+                                    <td class="value">
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Mother with Other Family') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Mother -- with other family</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Father with Other Family') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Father -- with other family</span>
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
 
                             <!-- FORMER BOARDING HOUSE -->
-                            <div class="print-line">
-                                <span class="label">Length of months/years you stayed in your former boarding house:</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['former_boarding_years'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:280px;">Length of months/years you stayed in your former boarding house:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:150px;">&nbsp;<?php echo htmlspecialchars($formData['former_boarding_years'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- PLAN TO TRANSFER -->
-                            <div class="print-line">
-                                <span class="label">Do you plan to transfer to the other boarding house after this semester?</span>
-                                <span class="value-inline">
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['plan_transfer']) && $formData['plan_transfer'] == 'Yes') ? 'checked' : ''; ?>"></span> Yes
-                                    </span>
-                                    <span class="checkbox-item">
-                                        <span class="box <?php echo (isset($formData['plan_transfer']) && $formData['plan_transfer'] == 'No') ? 'checked' : ''; ?>"></span> No
-                                    </span>
-                                </span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:320px;">Do you plan to transfer to the other boarding house after this semester?</td>
+                                    <td class="value">
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['plan_transfer']) && $formData['plan_transfer'] == 'Yes') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">Yes</span>
+                                        </span>
+                                        <span class="checkbox-item">
+                                            <span class="box <?php echo (isset($formData['plan_transfer']) && $formData['plan_transfer'] == 'No') ? 'checked' : ''; ?>"></span>
+                                            <span class="box-text">No</span>
+                                        </span>
+                                    </td>
+                                </tr>
+                            </table>
 
                             <!-- WHY YES -->
-                            <div class="print-line">
-                                <span class="label">Why, if Yes?</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['plan_transfer_yes'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:100px;">Why, if Yes?</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:250px;">&nbsp;<?php echo htmlspecialchars($formData['plan_transfer_yes'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- WHY NO -->
-                            <div class="print-line">
-                                <span class="label">Why, if No?</span>
-                                <span class="value"><?php echo htmlspecialchars($formData['plan_transfer_no'] ?? ''); ?></span>
-                            </div>
+                            <table class="print-table">
+                                <tr>
+                                    <td class="label" style="width:100px;">Why, if No?</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:250px;">&nbsp;<?php echo htmlspecialchars($formData['plan_transfer_no'] ?? ''); ?></td>
+                                </tr>
+                            </table>
 
                             <!-- FORM NUMBER -->
                             <div class="print-form-number">
-                                ISU-EOSS-SDP-025 &bull; Effectivity: 01/09/2013 &bull; Revision: 0
+                                ISUE-OSS-SDP-025 &bull; Effectivity: 01/09/2013 &bull; Revision: 0
                             </div>
                         </div>
 
