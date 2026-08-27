@@ -4,6 +4,7 @@
  * DARK MODE - NO PHOTO - NO ROOM ASSIGNMENT
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
  * AUTO UPPERCASE FOR ALL TEXT FIELDS
+ * PRINT LAYOUT MATCHES OFFICIAL FORM WITH PHOTO
  */
 
 // Start session
@@ -633,31 +634,154 @@ $formData = $_POST ?? [];
         }
         
         /* ============================================================
-           PRINT
+           PRINT - MATCH OFFICIAL FORM WITH PHOTO
            ============================================================ */
         @media print {
             .no-print { display: none !important; }
+            
+            body { 
+                background: #fff !important; 
+                color: #000 !important;
+                font-family: 'Times New Roman', 'Arial', serif !important;
+            }
+            
+            .main-content {
+                margin: 0 !important;
+                padding: 20px 30px !important;
+                height: auto !important;
+                overflow: visible !important;
+                background: #fff !important;
+            }
+            
             .form-section { 
                 box-shadow: none !important; 
                 border: 1px solid #333 !important; 
                 break-inside: avoid;
                 background: #fff !important;
+                padding: 15px 20px !important;
+                margin-bottom: 10px !important;
+                border-radius: 0 !important;
             }
-            .form-section h5 { color: #1a3a6a !important; border-bottom-color: #1a3a6a !important; }
+            
+            .form-section h5 { 
+                color: #1a3a6a !important; 
+                border-bottom-color: #1a3a6a !important;
+                font-size: 13px !important;
+            }
+            
             .header-title { 
-                background: #1a3a6a !important; 
-                -webkit-print-color-adjust: exact !important; 
-                print-color-adjust: exact !important; 
+                background: #fff !important;
+                border-bottom: 2px solid #1a3a6a !important;
+                margin: -15px -20px 15px -20px !important;
+                padding: 10px 20px !important;
+                border-radius: 0 !important;
+                text-align: center !important;
             }
-            .header-title h4 { color: #ffd700 !important; }
-            body { background: #fff !important; color: #000 !important; }
-            .form-control, .form-select { background: #fff !important; color: #000 !important; border-color: #ddd !important; }
-            .form-label { color: #333 !important; }
-            .form-check-label { color: #333 !important; }
-            .footer { display: none !important; }
-            .navbar { display: none !important; }
-            .sidebar { display: none !important; }
-            .main-content { margin: 0 !important; padding: 20px !important; height: auto !important; overflow: visible !important;}
+            
+            .header-title h4 { color: #1a3a6a !important; font-size: 18px !important; font-weight: 700 !important; }
+            .header-title p { color: #333 !important; }
+            .header-title h5 { color: #1a3a6a !important; }
+            .header-title hr { border-color: #1a3a6a !important; }
+            
+            .form-label { color: #000 !important; font-weight: 600 !important; font-size: 11px !important; }
+            .form-control, .form-select { 
+                background: #fff !important; 
+                color: #000 !important; 
+                border-color: #000 !important;
+                border-radius: 0 !important;
+                font-size: 11px !important;
+                height: 26px !important;
+                padding: 2px 8px !important;
+            }
+            .form-check-label { color: #000 !important; font-size: 11px !important; }
+            
+            .form-check-input {
+                border-color: #000 !important;
+                background-color: #fff !important;
+            }
+            .form-check-input:checked {
+                background-color: #000 !important;
+                border-color: #000 !important;
+            }
+            
+            .form-select option {
+                background: #fff !important;
+                color: #000 !important;
+            }
+            
+            .form-control::placeholder {
+                color: #aaa !important;
+            }
+            
+            .text-muted { color: #666 !important; }
+            .required { color: #000 !important; }
+            
+            .form-control.auto-upper {
+                text-transform: uppercase;
+            }
+            
+            /* PHOTO BOX IN PRINT */
+            .print-photo-wrapper {
+                display: flex !important;
+                align-items: flex-start !important;
+                gap: 20px !important;
+                margin-bottom: 15px !important;
+            }
+            
+            .print-photo-box {
+                width: 120px !important;
+                height: 140px !important;
+                border: 2px solid #000 !important;
+                flex-shrink: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: center !important;
+                background: #f9f9f9 !important;
+                font-size: 10px !important;
+                color: #666 !important;
+                text-align: center !important;
+                padding: 5px !important;
+            }
+            
+            .print-photo-box strong {
+                color: #000 !important;
+            }
+            
+            .print-header-fields {
+                flex: 1 !important;
+            }
+            
+            .print-header-fields .form-control {
+                border: 1px solid #000 !important;
+            }
+            
+            /* Form number at bottom */
+            .print-form-number {
+                text-align: center !important;
+                font-size: 10px !important;
+                color: #666 !important;
+                margin-top: 15px !important;
+                border-top: 1px solid #ccc !important;
+                padding-top: 10px !important;
+            }
+            
+            /* Hide on-screen photo section */
+            .screen-photo-section {
+                display: none !important;
+            }
+            
+            /* Show print photo section */
+            .print-photo-section {
+                display: block !important;
+            }
+        }
+        
+        /* ============================================================
+           PRINT PHOTO SECTION - HIDDEN ON SCREEN
+           ============================================================ */
+        .print-photo-section {
+            display: none;
         }
     </style>
 </head>
@@ -712,16 +836,41 @@ $formData = $_POST ?? [];
                                 <p style="font-size: 11px;">ISU-ECHAGUE CAMPUS DORMITORY</p>
                             </div>
 
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="row g-2">
-                                        <div class="col-md-6">
-                                            <label class="form-label">Date <span class="required">*</span></label>
-                                            <input type="date" class="form-control" name="date" value="<?php echo date('Y-m-d'); ?>" required>
+                            <!-- SCREEN VERSION - NO PHOTO -->
+                            <div class="screen-photo-section">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="row g-2">
+                                            <div class="col-md-6">
+                                                <label class="form-label">Date <span class="required">*</span></label>
+                                                <input type="date" class="form-control" name="date" value="<?php echo date('Y-m-d'); ?>" required>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label">Name of Dorm Occupant <span class="required">*</span></label>
+                                                <input type="text" class="form-control auto-upper" name="full_name" placeholder="Enter full name" value="<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?>" required>
+                                            </div>
                                         </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label">Name of Dorm Occupant <span class="required">*</span></label>
-                                            <input type="text" class="form-control auto-upper" name="full_name" placeholder="Enter full name" value="<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?>" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PRINT VERSION - WITH PHOTO -->
+                            <div class="print-photo-section">
+                                <div class="print-photo-wrapper">
+                                    <div class="print-photo-box">
+                                        <strong>ID Passport Size</strong>
+                                        <span>(2x2 photo)</span>
+                                    </div>
+                                    <div class="print-header-fields">
+                                        <div class="row g-2">
+                                            <div class="col-md-8">
+                                                <label class="form-label">Name of Dorm Occupant <span class="required">*</span></label>
+                                                <input type="text" class="form-control auto-upper" name="full_name" placeholder="Enter full name" value="<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?>" required>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">Date <span class="required">*</span></label>
+                                                <input type="date" class="form-control" name="date" value="<?php echo date('Y-m-d'); ?>" required>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -765,14 +914,18 @@ $formData = $_POST ?? [];
                                     <input type="number" class="form-control" name="age" min="1" max="99" value="<?php echo htmlspecialchars($formData['age'] ?? ''); ?>">
                                 </div>
                                 <div class="col-md-3">
+                                    <label class="form-label">No. of Siblings</label>
+                                    <input type="text" class="form-control auto-upper" name="no_siblings" placeholder="e.g., 3 siblings" value="<?php echo htmlspecialchars($formData['no_siblings'] ?? ''); ?>">
+                                </div>
+                                <div class="col-md-4">
                                     <label class="form-label">Birth No.</label>
                                     <input type="text" class="form-control auto-upper" name="birth_no" placeholder="Birth Certificate No." value="<?php echo htmlspecialchars($formData['birth_no'] ?? ''); ?>">
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-4">
                                     <label class="form-label">Course <span class="required">*</span></label>
                                     <input type="text" class="form-control auto-upper" name="course" placeholder="e.g., BSIT" value="<?php echo htmlspecialchars($formData['course'] ?? ''); ?>" required>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-3">
                                     <label class="form-label">Year Level <span class="required">*</span></label>
                                     <select class="form-select" name="year_level" required>
                                         <option value="">Select</option>
@@ -783,11 +936,7 @@ $formData = $_POST ?? [];
                                         <option value="5th Year" <?php echo (isset($formData['year_level']) && $formData['year_level'] == '5th Year') ? 'selected' : ''; ?>>5th Year</option>
                                     </select>
                                 </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">No. of Siblings</label>
-                                    <input type="text" class="form-control auto-upper" name="no_siblings" placeholder="e.g., 3 siblings" value="<?php echo htmlspecialchars($formData['no_siblings'] ?? ''); ?>">
-                                </div>
-                                <div class="col-md-3">
+                                <div class="col-md-5">
                                     <label class="form-label">Scholarship Grant</label>
                                     <input type="text" class="form-control auto-upper" name="scholarship" placeholder="If none, type 'None'" value="<?php echo htmlspecialchars($formData['scholarship'] ?? ''); ?>">
                                 </div>
@@ -957,6 +1106,11 @@ $formData = $_POST ?? [];
                             </button>
                         </div>
 
+                        <!-- FORM NUMBER - ONLY SHOWS IN PRINT -->
+                        <div class="print-form-number no-print">
+                            ISUE-OSS-SDP-025 &bull; Effectivity: 01/09/2013 &bull; Revision: 0
+                        </div>
+
                     </form>
                 </div>
                 
@@ -971,8 +1125,6 @@ $formData = $_POST ?? [];
         </footer>
     </div>
 
-  
-    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
@@ -980,14 +1132,9 @@ $formData = $_POST ?? [];
         // ============================================================
         document.querySelectorAll('.auto-upper').forEach(function(input) {
             input.addEventListener('input', function() {
-                // Save cursor position
                 const start = this.selectionStart;
                 const end = this.selectionEnd;
-                
-                // Convert to uppercase
                 this.value = this.value.toUpperCase();
-                
-                // Restore cursor position
                 this.setSelectionRange(start, end);
             });
         });
