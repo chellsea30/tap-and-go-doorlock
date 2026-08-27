@@ -1,10 +1,8 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Access Logs / Attendance
- * COMPLETE - With same layout as dashboard.php
+ * WITH SEPARATE PRINT FOR RESIDENTS AND VISITORS
  * PURE DARK MODE - Fixed navbar, sidebar, footer
- * WITH PRINT VIEW - Residents: Date/Time | RFID UID | Tenant | Room | Type | Signature
- * WITH PRINT VIEW - Visitors: Date/Time | RFID UID | Name | Person to Visit | Reason/Purpose | Room | Type | Signature
  * WITH PROFILE PHOTO DISPLAY IN TABLE
  */
 
@@ -24,11 +22,14 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     }
 }
 
-// Handle Print Request
-$printMode = isset($_GET['print']) && $_GET['print'] === '1';
+// Handle Print Request - Residents
+$printResidents = isset($_GET['print_residents']) && $_GET['print_residents'] === '1';
+
+// Handle Print Request - Visitors
+$printVisitors = isset($_GET['print_visitors']) && $_GET['print_visitors'] === '1';
 
 // If print mode, use minimal layout
-if ($printMode) {
+if ($printResidents || $printVisitors) {
     // No header/footer for print
 } else {
     include '../includes/header.php';
@@ -355,26 +356,6 @@ $result = $conn->query("
 if ($result && $row = $result->fetch_assoc()) {
     $stats['critical_alerts'] = (int)$row['count'];
 }
-
-// ============================================================
-// Helper function to get profile photo HTML
-// ============================================================
-function getProfilePhoto($photoPath, $name, $size = 32) {
-    $fullPath = '../../' . $photoPath;
-    if (!empty($photoPath) && file_exists($fullPath)) {
-        return '<img src="' . $fullPath . '" alt="Photo" style="width:' . $size . 'px;height:' . $size . 'px;border-radius:50%;object-fit:cover;border:2px solid #2a2a4a;">';
-    } else {
-        $nameParts = explode(' ', $name);
-        $initials = '';
-        foreach ($nameParts as $part) {
-            if (!empty($part)) {
-                $initials .= strtoupper($part[0]);
-            }
-        }
-        $initials = substr($initials, 0, 2) ?: '?';
-        return '<div style="width:' . $size . 'px;height:' . $size . 'px;border-radius:50%;background:linear-gradient(135deg,#1a3a6a,#2a5a9a);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:' . ($size/2) . 'px;border:2px solid #2a2a4a;flex-shrink:0;">' . $initials . '</div>';
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -382,7 +363,7 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Access Logs - Tap-and-Go Doorlock</title>
-    <?php if (!$printMode): ?>
+    <?php if (!$printResidents && !$printVisitors): ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -438,19 +419,6 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
             height: 30px;
             border-bottom: 1px solid #000;
         }
-        .signature-line {
-            display: inline-block;
-            width: 100px;
-            border-bottom: 1px solid #000;
-            margin-top: 15px;
-            padding-bottom: 2px;
-        }
-        .signature-label {
-            font-size: 9px;
-            color: #666;
-            display: block;
-            text-align: center;
-        }
         .badge-print {
             display: inline-block;
             padding: 2px 8px;
@@ -483,9 +451,6 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
             font-weight: 700;
             border: 1px solid #ccc;
         }
-        .page-break {
-            page-break-after: always;
-        }
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
@@ -498,7 +463,7 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
         /* ============================================================
            GLOBAL DARK THEME - SAME AS DASHBOARD (for non-print)
            ============================================================ */
-        <?php if (!$printMode): ?>
+        <?php if (!$printResidents && !$printVisitors): ?>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
@@ -918,8 +883,8 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
             gap: 10px;
         }
         
-        .btn-print {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
+        .btn-print-residents {
+            background: linear-gradient(135deg, #065f46, #0a8a6a) !important;
             color: white !important;
             border: none !important;
             border-radius: 8px;
@@ -928,9 +893,25 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
             font-size: 13px;
             transition: all 0.3s ease;
         }
-        .btn-print:hover {
+        .btn-print-residents:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
+            box-shadow: 0 4px 15px rgba(6,95,70,0.4);
+            color: white !important;
+        }
+        
+        .btn-print-visitors {
+            background: linear-gradient(135deg, #3730a3, #4f46e5) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px;
+            padding: 6px 16px;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+        .btn-print-visitors:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(55,48,163,0.4);
             color: white !important;
         }
         
@@ -999,34 +980,178 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
         <?php endif; ?>
     </style>
 </head>
-<body <?php echo $printMode ? 'onload="window.print();"' : ''; ?>>
+<body <?php echo ($printResidents || $printVisitors) ? 'onload="window.print();"' : ''; ?>>
     
-    <?php if (!$printMode): ?>
+    <?php if (!$printResidents && !$printVisitors): ?>
     <?php include '../includes/navbar.php'; ?>
     <?php endif; ?>
     
-    <?php if ($printMode): ?>
-    <!-- PRINT HEADER -->
+    <?php if ($printResidents): ?>
+    <!-- PRINT HEADER - RESIDENTS ONLY -->
     <div class="print-header">
-        <h2>📋 Access Logs Report</h2>
+        <h2>🏠 Resident / Staff Access Logs</h2>
         <p>
             ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>
             Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?>
             <?php if (!empty($statusFilter)): ?> | Status: <?php echo ucfirst($statusFilter); ?><?php endif; ?>
             <?php if (!empty($typeFilter)): ?> | Type: <?php echo ucfirst($typeFilter); ?><?php endif; ?>
+            <?php if (!empty($searchFilter)): ?> | Search: "<?php echo htmlspecialchars($searchFilter); ?>"<?php endif; ?>
         </p>
     </div>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>RFID UID</th>
+                <th>Tenant</th>
+                <th>Room</th>
+                <th>Type</th>
+                <th>Signature</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (empty($residentLogs)): ?>
+                <tr>
+                    <td colspan="6" style="text-align:center;padding:20px;color:#999;">
+                        No resident/staff access logs found
+                    </td>
+                </tr>
+            <?php else: ?>
+                <?php foreach ($residentLogs as $log): 
+                    $displayName = $log['user_name'] ?? 'Unknown';
+                    $cardType = $log['card_type'] ?? 'resident';
+                    $typeLabel = $cardType == 'staff' ? 'Staff' : 'Resident';
+                    $roomDisplay = $log['room_number'] ?? 'N/A';
+                ?>
+                    <tr>
+                        <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
+                        <td><span style="font-family:monospace;font-weight:600;"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                        <td>
+                            <?php echo htmlspecialchars($displayName); ?>
+                            <span class="badge-print" style="background:#d4edda;color:#155724;font-size:8px;padding:0 5px;margin-left:3px;">
+                                <?php echo $typeLabel; ?>
+                            </span>
+                            <?php if (!empty($log['student_id'])): ?>
+                                <br><span style="font-size:8px;color:#888;">ID: <?php echo htmlspecialchars($log['student_id']); ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?php echo htmlspecialchars($roomDisplay); ?></td>
+                        <td>
+                            <span class="badge-print <?php echo $log['access_type'] == 'entry' ? 'badge-print-entry' : 'badge-print-exit'; ?>">
+                                <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
+                            </span>
+                        </td>
+                        <td style="text-align:center;">
+                            <span style="display:inline-block; width:80px; border-bottom:1px solid #000; margin-top:8px;"></span>
+                            <span style="display:block; font-size:8px; color:#666;">Signature</span>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
+    </table>
+    
+    <div class="print-footer">
+        <p>
+            Printed on: <?php echo date('F d, Y h:i A'); ?> | 
+            Total Residents/Staff: <?php echo count($residentLogs); ?>
+        </p>
+        <p style="font-size: 10px; color: #999;">
+            ISU-Echague Dormitory - Tap-and-Go Doorlock System
+        </p>
+    </div>
+    <?php exit(); ?>
+    <?php endif; ?>
+    
+    <?php if ($printVisitors): ?>
+    <!-- PRINT HEADER - VISITORS ONLY -->
+    <div class="print-header">
+        <h2>👤 Visitor Access Logs</h2>
+        <p>
+            ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>
+            Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?>
+            <?php if (!empty($statusFilter)): ?> | Status: <?php echo ucfirst($statusFilter); ?><?php endif; ?>
+            <?php if (!empty($typeFilter)): ?> | Type: <?php echo ucfirst($typeFilter); ?><?php endif; ?>
+            <?php if (!empty($searchFilter)): ?> | Search: "<?php echo htmlspecialchars($searchFilter); ?>"<?php endif; ?>
+        </p>
+    </div>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>RFID UID</th>
+                <th>Name</th>
+                <th>Person to Visit</th>
+                <th>Reason/Purpose</th>
+                <th>Room</th>
+                <th>Type</th>
+                <th>Signature</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (empty($visitorLogs)): ?>
+                <tr>
+                    <td colspan="8" style="text-align:center;padding:20px;color:#999;">
+                        No visitor access logs found
+                    </td>
+                </tr>
+            <?php else: ?>
+                <?php foreach ($visitorLogs as $log): 
+                    $visitorName = $log['visitor_name'] ?? 'Unknown Visitor';
+                    $residentVisited = $log['resident_visited_name'] ?? 'Unknown';
+                    $purpose = $log['purpose_of_visit'] ?? 'N/A';
+                    $roomDisplay = $log['resident_room'] ?? 'N/A';
+                ?>
+                    <tr>
+                        <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
+                        <td><span style="font-family:monospace;font-weight:600;"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                        <td>
+                            <?php echo htmlspecialchars($visitorName); ?>
+                            <span class="badge-print" style="background:#cce5ff;color:#004085;font-size:8px;padding:0 5px;margin-left:3px;">
+                                Visitor
+                            </span>
+                        </td>
+                        <td><?php echo htmlspecialchars($residentVisited); ?></td>
+                        <td><span style="font-size:10px;"><?php echo htmlspecialchars($purpose); ?></span></td>
+                        <td><?php echo htmlspecialchars($roomDisplay); ?></td>
+                        <td>
+                            <span class="badge-print <?php echo $log['access_type'] == 'entry' ? 'badge-print-entry' : 'badge-print-exit'; ?>">
+                                <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
+                            </span>
+                        </td>
+                        <td style="text-align:center;">
+                            <span style="display:inline-block; width:80px; border-bottom:1px solid #000; margin-top:8px;"></span>
+                            <span style="display:block; font-size:8px; color:#666;">Signature</span>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
+    </table>
+    
+    <div class="print-footer">
+        <p>
+            Printed on: <?php echo date('F d, Y h:i A'); ?> | 
+            Total Visitors: <?php echo count($visitorLogs); ?>
+        </p>
+        <p style="font-size: 10px; color: #999;">
+            ISU-Echague Dormitory - Tap-and-Go Doorlock System
+        </p>
+    </div>
+    <?php exit(); ?>
     <?php endif; ?>
     
     <div class="container-fluid">
         <div class="row">
-            <?php if (!$printMode): ?>
+            <?php if (!$printResidents && !$printVisitors): ?>
             <?php include '../includes/sidebar.php'; ?>
             <?php endif; ?>
             
-            <main class="<?php echo $printMode ? 'col-12' : 'col-md-9 ms-sm-auto col-lg-10 px-md-4'; ?>">
+            <main class="<?php echo ($printResidents || $printVisitors) ? 'col-12' : 'col-md-9 ms-sm-auto col-lg-10 px-md-4'; ?>">
                 
-                <?php if (!$printMode): ?>
+                <?php if (!$printResidents && !$printVisitors): ?>
                 <!-- ============================================================
                 HEADER - SAME AS DASHBOARD
                 ============================================================ -->
@@ -1055,9 +1180,6 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                         <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()">
                             <i class="fas fa-sync-alt"></i>
                         </button>
-                        <a href="?print=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" class="btn btn-print ms-2" target="_blank">
-                            <i class="fas fa-print me-1"></i> Print
-                        </a>
                     </div>
                 </div>
 
@@ -1323,7 +1445,7 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                         <?php endif; ?>
                     </div>
                 </div>
-                <?php endif; // end !printMode ?>
+                <?php endif; // end !printResidents && !printVisitors ?>
 
                 <!-- ============================================================
                 RESIDENTS TABLE
@@ -1339,8 +1461,11 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                                 </div>
                             </div>
                             <div>
-                                <?php if (!$printMode): ?>
-                                <span class="text-muted small">
+                                <?php if (!$printResidents && !$printVisitors): ?>
+                                <a href="?print_residents=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" target="_blank" class="btn btn-print-residents btn-sm">
+                                    <i class="fas fa-print me-1"></i> Print Residents
+                                </a>
+                                <span class="text-muted small ms-2">
                                     <?php if ($residentTotal > 0): ?>
                                         Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $residentTotal); ?> of <?php echo $residentTotal; ?>
                                     <?php endif; ?>
@@ -1359,18 +1484,14 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                                         <th>Tenant</th>
                                         <th>Room</th>
                                         <th>Type</th>
-                                        <?php if ($printMode): ?>
-                                        <th>Signature</th>
-                                        <?php else: ?>
                                         <th>Status</th>
                                         <th>Power</th>
-                                        <?php endif; ?>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($residentLogs)): ?>
                                         <tr>
-                                            <td colspan="<?php echo $printMode ? '6' : '7'; ?>" class="text-center text-muted py-4">
+                                            <td colspan="7" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                                 No resident/staff access logs found
                                             </td>
@@ -1428,14 +1549,6 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                                                         <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
                                                     </span>
                                                 </td>
-                                                <?php if ($printMode): ?>
-                                                <td>
-                                                    <div style="text-align:center; padding: 4px 0;">
-                                                        <span style="display:inline-block; width:80px; border-bottom:1px solid #000; margin-top:8px;"></span>
-                                                        <span style="display:block; font-size:8px; color:#666;">Signature</span>
-                                                    </div>
-                                                </td>
-                                                <?php else: ?>
                                                 <td>
                                                     <span class="badge <?php echo $log['access_status'] == 'granted' ? 'badge-granted' : 'badge-denied'; ?>">
                                                         <i class="fas <?php echo $log['access_status'] == 'granted' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
@@ -1448,7 +1561,6 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                                                         <?php echo isset($log['power_source']) ? ucfirst($log['power_source']) : 'N/A'; ?>
                                                     </span>
                                                 </td>
-                                                <?php endif; ?>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
@@ -1456,7 +1568,7 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                             </table>
                         </div>
                         
-                        <?php if (!$printMode && $residentPages > 1): ?>
+                        <?php if (!$printResidents && !$printVisitors && $residentPages > 1): ?>
                         <!-- PAGINATION -->
                         <div class="pagination-container">
                             <div class="row align-items-center">
@@ -1543,10 +1655,15 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                                 </div>
                             </div>
                             <div>
-                                <span class="text-muted small">
+                                <?php if (!$printResidents && !$printVisitors): ?>
+                                <a href="?print_visitors=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" target="_blank" class="btn btn-print-visitors btn-sm">
+                                    <i class="fas fa-print me-1"></i> Print Visitors
+                                </a>
+                                <span class="text-muted small ms-2">
                                     <i class="fas fa-info-circle me-1"></i>
                                     Showing <?php echo count($visitorLogs); ?> visitor logs
                                 </span>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -1562,17 +1679,13 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                                         <th>Reason/Purpose</th>
                                         <th>Room</th>
                                         <th>Type</th>
-                                        <?php if ($printMode): ?>
-                                        <th>Signature</th>
-                                        <?php else: ?>
                                         <th>Status</th>
-                                        <?php endif; ?>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($visitorLogs)): ?>
                                         <tr>
-                                            <td colspan="<?php echo $printMode ? '8' : '8'; ?>" class="text-center text-muted py-4">
+                                            <td colspan="8" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                                 No visitor access logs found
                                             </td>
@@ -1624,21 +1737,12 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                                                         <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
                                                     </span>
                                                 </td>
-                                                <?php if ($printMode): ?>
-                                                <td>
-                                                    <div style="text-align:center; padding: 4px 0;">
-                                                        <span style="display:inline-block; width:80px; border-bottom:1px solid #000; margin-top:8px;"></span>
-                                                        <span style="display:block; font-size:8px; color:#666;">Signature</span>
-                                                    </div>
-                                                </td>
-                                                <?php else: ?>
                                                 <td>
                                                     <span class="badge <?php echo $log['access_status'] == 'granted' ? 'badge-granted' : 'badge-denied'; ?>">
                                                         <i class="fas <?php echo $log['access_status'] == 'granted' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
                                                         <?php echo ucfirst($log['access_status'] ?? 'N/A'); ?>
                                                     </span>
                                                 </td>
-                                                <?php endif; ?>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
@@ -1648,21 +1752,7 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
                     </div>
                 </div>
 
-                <?php if ($printMode): ?>
-                <!-- PRINT FOOTER -->
-                <div class="print-footer">
-                    <p>
-                        Printed on: <?php echo date('F d, Y h:i A'); ?> | 
-                        Total Residents/Staff: <?php echo count($residentLogs); ?> | 
-                        Total Visitors: <?php echo count($visitorLogs); ?>
-                    </p>
-                    <p style="font-size: 10px; color: #999;">
-                        ISU-Echague Dormitory - Tap-and-Go Doorlock System
-                    </p>
-                </div>
-                <?php endif; ?>
-
-                <?php if (!$printMode): ?>
+                <?php if (!$printResidents && !$printVisitors): ?>
                 <!-- ============================================================
                 FOOTER - SAME AS DASHBOARD
                 ============================================================ -->
@@ -1688,7 +1778,7 @@ function getProfilePhoto($photoPath, $name, $size = 32) {
         </div>
     </div>
 
-    <?php if (!$printMode): ?>
+    <?php if (!$printResidents && !$printVisitors): ?>
     <?php include '../includes/footer.php'; ?>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
