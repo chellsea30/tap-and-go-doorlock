@@ -6,7 +6,7 @@
  * FIXED: Complete dark table
  * ADDED: Print buttons and show entries dropdown
  * UPDATED: Print layout - Entry/Exit with Signature columns
- * ADDED: Picture display in Residents table
+ * ADDED: Picture display in Residents table (with fallback)
  */
 
 session_start();
@@ -27,6 +27,19 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
 // Include header
 include '../includes/header.php'; 
 $conn = getDBConnection();
+
+// ============================================================
+// CHECK IF PROFILE_PICTURE COLUMN EXISTS
+// ============================================================
+$hasProfilePicture = false;
+try {
+    $checkColumn = $conn->query("SHOW COLUMNS FROM users LIKE 'profile_picture'");
+    if ($checkColumn && $checkColumn->num_rows > 0) {
+        $hasProfilePicture = true;
+    }
+} catch (Exception $e) {
+    $hasProfilePicture = false;
+}
 
 // ============================================================
 // PAGINATION SETTINGS
@@ -134,6 +147,7 @@ if ($page > $residentPages) $page = $residentPages;
 if ($page < 1) $page = 1;
 $offset = ($page - 1) * $perPage;
 
+// Build resident query with or without profile_picture
 $residentQuery = "
     SELECT 
         al.*,
@@ -145,10 +159,17 @@ $residentQuery = "
         u.full_name as user_name,
         u.room_number,
         u.student_id,
-        u.profile_picture,
         rp.course,
         rp.year_level,
         ru.full_name as resident_visited_name
+";
+
+// Only add profile_picture if column exists
+if ($hasProfilePicture) {
+    $residentQuery .= ", u.profile_picture";
+}
+
+$residentQuery .= "
     FROM access_logs al
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
     LEFT JOIN users u ON c.user_id = u.user_id
@@ -193,7 +214,6 @@ $visitorQuery = "
         c.resident_visited,
         ru.full_name as resident_visited_name,
         ru.room_number as resident_room,
-        ru.profile_picture as resident_picture,
         vl.validity_end
     FROM access_logs al
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
@@ -571,8 +591,13 @@ if ($result && $row = $result->fetch_assoc()) {
         .log-table .user-avatar {
             width: 32px; height: 32px; border-radius: 50%;
             background: linear-gradient(135deg, #4a5a8a, #5a3a7a);
-            display: flex; align-items: center; justify-content: center;
-            color: white; font-weight: 700; font-size: 12px; flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 12px;
+            flex-shrink: 0;
             overflow: hidden;
         }
         .log-table .user-avatar img {
@@ -1426,7 +1451,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                             $cardType = $log['card_type'] ?? 'resident';
                                             $avatarClass = '';
                                             $userTypeTag = '';
-                                            $profilePic = $log['profile_picture'] ?? '';
+                                            $profilePic = isset($log['profile_picture']) ? $log['profile_picture'] : '';
                                             
                                             if ($cardType == 'staff') {
                                                 $avatarClass = 'staff';
@@ -1446,7 +1471,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                             
                                             // Determine avatar content
                                             $avatarContent = $initials ?: '?';
-                                            if (!empty($profilePic) && file_exists('../../uploads/profile/' . $profilePic)) {
+                                            if ($hasProfilePicture && !empty($profilePic) && file_exists('../../uploads/profile/' . $profilePic)) {
                                                 $avatarContent = '<img src="../../uploads/profile/' . htmlspecialchars($profilePic) . '" alt="Profile">';
                                             }
                                         ?>
@@ -1631,7 +1656,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                             $visitorName = $log['visitor_name'] ?? 'Unknown Visitor';
                                             $residentVisited = $log['resident_visited_name'] ?? 'Unknown';
                                             $purpose = $log['purpose_of_visit'] ?? 'N/A';
-                                            $residentPic = $log['resident_picture'] ?? '';
                                             
                                             $initials = '';
                                             $nameParts = explode(' ', $visitorName);
