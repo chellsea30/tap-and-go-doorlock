@@ -1,17 +1,13 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Staff Card Management
- * PURE DARK MODE - WITH SHOW ENTRIES
- * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
+ * DARK MODE - WITH CARD UID - FIXED LAYOUT SAME AS STAFF INFO
  */
 
 session_start();
-
-// Load config and functions
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
 
-// Check authentication (Admin only)
 if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
@@ -19,42 +15,254 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
 
 // Include header
 include '../includes/header.php'; 
+
 $conn = getDBConnection();
 $error = '';
 $success = '';
 
 // ============================================================
-// PAGINATION SETTINGS
+// GET NEXT STAFF ID NUMBER
 // ============================================================
-$perPage = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 10;
-$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$perPageOptions = [10, 25, 50, 100];
-if (!in_array($perPage, $perPageOptions)) {
-    $perPage = 10;
+function getNextStaffId($conn) {
+    $result = $conn->query("SELECT staff_id_number FROM staff_users ORDER BY staff_id DESC LIMIT 1");
+    if ($result && $row = $result->fetch_assoc()) {
+        $lastId = $row['staff_id_number'];
+        $num = (int)substr($lastId, 6);
+        $nextNum = $num + 1;
+        return 'STAFF-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
+    }
+    return 'STAFF-001';
 }
 
 // ============================================================
-// GET ALL STAFF (with pagination)
+// GET AVAILABLE CARDS FOR DROPDOWN
 // ============================================================
-$countQuery = "SELECT COUNT(*) as total FROM staff";
-$countResult = $conn->query($countQuery);
-$totalStaff = 0;
-if ($countResult && $row = $countResult->fetch_assoc()) {
-    $totalStaff = (int)$row['total'];
+$availableCards = [];
+$result = $conn->query("
+    SELECT card_id, card_uid, card_type 
+    FROM available_rfid_cards 
+    WHERE status = 'available'
+    ORDER BY card_uid
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $availableCards[] = $row;
+    }
 }
 
-$totalPages = ceil($totalStaff / $perPage);
-if ($totalPages < 1) $totalPages = 1;
-if ($page > $totalPages) $page = $totalPages;
-if ($page < 1) $page = 1;
-$offset = ($page - 1) * $perPage;
+// ============================================================
+// HANDLE ADD STAFF WITH CARD UID
+// ============================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
+    $full_name = trim($_POST['full_name'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $department = trim($_POST['department'] ?? 'Staff');
+    $card_uid = strtoupper(trim($_POST['card_uid'] ?? ''));
+    
+    if (empty($full_name) || empty($email)) {
+        $error = 'Please fill in all required fields (Name and Email).';
+    } else {
+        // Check if email already exists
+        $check = $conn->prepare("SELECT staff_id FROM staff_users WHERE email = ?");
+        $check->bind_param("s", $email);
+        $check->execute();
+        if ($check->get_result()->num_rows > 0) {
+            $error = 'Email already exists in the system.';
+        } else {
+            // Check if card UID is available
+            if (!empty($card_uid)) {
+                $cardCheck = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE card_uid = ? AND status = 'active'");
+                $cardCheck->bind_param("s", $card_uid);
+                $cardCheck->execute();
+                if ($cardCheck->get_result()->num_rows > 0) {
+                    $error = 'Card UID is already assigned to someone else.';
+                }
+                $cardCheck->close();
+            }
+            
+            if (empty($error)) {
+                $staff_id_number = getNextStaffId($conn);
+                
+                $stmt = $conn->prepare("
+                    INSERT INTO staff_users (staff_id_number, full_name, email, department, card_uid, created_at)
+                    VALUES (?, ?, ?, ?, ?, NOW())
+                ");
+                $stmt->bind_param("sssss", $staff_id_number, $full_name, $email, $department, $card_uid);
+                
+                if ($stmt->execute()) {
+                    $new_id = $stmt->insert_id;
+                    
+                    // If card_uid is provided and not available, insert into rfid_cards
+                    if (!empty($card_uid)) {
+                        // Check if in available cards
+                        $availCheck = $conn->prepare("SELECT card_id FROM available_rfid_cards WHERE card_uid = ? AND status = 'available'");
+                        $availCheck->bind_param("s", $card_uid);
+                        $availCheck->execute();
+                        $availResult = $availCheck->get_result();
+                        $isAvailable = $availResult->num_rows > 0;
+                        $availCheck->close();
+                        
+                        // Insert into rfid_cards
+                        $rfidStmt = $conn->prepare("
+                            INSERT INTO rfid_cards (card_uid, user_id, card_type, issued_date, expiry_date, status)
+                            VALUES (?, ?, 'staff', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'active')
+                        ");
+                        $rfidStmt->bind_param("si", $card_uid, $new_id);
+                        $rfidStmt->execute();
+                        $rfidStmt->close();
+                        
+                        // Mark as assigned if from available cards
+                        if ($isAvailable) {
+                            $updateStmt = $conn->prepare("UPDATE available_rfid_cards SET status = 'assigned' WHERE card_uid = ?");
+                            $updateStmt->bind_param("s", $card_uid);
+                            $updateStmt->execute();
+                            $updateStmt->close();
+                        }
+                    }
+                    
+                    $success = "✅ Staff added successfully with Card UID: " . (!empty($card_uid) ? $card_uid : 'None');
+                    logAudit($_SESSION['admin_id'], 'Add Staff', "Added staff: $full_name ($staff_id_number)");
+                    header('Location: staff-card.php?success=1');
+                    exit();
+                } else {
+                    $error = "Failed to add staff: " . $stmt->error;
+                }
+                $stmt->close();
+            }
+        }
+        $check->close();
+    }
+}
 
+// ============================================================
+// HANDLE UPDATE STAFF CARD UID
+// ============================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_card'])) {
+    $staff_id = (int)$_POST['staff_id'];
+    $card_uid = strtoupper(trim($_POST['card_uid'] ?? ''));
+    
+    if (empty($card_uid)) {
+        $error = 'Please enter a Card UID.';
+    } else {
+        // Check if card already assigned to someone else
+        $check = $conn->prepare("
+            SELECT user_id FROM rfid_cards 
+            WHERE card_uid = ? AND user_id != ? AND status = 'active'
+        ");
+        $check->bind_param("si", $card_uid, $staff_id);
+        $check->execute();
+        if ($check->get_result()->num_rows > 0) {
+            $error = 'Card UID is already assigned to someone else.';
+        } else {
+            // Update staff_users
+            $stmt = $conn->prepare("UPDATE staff_users SET card_uid = ? WHERE staff_id = ?");
+            $stmt->bind_param("si", $card_uid, $staff_id);
+            
+            if ($stmt->execute()) {
+                // Update or insert into rfid_cards
+                $cardCheck = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE user_id = ? AND card_type = 'staff'");
+                $cardCheck->bind_param("i", $staff_id);
+                $cardCheck->execute();
+                $exists = $cardCheck->get_result()->num_rows > 0;
+                $cardCheck->close();
+                
+                if ($exists) {
+                    $rfidStmt = $conn->prepare("
+                        UPDATE rfid_cards SET card_uid = ?, status = 'active' 
+                        WHERE user_id = ? AND card_type = 'staff'
+                    ");
+                    $rfidStmt->bind_param("si", $card_uid, $staff_id);
+                } else {
+                    $rfidStmt = $conn->prepare("
+                        INSERT INTO rfid_cards (card_uid, user_id, card_type, issued_date, expiry_date, status)
+                        VALUES (?, ?, 'staff', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'active')
+                    ");
+                    $rfidStmt->bind_param("si", $card_uid, $staff_id);
+                }
+                $rfidStmt->execute();
+                $rfidStmt->close();
+                
+                $success = "✅ Card UID updated successfully!";
+                logAudit($_SESSION['admin_id'], 'Update Staff Card', "Updated card for staff ID: $staff_id to $card_uid");
+                header('Location: staff-card.php?card_updated=1');
+                exit();
+            } else {
+                $error = "Failed to update card: " . $stmt->error;
+            }
+            $stmt->close();
+        }
+        $check->close();
+    }
+}
+
+// ============================================================
+// HANDLE REMOVE CARD UID
+// ============================================================
+if (isset($_GET['remove_card']) && is_numeric($_GET['remove_card'])) {
+    $staff_id = (int)$_GET['remove_card'];
+    
+    $stmt = $conn->prepare("UPDATE staff_users SET card_uid = NULL WHERE staff_id = ?");
+    $stmt->bind_param("i", $staff_id);
+    if ($stmt->execute()) {
+        // Deactivate in rfid_cards
+        $rfidStmt = $conn->prepare("UPDATE rfid_cards SET status = 'deactivated' WHERE user_id = ? AND card_type = 'staff'");
+        $rfidStmt->bind_param("i", $staff_id);
+        $rfidStmt->execute();
+        $rfidStmt->close();
+        
+        $success = "✅ Card UID removed successfully!";
+        logAudit($_SESSION['admin_id'], 'Remove Staff Card', "Removed card for staff ID: $staff_id");
+        header('Location: staff-card.php?card_removed=1');
+        exit();
+    } else {
+        $error = "Failed to remove card: " . $stmt->error;
+    }
+    $stmt->close();
+}
+
+// ============================================================
+// HANDLE DELETE STAFF
+// ============================================================
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $delete_id = (int)$_GET['delete'];
+    
+    // Get card_uid first
+    $getCard = $conn->prepare("SELECT card_uid FROM staff_users WHERE staff_id = ?");
+    $getCard->bind_param("i", $delete_id);
+    $getCard->execute();
+    $cardResult = $getCard->get_result();
+    $staffData = $cardResult->fetch_assoc();
+    $getCard->close();
+    
+    // Delete from staff_users
+    $stmt = $conn->prepare("DELETE FROM staff_users WHERE staff_id = ?");
+    $stmt->bind_param("i", $delete_id);
+    if ($stmt->execute()) {
+        // Deactivate rfid card
+        if (!empty($staffData['card_uid'])) {
+            $rfidStmt = $conn->prepare("UPDATE rfid_cards SET status = 'deactivated' WHERE card_uid = ?");
+            $rfidStmt->bind_param("s", $staffData['card_uid']);
+            $rfidStmt->execute();
+            $rfidStmt->close();
+        }
+        $success = "Staff deleted successfully!";
+        logAudit($_SESSION['admin_id'], 'Delete Staff', "Deleted staff ID: $delete_id");
+        header('Location: staff-card.php?deleted=1');
+        exit();
+    } else {
+        $error = "Failed to delete staff.";
+    }
+    $stmt->close();
+}
+
+// ============================================================
+// GET STAFF LIST WITH CARD UID
+// ============================================================
 $staffList = [];
 $result = $conn->query("
-    SELECT id, full_name, position, email, phone, status, created_at
-    FROM staff
+    SELECT staff_id, staff_id_number, full_name, email, department, card_uid, created_at
+    FROM staff_users
     ORDER BY full_name
-    LIMIT $perPage OFFSET $offset
 ");
 if ($result) {
     while ($row = $result->fetch_assoc()) {
@@ -62,152 +270,19 @@ if ($result) {
     }
 }
 
-// ============================================================
-// GET ACTIVE STAFF COUNT
-// ============================================================
-$activeStaff = 0;
-$result = $conn->query("SELECT COUNT(*) as count FROM staff WHERE status = 'active'");
-if ($result && $row = $result->fetch_assoc()) {
-    $activeStaff = (int)$row['count'];
-}
+$totalStaff = count($staffList);
+$hasCardCount = 0;
+$noCardCount = 0;
 
-// ============================================================
-// GET INACTIVE STAFF COUNT
-// ============================================================
-$inactiveStaff = 0;
-$result = $conn->query("SELECT COUNT(*) as count FROM staff WHERE status = 'inactive'");
-if ($result && $row = $result->fetch_assoc()) {
-    $inactiveStaff = (int)$row['count'];
-}
-
-// ============================================================
-// HANDLE STAFF ADD
-// ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
-    $full_name = trim($_POST['full_name'] ?? '');
-    $position = trim($_POST['position'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $phone = trim($_POST['phone'] ?? '');
-    
-    if (empty($full_name) || empty($position)) {
-        $error = 'Please fill in all required fields (Name and Position).';
+foreach ($staffList as $staff) {
+    if (!empty($staff['card_uid'])) {
+        $hasCardCount++;
     } else {
-        $stmt = $conn->prepare("
-            INSERT INTO staff (full_name, position, email, phone, status, created_at)
-            VALUES (?, ?, ?, ?, 'active', NOW())
-        ");
-        $stmt->bind_param("ssss", $full_name, $position, $email, $phone);
-        
-        if ($stmt->execute()) {
-            $success = "✅ Staff member added successfully!";
-            logAudit($_SESSION['admin_id'], 'Add Staff', "Added staff: $full_name ($position)");
-            header('Location: staff-card.php?success=1');
-            exit();
-        } else {
-            $error = "Failed to add staff: " . $stmt->error;
-        }
-        $stmt->close();
+        $noCardCount++;
     }
 }
 
-// ============================================================
-// HANDLE STAFF UPDATE
-// ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_staff'])) {
-    $staff_id = (int)$_POST['staff_id'];
-    $full_name = trim($_POST['full_name'] ?? '');
-    $position = trim($_POST['position'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $phone = trim($_POST['phone'] ?? '');
-    $status = $_POST['status'] ?? 'active';
-    
-    if (empty($full_name) || empty($position)) {
-        $error = 'Please fill in all required fields.';
-    } else {
-        $stmt = $conn->prepare("
-            UPDATE staff SET 
-                full_name = ?, 
-                position = ?, 
-                email = ?, 
-                phone = ?, 
-                status = ?
-            WHERE id = ?
-        ");
-        $stmt->bind_param("sssssi", $full_name, $position, $email, $phone, $status, $staff_id);
-        
-        if ($stmt->execute()) {
-            $success = "✅ Staff updated successfully!";
-            logAudit($_SESSION['admin_id'], 'Update Staff', "Updated staff ID: $staff_id");
-            header('Location: staff-card.php?updated=1');
-            exit();
-        } else {
-            $error = "Failed to update staff: " . $stmt->error;
-        }
-        $stmt->close();
-    }
-}
-
-// ============================================================
-// HANDLE STAFF DELETE
-// ============================================================
-if (isset($_GET['delete']) && !empty($_GET['delete'])) {
-    $staff_id = (int)$_GET['delete'];
-    
-    $stmt = $conn->prepare("DELETE FROM staff WHERE id = ?");
-    $stmt->bind_param("i", $staff_id);
-    if ($stmt->execute()) {
-        $success = "✅ Staff deleted successfully!";
-        logAudit($_SESSION['admin_id'], 'Delete Staff', "Deleted staff ID: $staff_id");
-        header('Location: staff-card.php?deleted=1');
-        exit();
-    } else {
-        $error = "Failed to delete staff: " . $stmt->error;
-    }
-    $stmt->close();
-}
-
-// ============================================================
-// HANDLE STAFF ACTIVATION/DEACTIVATION
-// ============================================================
-if (isset($_GET['toggle_status']) && !empty($_GET['toggle_status'])) {
-    $staff_id = (int)$_GET['toggle_status'];
-    $new_status = $_GET['status'] ?? 'active';
-    
-    $stmt = $conn->prepare("UPDATE staff SET status = ? WHERE id = ?");
-    $stmt->bind_param("si", $new_status, $staff_id);
-    if ($stmt->execute()) {
-        $success = "✅ Staff status updated successfully!";
-        logAudit($_SESSION['admin_id'], 'Toggle Staff Status', "Staff ID: $staff_id set to $new_status");
-        header('Location: staff-card.php?status_updated=1');
-        exit();
-    } else {
-        $error = "Failed to update status: " . $stmt->error;
-    }
-    $stmt->close();
-}
-
-// ============================================================
-// GET DARK MODE
-// ============================================================
-$darkModeClass = '';
-$darkModeFromDb = 'false';
-if (isset($_SESSION['admin_id'])) {
-    try {
-        $stmt = $conn->prepare("SELECT setting_value FROM user_settings WHERE admin_id = ? AND setting_key = 'dark_mode'");
-        $stmt->bind_param("i", $_SESSION['admin_id']);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($row = $result->fetch_assoc()) {
-            $darkModeFromDb = $row['setting_value'];
-            if ($darkModeFromDb == 'true') {
-                $darkModeClass = 'dark-mode';
-            }
-        }
-        $stmt->close();
-    } catch (Exception $e) {
-        // Silently fail
-    }
-}
+$nextStaffId = getNextStaffId($conn);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -217,22 +292,36 @@ if (isset($_SESSION['admin_id'])) {
     <title>Staff Card - Tap-and-Go Doorlock</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
         /* ============================================================
-           RESET & BASE - SAME AS STAFF CARD PAGE
+           GLOBAL DARK THEME - SAME AS STAFF INFO
            ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body {
-            height: 100%;
+        
+        body {
             font-family: 'Inter', sans-serif;
             background: #0a0e1a !important;
             color: #e0e0e0 !important;
+            min-height: 100vh;
+            padding-top: 70px !important;
         }
         
         /* ============================================================
-           FIXED NAVBAR
+           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
+           ============================================================ */
+        .container-fluid {
+            padding-top: 10px !important;
+        }
+        
+        main {
+            padding-top: 10px !important;
+            margin-top: 0 !important;
+        }
+        
+        /* ============================================================
+           DARK NAVBAR OVERRIDE
            ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
@@ -242,7 +331,7 @@ if (isset($_SESSION['admin_id'])) {
             left: 0 !important;
             right: 0 !important;
             z-index: 1050 !important;
-            height: 56px !important;
+            height: 70px !important;
         }
         .navbar-brand { color: #e0e0e0 !important; }
         .navbar .nav-link { color: rgba(255,255,255,0.6) !important; }
@@ -250,26 +339,16 @@ if (isset($_SESSION['admin_id'])) {
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
         /* ============================================================
-           SIDEBAR - FIXED POSITION
+           DARK SIDEBAR
            ============================================================ */
         .sidebar {
-            position: fixed !important;
-            top: 56px !important;
-            left: 0 !important;
-            bottom: 0 !important;
-            width: 220px !important;
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
-            overflow-y: auto !important;
-            z-index: 1040 !important;
-            padding-top: 10px !important;
+            padding-top: 80px !important;
+            min-height: calc(100vh - 70px) !important;
         }
         .sidebar .nav-link {
             color: #9090a0 !important;
-            padding: 8px 16px !important;
-            border-radius: 8px !important;
-            margin: 2px 10px !important;
-            font-size: 13px !important;
         }
         .sidebar .nav-link:hover {
             background: rgba(255,255,255,0.05) !important;
@@ -279,511 +358,443 @@ if (isset($_SESSION['admin_id'])) {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             color: white !important;
         }
-        .sidebar .nav-link i {
-            width: 18px;
-            text-align: center;
-        }
-        .sidebar-footer { 
-            border-top-color: #1a2a4a !important;
-            padding: 12px 16px !important;
-            margin-top: 10px !important;
-        }
-        .sidebar-footer .text-muted { color: #606070 !important; font-size: 11px !important; }
+        .sidebar-footer { border-top-color: #1a2a4a !important; }
+        .sidebar-footer .text-muted { color: #606070 !important; }
         
         /* ============================================================
-           PAGE WRAPPER - FLEX LAYOUT
+           STAFF CARD - DARK
            ============================================================ */
-        .page-wrapper {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
-        
-        .content-wrapper {
-            display: flex;
-            flex: 1;
-        }
-        
-        /* ============================================================
-           MAIN CONTENT
-           ============================================================ */
-        .main-content {
-            margin-left: 220px !important;
-            margin-top: 56px !important;
-            padding: 15px 25px !important;
-            flex: 1;
-            min-height: calc(100vh - 56px - 50px) !important;
-            background: #0a0e1a !important;
-        }
-        
-        /* ============================================================
-           FOOTER - STICKY BOTTOM (DARK)
-           ============================================================ */
-        .footer {
-            margin-left: 220px !important;
-            padding: 10px 25px !important;
-            background: #0d1528 !important;
-            border-top: 1px solid #1a2a4a !important;
-            color: #606070 !important;
-            font-size: 12px !important;
-            text-align: center !important;
-            flex-shrink: 0;
-            width: calc(100% - 220px) !important;
-        }
-        .footer span { color: #ffd700 !important; }
-        
-        /* ============================================================
-           DARK STAT CARDS
-           ============================================================ */
-        .stat-card {
+        .staff-card {
             background: #111827 !important;
-            border: 1px solid #1a2a4a !important;
-            border-radius: 12px !important;
-            padding: 14px 16px;
+            border-radius: 16px;
+            padding: 20px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-            transition: transform 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 12px;
+            transition: all 0.3s ease;
+            text-align: center;
+            height: 100%;
+            position: relative;
+            border: 1px solid #1a2a4a;
         }
-        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; }
-        .stat-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 10px;
+        .staff-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important;
+        }
+        .staff-card .name {
+            font-weight: 700;
+            color: #ffd700 !important;
+            font-size: 18px;
+        }
+        .staff-card .department {
+            color: #9ca3af !important;
+            font-size: 14px;
+        }
+        .staff-card .staff-id {
+            color: #6b7280 !important;
+            font-size: 12px;
+        }
+        .staff-card .badge-active {
+            background: rgba(16, 185, 129, 0.2) !important;
+            color: #6ee7b7 !important;
+            font-size: 11px;
+            padding: 3px 12px;
+            border-radius: 20px;
+        }
+        .staff-card .text-muted { color: #6b7280 !important; }
+        
+        /* ============================================================
+           STAFF AVATAR / ICON
+           ============================================================ */
+        .staff-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-size: 32px;
             color: white;
-            flex-shrink: 0;
+            margin: 0 auto 15px;
+            font-weight: 700;
+            overflow: hidden;
+            border: 3px solid #1a2a4a;
+            background: linear-gradient(135deg, #667eea, #764ba2);
         }
-        .stat-number { font-size: 20px; font-weight: 700; color: #e0e0e0; margin: 0; }
-        .stat-label { font-size: 11px; color: #808090; margin: 0; }
+        .staff-avatar .no-photo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+        }
+        
+        /* Card UID Badge */
+        .card-uid-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+        .card-uid-badge.has-card {
+            background: rgba(16, 185, 129, 0.2) !important;
+            color: #34d399 !important;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .card-uid-badge.no-card {
+            background: rgba(239, 68, 68, 0.15) !important;
+            color: #f87171 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
         
         /* ============================================================
-           DARK FORM SECTIONS
+           STAT CARDS
            ============================================================ */
-        .form-section {
+        .staff-stat {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
-            border-radius: 12px !important;
-            padding: 20px 25px;
-            margin-bottom: 16px;
+            border-radius: 16px !important;
+            padding: 18px 20px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+            transition: transform 0.3s ease;
+            text-align: center;
         }
-        .form-section h5 {
-            color: #93c5fd !important;
+        .staff-stat:hover { transform: translateY(-4px); }
+        .staff-stat .number {
+            font-size: 32px;
             font-weight: 700;
-            border-bottom: 2px solid #ffd700;
-            padding-bottom: 8px;
-            margin-bottom: 16px;
-            font-size: 15px;
+            color: #ffd700 !important;
         }
-        .form-label {
-            font-weight: 500;
-            font-size: 12px;
-            color: #b0b0c0 !important;
-        }
-        .form-control, .form-select {
-            background: #1a1a2e !important;
-            border: 1px solid #2a2a4a !important;
-            border-radius: 8px;
-            padding: 8px 12px;
+        .staff-stat .label {
             font-size: 13px;
-            color: #e0e0e0 !important;
-            height: 38px;
+            color: #6b7280 !important;
+        }
+        
+        /* ============================================================
+           BUTTONS
+           ============================================================ */
+        .btn-add {
+            background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
+            border: none !important;
+            color: #0a0e1a !important;
+            padding: 10px 25px;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-add:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3) !important;
+            color: #0a0e1a !important;
+        }
+        .btn-add i { margin-right: 8px; }
+        
+        .btn-card {
+            background: rgba(139, 92, 246, 0.2) !important;
+            color: #a78bfa !important;
+            border: 1px solid rgba(139, 92, 246, 0.3) !important;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-card:hover {
+            background: rgba(139, 92, 246, 0.3) !important;
+            color: #a78bfa !important;
+        }
+        
+        .btn-card-remove {
+            background: rgba(239, 68, 68, 0.2) !important;
+            color: #fca5a5 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3) !important;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-card-remove:hover {
+            background: rgba(239, 68, 68, 0.3) !important;
+            color: #fca5a5 !important;
+        }
+        
+        .btn-outline-primary {
+            color: #ffd700 !important;
+            border-color: rgba(255, 215, 0, 0.3) !important;
+        }
+        .btn-outline-primary:hover {
+            background: rgba(255, 215, 0, 0.15) !important;
+            color: #ffd700 !important;
+        }
+        .btn-outline-danger {
+            color: #fca5a5 !important;
+            border-color: rgba(239, 68, 68, 0.3) !important;
+        }
+        .btn-outline-danger:hover {
+            background: rgba(239, 68, 68, 0.15) !important;
+            color: #fca5a5 !important;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
+            border: none !important;
+            color: #0a0e1a !important;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+            color: #0a0e1a !important;
+        }
+        
+        .btn-secondary {
+            background: #1a2a4a !important;
+            border: none !important;
+            color: #e5e7eb !important;
+        }
+        .btn-secondary:hover {
+            background: #2d3548 !important;
+            color: #e5e7eb !important;
+        }
+        
+        .staff-actions {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        
+        .staff-id-badge {
+            background: rgba(255, 215, 0, 0.1);
+            color: #ffd700;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            border: 1px solid rgba(255, 215, 0, 0.15);
+        }
+        
+        /* ============================================================
+           MODAL - DARK
+           ============================================================ */
+        .modal-content {
+            background: #131926 !important;
+            border-radius: 16px;
+            border: 1px solid #1a2a4a;
+        }
+        .modal-header { border-bottom: 1px solid #1a2a4a; }
+        .modal-footer { border-top: 1px solid #1a2a4a; }
+        .modal-title { color: #ffd700 !important; }
+        .modal-title i { color: #ffd700 !important; }
+        
+        /* ============================================================
+           FORM ELEMENTS
+           ============================================================ */
+        .form-control, .form-select {
+            background: #0d1220 !important;
+            border: 1px solid #1a2a4a !important;
+            color: #e5e7eb !important;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 14px;
         }
         .form-control:focus, .form-select:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
-            background: #1a1a2e !important;
-            color: #e0e0e0 !important;
+            border-color: #ffd700 !important;
+            box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15) !important;
+            background: #0d1220 !important;
+            color: #e5e7eb !important;
         }
-        .form-control::placeholder { color: #606070 !important; }
-        .required { color: #f87171 !important; }
-        
-        /* ============================================================
-           DARK BUTTONS
-           ============================================================ */
-        .btn-submit {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            border: none !important;
-            padding: 8px 25px;
-            border-radius: 10px;
-            font-weight: 600;
+        .form-control::placeholder { color: #6b7280 !important; }
+        .form-label {
+            font-weight: 500;
             font-size: 13px;
-            color: white !important;
-            transition: all 0.3s ease;
+            color: #d1d5db !important;
         }
-        .btn-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(26,58,106,0.4);
-            color: white !important;
-        }
-        .btn-submit:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-        .btn-outline-secondary {
-            border-color: #2a2a4a !important;
-            color: #808090 !important;
-            font-size: 12px;
-            padding: 5px 12px;
+        .form-text { color: #6b7280 !important; }
+        
+        /* Available cards list */
+        .available-card-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 8px 10px;
+            background: #0d1220 !important;
             border-radius: 8px;
-        }
-        .btn-outline-secondary:hover {
-            background: #2a2a4a !important;
-            color: #e0e0e0 !important;
-        }
-        .btn-sm-custom {
-            padding: 2px 8px;
-            font-size: 10px;
-            border-radius: 6px;
-            border: none !important;
-            transition: all 0.3s ease;
-        }
-        .btn-sm-custom:hover { transform: translateY(-1px); }
-        .btn-warning {
-            background: #4a3a1a !important;
-            color: #fbbf24 !important;
-        }
-        .btn-warning:hover { background: #5a4a2a !important; color: #fcd34d !important; }
-        .btn-success {
-            background: #065f46 !important;
-            color: #34d399 !important;
-        }
-        .btn-success:hover { background: #0a7a5a !important; color: #6ee7b7 !important; }
-        .btn-danger-sm {
-            background: #7a2a2a !important;
-            color: #f87171 !important;
-            border: none !important;
-            padding: 2px 8px;
-            font-size: 10px;
-            border-radius: 6px;
-        }
-        .btn-danger-sm:hover { background: #9a3a3a !important; color: #fca5a5 !important; }
-        .btn-primary-sm {
-            background: #1a3a6a !important;
-            border: 1px solid #1a3a6a !important;
-            color: white !important;
-            padding: 2px 8px;
-            font-size: 10px;
-            border-radius: 6px;
-        }
-        .btn-primary-sm:hover {
-            background: #2a5a9a !important;
-            border-color: #2a5a9a !important;
-            color: white !important;
-        }
-        
-        /* ============================================================
-           DARK CARD ITEMS
-           ============================================================ */
-        .card-item {
-            background: #111827 !important;
             border: 1px solid #1a2a4a !important;
-            border-radius: 10px !important;
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            border-left: 3px solid #10b981;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
-            transition: all 0.3s ease;
+            min-height: 36px;
         }
-        .card-item:hover {
-            transform: translateX(4px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.4) !important;
-        }
-        .card-item .name {
-            font-weight: 600;
-            color: #e0e0e0 !important;
-            font-size: 13px;
-        }
-        .card-item .detail {
+        .available-card-list .card-item-mini {
+            display: inline-block;
+            padding: 2px 10px;
+            background: #0d1220 !important;
+            border-radius: 6px;
+            font-family: monospace;
             font-size: 11px;
-            color: #808090 !important;
+            font-weight: 600;
+            border: 2px solid #1a2a4a !important;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #e0e0e0 !important;
         }
-        .card-item .status-badge {
-            font-size: 9px;
-            padding: 2px 8px;
-            border-radius: 20px;
+        .available-card-list .card-item-mini:hover {
+            border-color: #ffd700 !important;
+            background: #1a2a4a !important;
+            transform: scale(1.05);
         }
-        .card-item .status-active {
-            background: #065f46 !important;
-            color: #34d399 !important;
-        }
-        .card-item .status-inactive {
-            background: #2a2a3a !important;
-            color: #808090 !important;
-        }
-        .card-item.inactive {
-            border-left-color: #6b7280 !important;
-            opacity: 0.7;
+        .available-card-list .card-item-mini.selected {
+            border-color: #ffd700 !important;
+            background: #1a2a4a !important;
+            color: #ffd700 !important;
+            box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15);
         }
         
         /* ============================================================
-           DARK TABLE
-           ============================================================ */
-        .table {
-            color: #e0e0e0 !important;
-            font-size: 13px;
-            background: #111827 !important;
-        }
-        .table th {
-            color: #808090 !important;
-            border-bottom: 2px solid #1a2a4a !important;
-            font-size: 12px;
-            background: #0d1528 !important;
-        }
-        .table td {
-            border-bottom: 1px solid #1a2a4a !important;
-            background: #111827 !important;
-            color: #e0e0e0 !important;
-        }
-        .table-hover tbody tr:hover td {
-            background: rgba(255,255,255,0.03) !important;
-        }
-        .table .text-muted { color: #6b7280 !important; }
-        .table-responsive {
-            background: #111827 !important;
-            border-radius: 8px;
-            border: 1px solid #1a2a4a !important;
-            overflow: hidden;
-        }
-        
-        /* ============================================================
-           DARK ALERTS
+           ALERTS
            ============================================================ */
         .alert-success {
-            background: #065f46 !important;
-            border-color: #065f46 !important;
+            background: rgba(16, 185, 129, 0.15) !important;
+            border-color: #10b981 !important;
             color: #6ee7b7 !important;
-            font-size: 13px;
-            padding: 10px 16px;
-            border-radius: 10px;
         }
         .alert-danger {
-            background: #7a2a2a !important;
-            border-color: #7a2a2a !important;
-            color: #f87171 !important;
-            font-size: 13px;
-            padding: 10px 16px;
-            border-radius: 10px;
+            background: rgba(239, 68, 68, 0.15) !important;
+            border-color: #ef4444 !important;
+            color: #fca5a5 !important;
         }
-        .alert-warning {
-            background: #4a3a1a !important;
-            border-color: #4a3a1a !important;
-            color: #fbbf24 !important;
-            font-size: 13px;
-            padding: 10px 16px;
-            border-radius: 10px;
-        }
-        .alert-info {
-            background: #1a2a4a !important;
-            border-color: #1a3a6a !important;
-            color: #93c5fd !important;
-            font-size: 13px;
-            padding: 10px 16px;
-            border-radius: 10px;
-        }
-        .alert .btn-close { filter: invert(1) !important; }
-        
-        /* ============================================================
-           PAGE HEADER
-           ============================================================ */
-        .page-header {
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #1a2a4a;
-        }
-        .page-header h1 {
-            font-size: 20px;
-            font-weight: 600;
-            color: #e0e0e0;
-        }
-        .page-header h1 i {
-            color: #1a3a6a;
-        }
-        
-        /* ============================================================
-           PAGINATION - DARK
-           ============================================================ */
-        .pagination-container {
-            background: #111827 !important;
-            border: 1px solid #1a2a4a !important;
-            border-radius: 12px !important;
-            padding: 10px 18px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-            margin-top: 15px;
-        }
-        .pagination .page-link {
-            border-radius: 8px;
-            margin: 0 2px;
-            border: none;
-            color: #9090a0 !important;
-            background: transparent !important;
-            font-weight: 500;
-            padding: 5px 12px;
-            font-size: 12px;
-            transition: all 0.3s ease;
-        }
-        .pagination .page-link:hover {
-            background: #2a2a4a !important;
-            color: #e0e0e0 !important;
-        }
-        .pagination .page-item.active .page-link {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
-        }
-        .pagination .page-item.disabled .page-link {
-            color: #4a4a5a !important;
-        }
-        .page-info { color: #808090 !important; font-size: 12px; }
-        .page-info strong { color: #93c5fd !important; }
-        
-        /* ============================================================
-           PER PAGE SELECTOR - DARK
-           ============================================================ */
-        .per-page-selector select {
-            background: #1a1a2e !important;
-            border: 1px solid #2a2a4a !important;
-            color: #e0e0e0 !important;
-            border-radius: 6px;
-            padding: 3px 6px;
-            font-size: 12px;
-        }
-        .per-page-selector select:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
-        }
-        .per-page-selector label { color: #808090 !important; font-size: 12px; margin: 0; }
+        .btn-close { filter: invert(1) !important; }
         
         /* ============================================================
            BORDER & MISC
            ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
-        .text-muted { color: #808090 !important; }
-        .text-success { color: #34d399 !important; }
-        .text-warning { color: #fbbf24 !important; }
-        .text-danger { color: #f87171 !important; }
+        .text-muted { color: #6b7280 !important; }
         
-        /* ============================================================
-           MODAL - DARK
-           ============================================================ */
-        .modal-content {
+        .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
-            border-radius: 12px !important;
+            border-radius: 16px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+            margin-bottom: 20px;
         }
-        .modal-header {
-            border-bottom: 1px solid #1a2a4a !important;
-        }
-        .modal-header .modal-title {
-            color: #e0e0e0 !important;
-        }
-        .modal-header .btn-close {
-            filter: invert(1) !important;
-        }
-        .modal-body {
-            color: #e0e0e0 !important;
-        }
-        .modal-footer {
-            border-top: 1px solid #1a2a4a !important;
+        .card .card-body { background: transparent !important; }
+        .card h5 { color: #9ca3af !important; }
+        
+        .section-header h5 {
+            margin: 0;
+            color: #ffd700 !important;
+            font-weight: 700;
         }
         
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
-        @media (max-width: 768px) {
-            .sidebar {
-                position: fixed !important;
-                top: 56px !important;
-                bottom: 0 !important;
-                left: -260px !important;
-                width: 260px !important;
-                transition: left 0.3s ease !important;
-                z-index: 1040 !important;
-            }
-            .sidebar.show { left: 0 !important; }
-            .main-content {
-                margin-left: 0 !important;
-                padding: 12px 15px !important;
-                min-height: calc(100vh - 56px - 40px) !important;
-            }
-            .footer {
-                margin-left: 0 !important;
-                padding: 8px 15px !important;
-                width: 100% !important;
-            }
-            .form-section { padding: 15px; }
-            .stat-card { padding: 12px; }
-            .stat-number { font-size: 18px; }
-            .stat-icon { width: 36px; height: 36px; font-size: 14px; }
-            .pagination-container .row {
-                flex-direction: column;
-                gap: 8px;
-            }
-            .pagination-container .col-md-6 {
-                width: 100%;
-                text-align: center !important;
-            }
-            .pagination {
-                justify-content: center !important;
-            }
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #34d399;
+            animation: pulse 1.5s infinite;
+            margin-right: 4px;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
         }
         
         /* ============================================================
            SCROLLBAR
            ============================================================ */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0a0e1a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #1e2a3a;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #ffd700;
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0e1a; }
+        ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
+        
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 768px) {
+            body {
+                padding-top: 60px !important;
+            }
+            
+            .navbar {
+                height: 60px !important;
+            }
+            
+            .sidebar {
+                padding-top: 70px !important;
+                position: fixed;
+                top: 60px;
+                bottom: 0;
+                left: -280px;
+                width: 280px;
+                transition: left 0.3s ease;
+                z-index: 999;
+                min-height: calc(100vh - 60px) !important;
+            }
+            .sidebar.show { left: 0; }
+            
+            .staff-card { padding: 15px; }
+            .staff-card .name { font-size: 16px; }
+            .staff-avatar { width: 60px; height: 60px; font-size: 24px; }
         }
         
-        @media print {
-            .no-print { display: none !important; }
-            .footer { display: none !important; }
-            .navbar { display: none !important; }
-            .sidebar { display: none !important; }
-            .main-content { margin: 0 !important; padding: 20px !important; }
-            .stat-card { background: #f8f9fa !important; border: 1px solid #ddd !important; }
-            body { background: #fff !important; color: #000 !important; }
+        @media (max-width: 576px) {
+            .staff-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            .staff-actions .btn {
+                width: 100%;
+                text-align: center;
+            }
         }
     </style>
 </head>
-<body class="<?php echo $darkModeClass; ?>">
+<body>
     
     <?php include '../includes/navbar.php'; ?>
     
-    <div class="page-wrapper">
-        <div class="content-wrapper">
+    <div class="container-fluid">
+        <div class="row">
             <?php include '../includes/sidebar.php'; ?>
             
-            <!-- MAIN CONTENT -->
-            <main class="main-content">
-                <!-- Page Header -->
-                <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
-                    <h1><i class="fas fa-id-badge me-2"></i>Staff Card</h1>
-                    <button class="btn btn-submit btn-sm" data-bs-toggle="modal" data-bs-target="#addStaffModal">
-                        <i class="fas fa-user-plus me-1"></i> Add Staff
-                    </button>
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                
+                <!-- ============================================================
+                HEADER
+                ============================================================ -->
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">
+                        <i class="fas fa-id-card me-2" style="color: #ffd700;"></i>
+                        Staff Cards
+                        <span class="badge bg-secondary ms-2"><?php echo $totalStaff; ?> total</span>
+                    </h1>
+                    <div>
+                        <span class="badge bg-success me-2">
+                            <span class="live-indicator"></span> Live
+                        </span>
+                        <span class="badge bg-secondary" id="lastUpdate">Updated: <?php echo date('h:i A'); ?></span>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn btn-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#addStaffModal">
+                            <i class="fas fa-user-plus me-1"></i> Add Staff
+                        </button>
+                    </div>
                 </div>
 
                 <?php if (!empty($success)): ?>
                     <div class="alert alert-success alert-dismissible fade show" role="alert">
-                        <i class="fas fa-check-circle me-2"></i> <?php echo $success; ?>
+                        <i class="fas fa-check-circle me-2"></i> 
+                        <?php echo $success; ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 <?php endif; ?>
@@ -795,236 +806,230 @@ if (isset($_SESSION['admin_id'])) {
                     </div>
                 <?php endif; ?>
 
-                <!-- Stats -->
-                <div class="row g-2 mb-3">
+                <!-- ============================================================
+                STATISTICS
+                ============================================================ -->
+                <div class="row g-3 mb-4">
                     <div class="col-4 col-sm-4 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #10b981;"><i class="fas fa-users"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $totalStaff; ?></div>
-                                <div class="stat-label">Total Staff</div>
-                            </div>
+                        <div class="staff-stat">
+                            <div class="number"><?php echo $totalStaff; ?></div>
+                            <div class="label">Total Staff</div>
                         </div>
                     </div>
                     <div class="col-4 col-sm-4 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #667eea;"><i class="fas fa-user-check"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $activeStaff; ?></div>
-                                <div class="stat-label">Active</div>
-                            </div>
+                        <div class="staff-stat">
+                            <div class="number"><?php echo $hasCardCount; ?></div>
+                            <div class="label">With Card</div>
                         </div>
                     </div>
                     <div class="col-4 col-sm-4 col-xl-3">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #6b7280;"><i class="fas fa-user-slash"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $inactiveStaff; ?></div>
-                                <div class="stat-label">Inactive</div>
-                            </div>
+                        <div class="staff-stat">
+                            <div class="number"><?php echo $noCardCount; ?></div>
+                            <div class="label">No Card</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- ============================================================
-                STAFF LIST WITH PAGINATION
+                STAFF LIST
                 ============================================================ -->
-                <div class="form-section">
-                    <h5><i class="fas fa-list me-2"></i>Staff Members</h5>
-                    
-                    <?php if (empty($staffList)): ?>
-                        <p class="text-muted text-center py-2">
-                            <i class="fas fa-info-circle me-2"></i>
-                            No staff members found. Click "Add Staff" to get started.
-                        </p>
-                    <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Name</th>
-                                        <th>Position</th>
-                                        <th>Email</th>
-                                        <th>Phone</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php $i = $offset + 1; foreach ($staffList as $staff): ?>
-                                        <tr>
-                                            <td><?php echo $i++; ?></td>
-                                            <td><strong><?php echo htmlspecialchars($staff['full_name']); ?></strong></td>
-                                            <td><?php echo htmlspecialchars($staff['position']); ?></td>
-                                            <td><?php echo htmlspecialchars($staff['email'] ?? 'N/A'); ?></td>
-                                            <td><?php echo htmlspecialchars($staff['phone'] ?? 'N/A'); ?></td>
-                                            <td>
-                                                <span class="status-badge <?php echo $staff['status'] == 'active' ? 'status-active' : 'status-inactive'; ?>">
-                                                    <?php echo ucfirst($staff['status']); ?>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <button class="btn btn-primary-sm" data-bs-toggle="modal" data-bs-target="#editStaffModal<?php echo $staff['id']; ?>">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <?php if ($staff['status'] == 'active'): ?>
-                                                    <a href="?toggle_status=<?php echo $staff['id']; ?>&status=inactive" 
-                                                       class="btn btn-warning btn-sm-custom"
-                                                       onclick="return confirm('Deactivate this staff?')">
-                                                        <i class="fas fa-pause"></i>
-                                                    </a>
-                                                <?php else: ?>
-                                                    <a href="?toggle_status=<?php echo $staff['id']; ?>&status=active" 
-                                                       class="btn btn-success btn-sm-custom"
-                                                       onclick="return confirm('Activate this staff?')">
-                                                        <i class="fas fa-play"></i>
-                                                    </a>
-                                                <?php endif; ?>
-                                                <a href="?delete=<?php echo $staff['id']; ?>" 
-                                                   class="btn btn-danger-sm"
-                                                   onclick="return confirm('Delete this staff member permanently?')">
-                                                    <i class="fas fa-trash"></i>
-                                                </a>
-                                            </td>
-                                        </tr>
-                                        
-                                        <!-- ============================================================
-                                        EDIT STAFF MODAL
-                                        ============================================================ -->
-                                        <div class="modal fade" id="editStaffModal<?php echo $staff['id']; ?>" tabindex="-1">
-                                            <div class="modal-dialog modal-dialog-centered">
-                                                <div class="modal-content">
-                                                    <form method="POST" action="">
-                                                        <div class="modal-header">
-                                                            <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Staff</h5>
-                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                                        </div>
-                                                        <div class="modal-body">
-                                                            <input type="hidden" name="staff_id" value="<?php echo $staff['id']; ?>">
-                                                            <input type="hidden" name="update_staff" value="1">
-                                                            
-                                                            <div class="mb-2">
-                                                                <label class="form-label">Full Name <span class="required">*</span></label>
-                                                                <input type="text" class="form-control" name="full_name" value="<?php echo htmlspecialchars($staff['full_name']); ?>" required>
-                                                            </div>
-                                                            <div class="mb-2">
-                                                                <label class="form-label">Position <span class="required">*</span></label>
-                                                                <input type="text" class="form-control" name="position" value="<?php echo htmlspecialchars($staff['position']); ?>" required>
-                                                            </div>
-                                                            <div class="mb-2">
-                                                                <label class="form-label">Email</label>
-                                                                <input type="email" class="form-control" name="email" value="<?php echo htmlspecialchars($staff['email'] ?? ''); ?>">
-                                                            </div>
-                                                            <div class="mb-2">
-                                                                <label class="form-label">Phone</label>
-                                                                <input type="text" class="form-control" name="phone" value="<?php echo htmlspecialchars($staff['phone'] ?? ''); ?>">
-                                                            </div>
-                                                            <div class="mb-2">
-                                                                <label class="form-label">Status</label>
-                                                                <select class="form-select" name="status">
-                                                                    <option value="active" <?php echo $staff['status'] == 'active' ? 'selected' : ''; ?>>Active</option>
-                                                                    <option value="inactive" <?php echo $staff['status'] == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                        <div class="modal-footer">
-                                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                            <button type="submit" class="btn btn-submit">Update Staff</button>
-                                                        </div>
-                                                    </form>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                <div class="section-header mb-3">
+                    <h5><i class="fas fa-list me-2"></i>Staff Cards</h5>
+                    <small class="text-muted ms-2">
+                        Next ID: <strong class="text-warning"><?php echo $nextStaffId; ?></strong>
+                    </small>
+                </div>
+
+                <?php if (empty($staffList)): ?>
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No staff members found</h5>
+                            <p class="text-muted">Click "Add Staff" to add a staff member</p>
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addStaffModal">
+                                <i class="fas fa-user-plus me-1"></i> Add Staff
+                            </button>
                         </div>
-                        
-                        <!-- ============================================================
-                        PAGINATION WITH SHOW ENTRIES
-                        ============================================================ -->
-                        <?php if ($totalPages > 1): ?>
-                        <div class="pagination-container">
-                            <div class="row align-items-center">
-                                <div class="col-md-6">
-                                    <div class="page-info">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalStaff); ?> of <?php echo $totalStaff; ?> staff
-                                        <span class="mx-1 text-muted">|</span>
-                                        <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
+                    </div>
+                <?php else: ?>
+                    <div class="row g-4">
+                        <?php foreach ($staffList as $staff): ?>
+                            <div class="col-md-4 col-lg-3">
+                                <div class="staff-card">
+                                    <!-- Staff Avatar -->
+                                    <div class="staff-avatar">
+                                        <?php 
+                                            $name = $staff['full_name'] ?? 'Staff';
+                                            $initials = '';
+                                            $parts = explode(' ', $name);
+                                            foreach ($parts as $p) {
+                                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                                            }
+                                            echo '<div class="no-photo">' . substr($initials, 0, 2) . '</div>';
+                                        ?>
                                     </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-                                        <!-- Per Page Selector -->
-                                        <div class="per-page-selector d-flex align-items-center gap-1">
-                                            <label>Show:</label>
-                                            <select onchange="changePerPage(this.value)">
-                                                <?php foreach ($perPageOptions as $option): ?>
-                                                    <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                                        <?php echo $option; ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
+                                    
+                                    <div class="name"><?php echo htmlspecialchars($staff['full_name']); ?></div>
+                                    <div class="department"><?php echo htmlspecialchars($staff['department'] ?? 'Staff'); ?></div>
+                                    <div class="staff-id">
+                                        <span class="staff-id-badge">
+                                            <?php echo htmlspecialchars($staff['staff_id_number']); ?>
+                                        </span>
+                                    </div>
+                                    
+                                    <!-- Card UID Display -->
+                                    <div class="mt-2">
+                                        <?php if (!empty($staff['card_uid'])): ?>
+                                            <span class="card-uid-badge has-card">
+                                                <i class="fas fa-id-card me-1"></i>
+                                                <?php echo htmlspecialchars($staff['card_uid']); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="card-uid-badge no-card">
+                                                <i class="fas fa-times-circle me-1"></i>
+                                                No Card
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    
+                                    <div class="mt-2">
+                                        <span class="text-muted small">
+                                            <i class="fas fa-envelope me-1"></i>
+                                            <?php echo htmlspecialchars($staff['email']); ?>
+                                        </span>
+                                    </div>
+                                    
+                                    <!-- Staff Actions -->
+                                    <div class="staff-actions">
+                                        <button type="button" 
+                                                class="btn btn-card"
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#cardModal<?php echo $staff['staff_id']; ?>">
+                                            <i class="fas fa-id-card me-1"></i> Card
+                                        </button>
                                         
-                                        <!-- Pagination -->
-                                        <nav aria-label="Page navigation">
-                                            <ul class="pagination justify-content-end mb-0">
-                                                <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=1<?php echo '&per_page=' . $perPage; ?>">
-                                                        <i class="fas fa-angle-double-left"></i>
-                                                    </a>
-                                                </li>
-                                                <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                        <i class="fas fa-angle-left"></i>
-                                                    </a>
-                                                </li>
-                                                
-                                                <?php
-                                                $startPage = max(1, $page - 2);
-                                                $endPage = min($totalPages, $page + 2);
-                                                if ($startPage > 1) {
-                                                    echo '<li class="page-item"><span class="page-link">...</span></li>';
-                                                }
-                                                for ($i = $startPage; $i <= $endPage; $i++):
-                                                ?>
-                                                    <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                        <a class="page-link" href="?page=<?php echo $i; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                            <?php echo $i; ?>
-                                                        </a>
-                                                    </li>
-                                                <?php endfor; ?>
-                                                <?php if ($endPage < $totalPages): ?>
-                                                    <li class="page-item"><span class="page-link">...</span></li>
-                                                <?php endif; ?>
-                                                
-                                                <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                        <i class="fas fa-angle-right"></i>
-                                                    </a>
-                                                </li>
-                                                <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                        <i class="fas fa-angle-double-right"></i>
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </nav>
+                                        <?php if (!empty($staff['card_uid'])): ?>
+                                            <a href="?remove_card=<?php echo $staff['staff_id']; ?>" 
+                                               class="btn btn-card-remove"
+                                               onclick="return confirm('Remove card from <?php echo $staff['full_name']; ?>?')">
+                                                <i class="fas fa-times me-1"></i> Remove
+                                            </a>
+                                        <?php endif; ?>
+                                        
+                                        <a href="edit-staff.php?id=<?php echo $staff['staff_id']; ?>" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="?delete=<?php echo $staff['staff_id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this staff?')">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        <?php endif; ?>
-                    <?php endif; ?>
-                </div>
 
+                            <!-- ============================================================
+                            CARD UID MODAL
+                            ============================================================ -->
+                            <div class="modal fade" id="cardModal<?php echo $staff['staff_id']; ?>" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">
+                                                <i class="fas fa-id-card me-2"></i>
+                                                Staff Card - <?php echo htmlspecialchars($staff['full_name']); ?>
+                                            </h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="mb-3 text-center">
+                                                <?php 
+                                                    $name = $staff['full_name'] ?? 'Staff';
+                                                    $initials = '';
+                                                    $parts = explode(' ', $name);
+                                                    foreach ($parts as $p) {
+                                                        if (!empty($p)) $initials .= strtoupper($p[0]);
+                                                    }
+                                                ?>
+                                                <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:32px;font-weight:700;color:white;">
+                                                    <?php echo substr($initials, 0, 2); ?>
+                                                </div>
+                                                <div class="mt-2">
+                                                    <strong><?php echo htmlspecialchars($staff['full_name']); ?></strong>
+                                                </div>
+                                                <div class="text-muted small">
+                                                    <?php echo htmlspecialchars($staff['staff_id_number']); ?>
+                                                </div>
+                                            </div>
+                                            
+                                            <hr>
+                                            
+                                            <form method="POST" action="">
+                                                <input type="hidden" name="staff_id" value="<?php echo $staff['staff_id']; ?>">
+                                                <input type="hidden" name="update_card" value="1">
+                                                
+                                                <div class="mb-2">
+                                                    <label class="form-label">Current Card UID</label>
+                                                    <div class="form-control" style="background:#0d1220 !important;border:1px solid #1a2a4a !important;border-radius:10px;padding:10px 14px;color:#e5e7eb !important;">
+                                                        <?php if (!empty($staff['card_uid'])): ?>
+                                                            <span class="text-success"><i class="fas fa-check-circle me-1"></i> <?php echo htmlspecialchars($staff['card_uid']); ?></span>
+                                                        <?php else: ?>
+                                                            <span class="text-danger"><i class="fas fa-times-circle me-1"></i> No card assigned</span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+                                                
+                                                <?php if (!empty($availableCards)): ?>
+                                                    <div class="mb-2">
+                                                        <label class="form-label">Available Cards (Click to auto-fill)</label>
+                                                        <div class="available-card-list" id="availableCardList<?php echo $staff['staff_id']; ?>">
+                                                            <?php foreach ($availableCards as $card): ?>
+                                                                <span class="card-item-mini" data-uid="<?php echo $card['card_uid']; ?>" onclick="selectCard(this, 'cardUid<?php echo $staff['staff_id']; ?>')">
+                                                                    <?php echo $card['card_uid']; ?>
+                                                                </span>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                        <small class="text-muted">Click a card above to auto-fill the UID</small>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <div class="alert alert-warning">
+                                                        <i class="fas fa-info-circle me-1"></i>
+                                                        No available cards in inventory.
+                                                    </div>
+                                                <?php endif; ?>
+                                                
+                                                <div class="mb-2">
+                                                    <label class="form-label">New Card UID</label>
+                                                    <input type="text" class="form-control" name="card_uid" id="cardUid<?php echo $staff['staff_id']; ?>" placeholder="Enter new card UID">
+                                                    <div class="form-text text-muted small">
+                                                        <i class="fas fa-info-circle me-1"></i>
+                                                        Enter UID or click an available card above
+                                                    </div>
+                                                </div>
+                                                
+                                                <button type="submit" class="btn btn-primary w-100">
+                                                    <i class="fas fa-save me-1"></i> Update Card
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+
+                <!-- ============================================================
+                FOOTER
+                ============================================================ -->
+                <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
+                    &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
+                    <span class="mx-2">|</span>
+                    <span id="serverTime">Server Time: <?php echo date('F d, Y h:i A'); ?></span>
+                    <span class="mx-2">|</span>
+                    <span><?php echo $hasCardCount; ?> with card, <?php echo $noCardCount; ?> without card</span>
+                </footer>
             </main>
         </div>
-
-    <?php include '../includes/footer.php'; ?>
+    </div>
 
     <!-- ============================================================
     ADD STAFF MODAL
@@ -1032,51 +1037,109 @@ if (isset($_SESSION['admin_id'])) {
     <div class="modal fade" id="addStaffModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <form method="POST" action="">
-                    <div class="modal-header">
-                        <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Add New Staff</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-user-plus me-2"></i>
+                        Add New Staff
+                        <span class="badge bg-secondary ms-2"><?php echo $nextStaffId; ?></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" action="">
                         <input type="hidden" name="add_staff" value="1">
                         
                         <div class="mb-2">
-                            <label class="form-label">Full Name <span class="required">*</span></label>
+                            <label class="form-label">Full Name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" name="full_name" placeholder="Enter full name" required>
                         </div>
                         <div class="mb-2">
-                            <label class="form-label">Position <span class="required">*</span></label>
-                            <input type="text" class="form-control" name="position" placeholder="e.g., Security Guard, Admin, Maintenance" required>
+                            <label class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" name="email" placeholder="staff@example.com" required>
                         </div>
                         <div class="mb-2">
-                            <label class="form-label">Email</label>
-                            <input type="email" class="form-control" name="email" placeholder="staff@example.com">
+                            <label class="form-label">Department</label>
+                            <input type="text" class="form-control" name="department" placeholder="e.g., Security, Admin, Maintenance">
                         </div>
+                        
+                        <?php if (!empty($availableCards)): ?>
+                            <div class="mb-2">
+                                <label class="form-label">Available Cards (Click to auto-fill)</label>
+                                <div class="available-card-list" id="availableCardListAdd">
+                                    <?php foreach ($availableCards as $card): ?>
+                                        <span class="card-item-mini" data-uid="<?php echo $card['card_uid']; ?>" onclick="selectCard(this, 'cardUidAdd')">
+                                            <?php echo $card['card_uid']; ?>
+                                        </span>
+                                    <?php endforeach; ?>
+                                </div>
+                                <small class="text-muted">Click a card above to auto-fill the UID</small>
+                            </div>
+                        <?php endif; ?>
+                        
                         <div class="mb-2">
-                            <label class="form-label">Phone</label>
-                            <input type="text" class="form-control" name="phone" placeholder="09123456789">
+                            <label class="form-label">Card UID</label>
+                            <input type="text" class="form-control" name="card_uid" id="cardUidAdd" placeholder="Enter card UID (optional)">
+                            <div class="form-text text-muted small">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Leave empty to add staff without card, or assign a card above
+                            </div>
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-submit">Add Staff</button>
-                    </div>
-                </form>
+                        
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-save me-1"></i> Add Staff
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
+
+    <?php include '../includes/footer.php'; ?>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
-        // CHANGE PER PAGE
+        // SELECT CARD FROM AVAILABLE LIST - AUTO-FILL
         // ============================================================
-        function changePerPage(value) {
-            const urlParams = new URLSearchParams(window.location.search);
-            urlParams.set('per_page', value);
-            urlParams.set('page', 1);
-            window.location.href = '?' + urlParams.toString();
+        function selectCard(element, inputId) {
+            const uid = element.dataset.uid;
+            document.getElementById(inputId).value = uid;
+            
+            // Remove selected class from all cards in the same list
+            const parentList = element.closest('.available-card-list');
+            parentList.querySelectorAll('.card-item-mini').forEach(el => {
+                el.classList.remove('selected');
+            });
+            element.classList.add('selected');
         }
+
+        // ============================================================
+        // UPDATE TIME
+        // ============================================================
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true 
+            });
+            const updateElement = document.getElementById('lastUpdate');
+            if (updateElement) {
+                updateElement.textContent = 'Updated: ' + timeString;
+            }
+            const serverTimeElement = document.getElementById('serverTime');
+            if (serverTimeElement) {
+                const dateString = now.toLocaleDateString('en-US', { 
+                    month: 'long', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                });
+                serverTimeElement.textContent = 'Server Time: ' + dateString + ' ' + timeString;
+            }
+        }
+
+        setInterval(updateLastUpdateTime, 10000);
+        document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
         
         // ============================================================
         // SIDEBAR TOGGLE
