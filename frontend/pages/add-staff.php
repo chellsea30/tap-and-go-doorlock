@@ -7,12 +7,13 @@
 session_start();
 
 // ============================================================
-// FIXED: Correct include paths from frontend/pages/
+// FIXED: Correct authentication check
 // ============================================================
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
 
-if (!isset($_SESSION['user_type']) || !isset($_SESSION['user_id']) || !isSessionValid()) {
+// FIXED: Use admin_id instead of user_type/user_id
+if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
 }
@@ -31,7 +32,6 @@ function getNextStaffId($conn) {
     $result = $conn->query("SELECT staff_id_number FROM staff_users ORDER BY staff_id DESC LIMIT 1");
     if ($result && $row = $result->fetch_assoc()) {
         $lastId = $row['staff_id_number'];
-        // Extract number from STAFF-001 format
         $num = (int)substr($lastId, 6);
         $nextNum = $num + 1;
         return 'STAFF-' . str_pad($nextNum, 3, '0', STR_PAD_LEFT);
@@ -60,7 +60,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     if (isset($_FILES['profile_photo']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
         $upload_dir = '../../uploads/staff_photos/';
         
-        // Create directory if not exists
         if (!is_dir($upload_dir)) {
             mkdir($upload_dir, 0777, true);
         }
@@ -69,7 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         $file_name = 'staff_' . time() . '_' . uniqid() . '.' . $file_extension;
         $target_file = $upload_dir . $file_name;
         
-        // Check if image file is valid
         $image_info = getimagesize($_FILES['profile_photo']['tmp_name']);
         if ($image_info !== false) {
             $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -119,14 +117,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 }
                 
                 if ($stmt->execute()) {
-                    $success = "Staff added successfully! They can now login with their Staff ID.";
+                    $success = "✅ Staff added successfully!";
                     if (!empty($photo_path)) {
                         $success .= " Profile photo uploaded!";
                     }
-                    logAudit($_SESSION['admin_id'], 'Add Staff', "Added staff: $full_name ($staff_id_number)");
+                    
+                    // Log the activity
+                    if (function_exists('logAudit')) {
+                        logAudit($_SESSION['admin_id'], 'Add Staff', "Added staff: $full_name ($staff_id_number)");
+                    }
                     
                     // Redirect after success
-                    echo '<script>setTimeout(function(){ window.location.href = "staff-info.php"; }, 2000);</script>';
+                    echo '<script>setTimeout(function(){ window.location.href = "staff-info.php?success=1"; }, 2000);</script>';
                 } else {
                     $error = "Failed to add staff: " . $stmt->error;
                 }
@@ -151,9 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         /* ================================================================
            DARK MODE STYLES - NO WHITE BACKGROUNDS
            ================================================================ */
-        * {
-            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-        }
+        * { transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
         
         body {
             background: #0a0e1a !important;
@@ -161,9 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             font-family: 'Inter', sans-serif;
         }
         
-        .container-fluid {
-            background: #0a0e1a !important;
-        }
+        .container-fluid { background: #0a0e1a !important; }
         
         .form-section {
             background: #131926 !important;
@@ -203,14 +201,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             color: #e5e7eb !important;
         }
         
-        .form-control::placeholder {
-            color: #6b7280 !important;
-        }
-        
-        .required {
-            color: #ef4444 !important;
-            margin-left: 2px;
-        }
+        .form-control::placeholder { color: #6b7280 !important; }
+        .required { color: #ef4444 !important; margin-left: 2px; }
         
         .btn-submit {
             background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
@@ -246,21 +238,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             border-color: #ef4444 !important;
             color: #fca5a5 !important;
         }
-        .btn-close {
-            filter: invert(1) !important;
-        }
+        .btn-close { filter: invert(1) !important; }
         
-        .h1, .h2, .h3, .h4, .h5, h1, h2, h3, h4, h5 {
-            color: #e5e7eb !important;
-        }
-        
-        .border-bottom {
-            border-color: #1e2a3a !important;
-        }
-        
-        .text-muted {
-            color: #6b7280 !important;
-        }
+        .h1, .h2, .h3, .h4, .h5, h1, h2, h3, h4, h5 { color: #e5e7eb !important; }
+        .border-bottom { border-color: #1e2a3a !important; }
+        .text-muted { color: #6b7280 !important; }
         
         .info-box {
             background: #0d1220 !important;
@@ -280,7 +262,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             color: #ffd700 !important;
         }
         
-        /* Photo Upload */
         .photo-upload {
             width: 150px;
             height: 180px;
@@ -332,27 +313,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             z-index: 10;
             display: none;
         }
-        .photo-upload.has-image .remove-photo {
-            display: block;
-        }
-        .photo-upload.has-image .upload-placeholder {
-            display: none;
-        }
+        .photo-upload.has-image .remove-photo { display: block; }
+        .photo-upload.has-image .upload-placeholder { display: none; }
         
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 10px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0a0e1a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #1e2a3a;
-            border-radius: 5px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #ffd700;
-        }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #0a0e1a; }
+        ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
         .staff-id-preview {
             background: rgba(255, 215, 0, 0.1);
@@ -366,11 +333,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         
         @media print {
             .no-print { display: none !important; }
-            .form-section { 
-                box-shadow: none !important; 
-                border: 1px solid #ddd !important;
-                background: #fff !important;
-            }
+            .form-section { box-shadow: none !important; border: 1px solid #ddd !important; background: #fff !important; }
             .form-section h5 { color: #1a3a6a !important; border-bottom-color: #1a3a6a !important; }
             body { background: #fff !important; color: #000 !important; }
             .form-control { background: #fff !important; color: #000 !important; border-color: #ddd !important; }
@@ -380,13 +343,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         }
         
         @media (max-width: 768px) {
-            .form-section {
-                padding: 20px;
-            }
-            .photo-upload {
-                width: 120px;
-                height: 150px;
-            }
+            .form-section { padding: 20px; }
+            .photo-upload { width: 120px; height: 150px; }
         }
     </style>
 </head>
@@ -413,8 +371,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                         <div class="mt-2">
                             <small>
                                 <i class="fas fa-info-circle me-1"></i>
-                                The staff member can now login at: 
-                                <a href="../staff/login.php" target="_blank" style="color: #6ee7b7;">Staff Login Page</a>
+                                The staff member can now login using their Staff ID.
                             </small>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
@@ -431,7 +388,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 <div class="form-section">
                     <h5><i class="fas fa-user-tie me-2"></i>Staff Information</h5>
                     
-                    <!-- Info Box -->
                     <div class="info-box mb-4">
                         <div class="row">
                             <div class="col-md-4">
@@ -451,45 +407,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     
                     <form method="POST" action="" enctype="multipart/form-data">
                         <div class="row g-3">
-                            <!-- Staff ID -->
                             <div class="col-md-6">
                                 <label class="form-label">Staff ID Number <span class="required">*</span></label>
                                 <input type="text" class="form-control" name="staff_id_number" placeholder="e.g., STAFF-001" value="<?php echo htmlspecialchars($_POST['staff_id_number'] ?? $nextStaffId); ?>" required>
                                 <small class="text-muted">Auto-generated: <strong class="text-warning"><?php echo $nextStaffId; ?></strong></small>
                             </div>
                             
-                            <!-- Full Name -->
                             <div class="col-md-6">
                                 <label class="form-label">Full Name <span class="required">*</span></label>
                                 <input type="text" class="form-control" name="full_name" placeholder="Enter full name" value="<?php echo htmlspecialchars($_POST['full_name'] ?? ''); ?>" required>
                             </div>
                             
-                            <!-- Email -->
                             <div class="col-md-6">
                                 <label class="form-label">Email Address <span class="required">*</span></label>
                                 <input type="email" class="form-control" name="email" placeholder="staff@isu.edu.ph" value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>" required>
                             </div>
                             
-                            <!-- Department -->
                             <div class="col-md-6">
                                 <label class="form-label">Department <span class="required">*</span></label>
                                 <input type="text" class="form-control" name="department" placeholder="e.g., Dormitory Management" value="<?php echo htmlspecialchars($_POST['department'] ?? ''); ?>" required>
                             </div>
                             
-                            <!-- Phone -->
                             <div class="col-md-6">
                                 <label class="form-label">Phone Number</label>
                                 <input type="text" class="form-control" name="phone" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($_POST['phone'] ?? ''); ?>">
                             </div>
                             
-                            <!-- Password -->
                             <div class="col-md-6">
                                 <label class="form-label">Password</label>
                                 <input type="password" class="form-control" name="password" placeholder="Leave blank for default (Staff@123)">
                                 <small class="text-muted">Default password: <strong class="text-warning">Staff@123</strong></small>
                             </div>
                             
-                            <!-- Profile Photo Upload -->
                             <div class="col-md-12">
                                 <label class="form-label">Profile Photo</label>
                                 <div class="photo-upload" id="photoUpload" onclick="document.getElementById('photoInput').click()">
@@ -520,19 +469,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         // ============================================================
         // PHOTO UPLOAD PREVIEW
         // ============================================================
-        document.getElementById('photoInput').addEventListener('change', function(e) {
-            if (this.files && this.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const photoDiv = document.getElementById('photoUpload');
-                    photoDiv.innerHTML = `
-                        <img src="${event.target.result}" class="preview-img" alt="Preview">
-                        <button type="button" class="remove-photo" onclick="removePhoto(event)">✕</button>
-                        <input type="file" id="photoInput" name="profile_photo" accept="image/*" style="display:none;" onchange="handlePhotoChange(event)">
-                    `;
-                    photoDiv.classList.add('has-image');
-                }
-                reader.readAsDataURL(this.files[0]);
+        document.addEventListener('DOMContentLoaded', function() {
+            const photoInput = document.getElementById('photoInput');
+            if (photoInput) {
+                photoInput.addEventListener('change', function(e) {
+                    if (this.files && this.files[0]) {
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            const photoDiv = document.getElementById('photoUpload');
+                            photoDiv.innerHTML = `
+                                <img src="${event.target.result}" class="preview-img" alt="Preview">
+                                <button type="button" class="remove-photo" onclick="removePhoto(event)">✕</button>
+                                <input type="file" id="photoInput" name="profile_photo" accept="image/*" style="display:none;" onchange="handlePhotoChange(event)">
+                            `;
+                            photoDiv.classList.add('has-image');
+                        }
+                        reader.readAsDataURL(this.files[0]);
+                    }
+                });
             }
         });
 
@@ -558,7 +512,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             photoDiv.innerHTML = `
                 <i class="fas fa-camera upload-placeholder"></i>
                 <span class="upload-placeholder">Click to upload photo</span>
-                <input type="file" id="photoInput" name="profile_photo" accept="image/*" style="display:none;" onchange="handlePhotoChange(event)">
+                <input type="file" id="photoInput" name="profile_photo" accept="image/*" style="display:none;">
                 <button type="button" class="remove-photo" onclick="removePhoto(event)">✕</button>
             `;
             photoDiv.classList.remove('has-image');
@@ -566,14 +520,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         }
 
         // ============================================================
-        // AUTO-FILL STAFF ID WITH NEXT ID
+        // SIDEBAR TOGGLE
         // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            const staffIdInput = document.querySelector('input[name="staff_id_number"]');
-            if (staffIdInput && !staffIdInput.value) {
-                staffIdInput.value = '<?php echo $nextStaffId; ?>';
-            }
-        });
+        function toggleSidebar() {
+            document.querySelector('.sidebar')?.classList.toggle('show');
+        }
     </script>
 </body>
 </html>
