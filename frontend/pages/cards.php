@@ -138,7 +138,7 @@ $query = "
         u.full_name as user_name,
         u.student_id,
         u.room_number,
-        u.profile_picture,
+        u.profile_photo,
         rp.course,
         rp.year_level,
         rp.gender
@@ -478,7 +478,7 @@ if (isset($_SESSION['admin_id'])) {
         }
         
         /* ============================================================
-           PROFILE PICTURE STYLES
+           PROFILE PHOTO STYLES
            ============================================================ */
         .profile-img {
             width: 40px;
@@ -487,6 +487,7 @@ if (isset($_SESSION['admin_id'])) {
             object-fit: cover;
             border: 2px solid #1a2a4a;
             flex-shrink: 0;
+            background: #1a1a2e;
         }
         .profile-img-placeholder {
             width: 40px;
@@ -875,7 +876,8 @@ if (isset($_SESSION['admin_id'])) {
                 <?php endif; ?>
 
                 <!-- ============================================================
-                STATS CARDS                ============================================================ -->
+                STATS CARDS
+                ============================================================ -->
                 <div class="row g-2 mb-3">
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
@@ -1027,10 +1029,10 @@ if (isset($_SESSION['admin_id'])) {
                                         $tenant_name = null; // Don't show tenant for non-visitors
                                     }
                                     
-                                    // Get profile picture
-                                    $profile_pic = $card['profile_picture'] ?? null;
-                                    $has_profile_pic = !empty($profile_pic) && file_exists('../../uploads/profile_pictures/' . $profile_pic);
-                                    $profile_pic_path = $has_profile_pic ? '../../uploads/profile_pictures/' . $profile_pic : null;
+                                    // Get profile photo
+                                    $profile_photo = $card['profile_photo'] ?? null;
+                                    $has_profile_photo = !empty($profile_photo) && file_exists('../../uploads/profile_photos/' . $profile_photo);
+                                    $profile_photo_path = $has_profile_photo ? '../../uploads/profile_photos/' . $profile_photo : null;
                                     
                                     // Get initials for placeholder
                                     $parts = explode(' ', $display_name);
@@ -1044,9 +1046,9 @@ if (isset($_SESSION['admin_id'])) {
                                         <div class="card-item <?php echo $card['status']; ?>">
                                             <div class="d-flex justify-content-between align-items-start">
                                                 <div class="d-flex align-items-center gap-2">
-                                                    <!-- Profile Picture / Avatar -->
-                                                    <?php if ($profile_pic_path && !empty($card['user_name']) && $card['card_type'] != 'visitor'): ?>
-                                                        <img src="<?php echo $profile_pic_path; ?>" 
+                                                    <!-- Profile Photo / Avatar -->
+                                                    <?php if ($profile_photo_path && !empty($card['user_name']) && $card['card_type'] != 'visitor'): ?>
+                                                        <img src="<?php echo $profile_photo_path; ?>" 
                                                              alt="<?php echo htmlspecialchars($display_name); ?>" 
                                                              class="profile-img"
                                                              onerror="this.onerror=null; this.parentNode.innerHTML='<div class=\'profile-img-placeholder\'>'+'<?php echo $initials; ?>'+'</div>'">
