@@ -4,7 +4,8 @@
  * VIEW ONLY - Complete with Alerts
  * WITH UNAUTHORIZED TOTAL COUNT
  * PURE DARK MODE - NO WHITE IN TABLES
- * WITH DUPLICATE DETECTION
+ * WITH PROFILE PHOTO FOR RESIDENTS
+ * RESIDENTS ONLY (NO STAFF)
  */
 
 session_start();
@@ -58,6 +59,7 @@ $alertQuery = "
         c.resident_visited,
         u.full_name as user_name,
         u.room_number,
+        u.profile_photo,
         ru.full_name as resident_visited_name
     FROM alert_logs alog
     LEFT JOIN rfid_cards c ON alog.card_uid = c.card_uid
@@ -98,7 +100,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET RESIDENT ACCESS LOGS WITH COUNT
+// GET RESIDENT ACCESS LOGS WITH COUNT - RESIDENTS ONLY (NO STAFF)
 // ============================================================
 $residentLogs = [];
 $residentCountQuery = "
@@ -108,7 +110,7 @@ $residentCountQuery = "
     LEFT JOIN users u ON c.user_id = u.user_id
     LEFT JOIN users ru ON c.resident_visited = ru.user_id
     LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE (c.card_type = 'resident' OR c.card_type = 'staff' OR c.card_type IS NULL)
+    WHERE c.card_type = 'resident'
 ";
 
 if (!empty($dateFilter)) {
@@ -147,6 +149,7 @@ $residentQuery = "
         u.full_name as user_name,
         u.room_number,
         u.student_id,
+        u.profile_photo,
         rp.course,
         rp.year_level,
         ru.full_name as resident_visited_name
@@ -155,7 +158,7 @@ $residentQuery = "
     LEFT JOIN users u ON c.user_id = u.user_id
     LEFT JOIN users ru ON c.resident_visited = ru.user_id
     LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE (c.card_type = 'resident' OR c.card_type = 'staff' OR c.card_type IS NULL)
+    WHERE c.card_type = 'resident'
 ";
 
 if (!empty($dateFilter)) {
@@ -233,7 +236,8 @@ $unauthorizedQuery = "
         c.card_type,
         c.visitor_name,
         u.full_name as user_name,
-        u.room_number
+        u.room_number,
+        u.profile_photo
     FROM access_logs al
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
     LEFT JOIN users u ON c.user_id = u.user_id
@@ -319,7 +323,7 @@ $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM access_logs al
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
-    WHERE c.card_type != 'visitor' OR c.card_type IS NULL
+    WHERE c.card_type = 'resident'
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['residents'] = (int)$row['count'];
@@ -363,6 +367,24 @@ if (isset($_SESSION['staff_id'])) {
     } catch (Exception $e) {
         // Silently fail
     }
+}
+
+// Helper function to get profile photo
+function getProfilePhoto($photoPath) {
+    if (empty($photoPath)) {
+        return null;
+    }
+    
+    if (strpos($photoPath, 'uploads/') === 0) {
+        $fullPath = '../../../' . $photoPath;
+    } else {
+        $fullPath = '../../../uploads/resident_photos/' . $photoPath;
+    }
+    
+    if (file_exists($fullPath)) {
+        return $fullPath;
+    }
+    return null;
 }
 ?>
 <!DOCTYPE html>
@@ -565,16 +587,36 @@ if (isset($_SESSION['staff_id'])) {
         }
         .log-table .user-cell { display: flex; align-items: center; gap: 10px; }
         .log-table .user-avatar {
-            width: 32px; height: 32px; border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 12px;
+            flex-shrink: 0;
+            overflow: hidden;
             background: linear-gradient(135deg, #4a5a8a, #5a3a7a);
-            display: flex; align-items: center; justify-content: center;
-            color: white; font-weight: 700; font-size: 12px; flex-shrink: 0;
+        }
+        .log-table .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .log-table .user-avatar .no-photo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            font-size: 12px;
+            font-weight: 700;
+            color: white;
         }
         .log-table .user-avatar.visitor {
             background: linear-gradient(135deg, #2a3a6a, #3a2a7a);
-        }
-        .log-table .user-avatar.staff {
-            background: linear-gradient(135deg, #4a3a1a, #6a4a2a);
         }
         .log-table .user-avatar.denied {
             background: linear-gradient(135deg, #7a2a2a, #5a1a1a);
@@ -1202,7 +1244,7 @@ if (isset($_SESSION['staff_id'])) {
                 </div>
 
                 <!-- ============================================================
-                RESIDENTS TABLE - PURE DARK
+                RESIDENTS TABLE - PURE DARK - WITH PROFILE PHOTO - NO STAFF
                 ============================================================ -->
                 <div class="card">
                     <div class="card-header">
@@ -1210,7 +1252,7 @@ if (isset($_SESSION['staff_id'])) {
                             <div class="left">
                                 <div class="section-header">
                                     <span class="icon">🏠</span>
-                                    <span class="title">Residents / Staff</span>
+                                    <span class="title">Residents</span>
                                     <span class="count badge badge-resident-header"><?php echo count($residentLogs); ?> logs</span>
                                 </div>
                             </div>
@@ -1230,7 +1272,7 @@ if (isset($_SESSION['staff_id'])) {
                                     <tr>
                                         <th>Date/Time</th>
                                         <th>RFID UID</th>
-                                        <th>User</th>
+                                        <th>Resident</th>
                                         <th>Room</th>
                                         <th>Type</th>
                                         <th>Status</th>
@@ -1242,44 +1284,59 @@ if (isset($_SESSION['staff_id'])) {
                                         <tr>
                                             <td colspan="7" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
-                                                No resident/staff access logs found
+                                                No resident access logs found
                                             </td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($residentLogs as $log): 
                                             $displayName = $log['user_name'] ?? 'Unknown';
-                                            $cardType = $log['card_type'] ?? 'resident';
-                                            $avatarClass = '';
-                                            $userTypeTag = '';
-                                            
-                                            if ($cardType == 'staff') {
-                                                $avatarClass = 'staff';
-                                                $userTypeTag = '<span class="staff-tag">Staff</span>';
-                                            } else {
-                                                $userTypeTag = '<span class="resident-tag">Resident</span>';
-                                            }
-                                            
                                             $roomDisplay = $log['room_number'] ?? 'N/A';
+                                            
+                                            // Get profile photo
+                                            $photoPath = $log['profile_photo'] ?? null;
+                                            $hasPhoto = false;
+                                            $photoUrl = '';
+                                            
+                                            if (!empty($photoPath)) {
+                                                if (strpos($photoPath, 'uploads/') === 0) {
+                                                    $fullPath = '../../../' . $photoPath;
+                                                } else {
+                                                    $fullPath = '../../../uploads/resident_photos/' . $photoPath;
+                                                }
+                                                
+                                                if (file_exists($fullPath)) {
+                                                    $hasPhoto = true;
+                                                    $photoUrl = $fullPath;
+                                                }
+                                            }
                                             
                                             $initials = '';
                                             $nameParts = explode(' ', $displayName);
                                             foreach ($nameParts as $p) {
                                                 if (!empty($p)) $initials .= strtoupper($p[0]);
                                             }
-                                            $initials = substr($initials, 0, 2);
+                                            $initials = substr($initials, 0, 2) ?: '?';
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
                                                 <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
                                                 <td>
                                                     <div class="user-cell">
-                                                        <div class="user-avatar <?php echo $avatarClass; ?>">
-                                                            <?php echo $initials ?: '?'; ?>
+                                                        <div class="user-avatar">
+                                                            <?php if ($hasPhoto): ?>
+                                                                <img src="<?php echo $photoUrl; ?>" alt="<?php echo htmlspecialchars($displayName); ?>" 
+                                                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'no-photo\'>' + '<?php echo $initials; ?>' + '</div>'">
+                                                            <?php else: ?>
+                                                                <div class="no-photo"><?php echo $initials; ?></div>
+                                                            <?php endif; ?>
                                                         </div>
                                                         <div>
-                                                            <div><?php echo htmlspecialchars($displayName); ?> <?php echo $userTypeTag; ?></div>
+                                                            <div>
+                                                                <?php echo htmlspecialchars($displayName); ?> 
+                                                                <span class="resident-tag">Resident</span>
+                                                            </div>
                                                             <?php if (!empty($log['student_id'])): ?>
-                                                                <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['student_id']); ?></div>
+                                                                <div style="font-size: 10px; color: #808090;">ID: <?php echo htmlspecialchars($log['student_id']); ?></div>
                                                             <?php endif; ?>
                                                             <?php if (!empty($log['course'])): ?>
                                                                 <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['course']); ?></div>
@@ -1442,7 +1499,7 @@ if (isset($_SESSION['staff_id'])) {
                                             foreach ($nameParts as $p) {
                                                 if (!empty($p)) $initials .= strtoupper($p[0]);
                                             }
-                                            $initials = substr($initials, 0, 2);
+                                            $initials = substr($initials, 0, 2) ?: '?';
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
@@ -1450,7 +1507,7 @@ if (isset($_SESSION['staff_id'])) {
                                                 <td>
                                                     <div class="user-cell">
                                                         <div class="user-avatar visitor">
-                                                            <?php echo $initials ?: '?'; ?>
+                                                            <div class="no-photo"><?php echo $initials; ?></div>
                                                         </div>
                                                         <div>
                                                             <div><?php echo htmlspecialchars($visitorName); ?> <span class="visitor-tag">Visitor</span></div>
