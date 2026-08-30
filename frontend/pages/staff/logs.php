@@ -369,21 +369,31 @@ if (isset($_SESSION['staff_id'])) {
     }
 }
 
-// Helper function to get profile photo
+// ============================================================
+// GET PROFILE PHOTO - FIXED PATH
+// ============================================================
 function getProfilePhoto($photoPath) {
     if (empty($photoPath)) {
         return null;
     }
     
-    if (strpos($photoPath, 'uploads/') === 0) {
-        $fullPath = '../../../' . $photoPath;
-    } else {
-        $fullPath = '../../../uploads/resident_photos/' . $photoPath;
+    // Base path from staff folder (frontend/pages/staff/)
+    $basePath = '../../';
+    
+    // Check different possible paths
+    $possiblePaths = [
+        $basePath . $photoPath,  // direct path like 'uploads/resident_photos/photo.jpg'
+        $basePath . 'uploads/resident_photos/' . basename($photoPath), // filename only
+        $basePath . 'uploads/' . $photoPath, // nasa uploads folder
+        $basePath . 'uploads/resident_photos/' . $photoPath, // full path
+    ];
+    
+    foreach ($possiblePaths as $path) {
+        if (file_exists($path)) {
+            return $path;
+        }
     }
     
-    if (file_exists($fullPath)) {
-        return $fullPath;
-    }
     return null;
 }
 ?>
@@ -1292,21 +1302,36 @@ function getProfilePhoto($photoPath) {
                                             $displayName = $log['user_name'] ?? 'Unknown';
                                             $roomDisplay = $log['room_number'] ?? 'N/A';
                                             
-                                            // Get profile photo
+                                            // GET PROFILE PHOTO - FIXED
                                             $photoPath = $log['profile_photo'] ?? null;
                                             $hasPhoto = false;
                                             $photoUrl = '';
                                             
                                             if (!empty($photoPath)) {
-                                                if (strpos($photoPath, 'uploads/') === 0) {
-                                                    $fullPath = '../../../' . $photoPath;
-                                                } else {
-                                                    $fullPath = '../../../uploads/resident_photos/' . $photoPath;
-                                                }
+                                                // Try different paths
+                                                $basePath = '../../';
                                                 
-                                                if (file_exists($fullPath)) {
+                                                // Option 1: Direct path
+                                                $path1 = $basePath . $photoPath;
+                                                // Option 2: Uploads folder with filename only
+                                                $path2 = $basePath . 'uploads/resident_photos/' . basename($photoPath);
+                                                // Option 3: If full path with uploads
+                                                $path3 = $basePath . 'uploads/' . $photoPath;
+                                                // Option 4: If photo is in uploads/resident_photos/
+                                                $path4 = $basePath . 'uploads/resident_photos/' . $photoPath;
+                                                
+                                                if (file_exists($path1)) {
                                                     $hasPhoto = true;
-                                                    $photoUrl = $fullPath;
+                                                    $photoUrl = $path1;
+                                                } elseif (file_exists($path2)) {
+                                                    $hasPhoto = true;
+                                                    $photoUrl = $path2;
+                                                } elseif (file_exists($path3)) {
+                                                    $hasPhoto = true;
+                                                    $photoUrl = $path3;
+                                                } elseif (file_exists($path4)) {
+                                                    $hasPhoto = true;
+                                                    $photoUrl = $path4;
                                                 }
                                             }
                                             
@@ -1324,7 +1349,8 @@ function getProfilePhoto($photoPath) {
                                                     <div class="user-cell">
                                                         <div class="user-avatar">
                                                             <?php if ($hasPhoto): ?>
-                                                                <img src="<?php echo $photoUrl; ?>" alt="<?php echo htmlspecialchars($displayName); ?>" 
+                                                                <img src="<?php echo $photoUrl; ?>" 
+                                                                     alt="<?php echo htmlspecialchars($displayName); ?>" 
                                                                      onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'no-photo\'>' + '<?php echo $initials; ?>' + '</div>'">
                                                             <?php else: ?>
                                                                 <div class="no-photo"><?php echo $initials; ?></div>
