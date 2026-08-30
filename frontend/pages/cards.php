@@ -994,6 +994,23 @@ if (isset($_SESSION['admin_id'])) {
                                         $days_left = ceil((strtotime($card['expiry_date']) - time()) / 86400);
                                         $expiring_soon = $days_left >= 0 && $days_left <= 3 && $card['status'] == 'active';
                                     }
+                                    
+                                    // Determine display name
+                                    // For visitors: show visitor_name as main name
+                                    // For residents/staff: show user_name
+                                    if ($card['card_type'] == 'visitor' && !empty($card['visitor_name'])) {
+                                        $display_name = $card['visitor_name'];
+                                    } else {
+                                        $display_name = $card['user_name'] ?? 'Unassigned';
+                                    }
+                                    
+                                    // For visitors: tenant is the user they are visiting
+                                    // For residents: show their own name
+                                    if ($card['card_type'] == 'visitor') {
+                                        $tenant_name = $card['user_name'] ?? 'Unknown Tenant';
+                                    } else {
+                                        $tenant_name = null; // Don't show tenant for non-visitors
+                                    }
                                 ?>
                                     <div class="col-md-6 col-lg-4">
                                         <div class="card-item <?php echo $card['status']; ?>">
@@ -1001,8 +1018,7 @@ if (isset($_SESSION['admin_id'])) {
                                                 <div class="d-flex align-items-center gap-2">
                                                     <div class="user-avatar">
                                                         <?php 
-                                                            $name = $card['user_name'] ?? ($card['visitor_name'] ?? 'Unassigned');
-                                                            $parts = explode(' ', $name);
+                                                            $parts = explode(' ', $display_name);
                                                             $initials = '';
                                                             foreach ($parts as $p) {
                                                                 if (!empty($p)) $initials .= strtoupper($p[0]);
@@ -1012,7 +1028,7 @@ if (isset($_SESSION['admin_id'])) {
                                                     </div>
                                                     <div>
                                                         <div class="name">
-                                                            <?php echo htmlspecialchars($card['user_name'] ?? ($card['visitor_name'] ?? 'Unassigned')); ?>
+                                                            <?php echo htmlspecialchars($display_name); ?>
                                                             <span class="status-badge status-<?php echo $card['status']; ?> ms-1">
                                                                 <?php echo ucfirst($card['status']); ?>
                                                             </span>
@@ -1029,16 +1045,22 @@ if (isset($_SESSION['admin_id'])) {
                                                                 <i class="fas fa-door-open me-1"></i>
                                                                 Room <?php echo htmlspecialchars($card['room_number']); ?>
                                                             <?php endif; ?>
-                                                            <?php if (!empty($card['visitor_name']) && $card['card_type'] == 'visitor'): ?>
+                                                            <?php if ($card['card_type'] == 'visitor' && $tenant_name): ?>
                                                                 <span class="mx-1">•</span>
                                                                 <i class="fas fa-user me-1"></i>
-                                                                Visiting: <?php echo htmlspecialchars($card['visitor_name']); ?>
+                                                                <strong>Tenant:</strong> <?php echo htmlspecialchars($tenant_name); ?>
                                                             <?php endif; ?>
                                                         </div>
                                                         <div class="detail">
                                                             <i class="fas fa-user me-1"></i>
-                                                            <?php echo htmlspecialchars($card['student_id'] ?? ($card['visitor_phone'] ?? 'N/A')); ?>
-                                                            <?php if (!empty($card['course'])): ?>
+                                                            <?php 
+                                                                if ($card['card_type'] == 'visitor') {
+                                                                    echo htmlspecialchars($card['visitor_phone'] ?? 'N/A');
+                                                                } else {
+                                                                    echo htmlspecialchars($card['student_id'] ?? 'N/A');
+                                                                }
+                                                            ?>
+                                                            <?php if (!empty($card['course']) && $card['card_type'] != 'visitor'): ?>
                                                                 <span class="mx-1">•</span>
                                                                 <?php echo htmlspecialchars($card['course']); ?>
                                                             <?php endif; ?>
