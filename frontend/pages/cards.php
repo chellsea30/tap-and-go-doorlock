@@ -6,6 +6,7 @@
  * WITH AUTO-EXPIRATION SYSTEM
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
  * WITH PROFILE PHOTO SUPPORT
+ * WITH PRINT ID BUTTON
  */
 
 session_start();
@@ -119,7 +120,7 @@ if (!empty($searchFilter)) {
 $countResult = $conn->query($countQuery);
 $totalCards = 0;
 if ($countResult && $row = $countResult->fetch_assoc()) {
-    $totalCards = (int)$row['total'];
+    $totalCards = (int)$row['count'];
 }
 
 $totalPages = ceil($totalCards / $perPage);
@@ -478,7 +479,7 @@ if (isset($_SESSION['admin_id'])) {
         }
         
         /* ============================================================
-           PROFILE PHOTO STYLES - MATCHES RESIDENTS PAGE
+           PROFILE PHOTO STYLES
            ============================================================ */
         .profile-img {
             width: 40px;
@@ -1013,8 +1014,6 @@ if (isset($_SESSION['admin_id'])) {
                                     }
                                     
                                     // Determine display name
-                                    // For visitors: show visitor_name as main name
-                                    // For residents/staff: show user_name
                                     if ($card['card_type'] == 'visitor' && !empty($card['visitor_name'])) {
                                         $display_name = $card['visitor_name'];
                                     } else {
@@ -1022,21 +1021,18 @@ if (isset($_SESSION['admin_id'])) {
                                     }
                                     
                                     // For visitors: tenant is the user they are visiting
-                                    // For residents: show their own name
                                     if ($card['card_type'] == 'visitor') {
                                         $tenant_name = $card['user_name'] ?? 'Unknown Tenant';
                                     } else {
-                                        $tenant_name = null; // Don't show tenant for non-visitors
+                                        $tenant_name = null;
                                     }
                                     
-                                    // Get profile photo - using the same path as residents page
+                                    // Get profile photo
                                     $profile_photo = $card['profile_photo'] ?? null;
-                                    // Check if the photo exists using the same path structure as residents page
                                     $has_profile_photo = false;
                                     $profile_photo_path = null;
                                     
                                     if (!empty($profile_photo)) {
-                                        // Check if path already has 'uploads/' prefix or not
                                         if (strpos($profile_photo, 'uploads/') === 0) {
                                             $full_path = '../../' . $profile_photo;
                                         } else {
@@ -1049,7 +1045,7 @@ if (isset($_SESSION['admin_id'])) {
                                         }
                                     }
                                     
-                                    // Get initials for placeholder
+                                    // Get initials
                                     $parts = explode(' ', $display_name);
                                     $initials = '';
                                     foreach ($parts as $p) {
@@ -1077,10 +1073,6 @@ if (isset($_SESSION['admin_id'])) {
                                                             <span class="status-badge status-<?php echo $card['status']; ?> ms-1">
                                                                 <?php echo ucfirst($card['status']); ?>
                                                             </span>
-                                                        </div>
-                                                        <div class="detail">
-                                                            <i class="fas fa-id-card me-1"></i>
-                                                            <span class="uid"><?php echo htmlspecialchars($card['card_uid']); ?></span>
                                                         </div>
                                                         <div class="detail">
                                                             <i class="fas fa-tag me-1"></i>
@@ -1152,6 +1144,14 @@ if (isset($_SESSION['admin_id'])) {
                                                             <i class="fas fa-play me-1"></i> Activate
                                                         </a>
                                                     <?php endif; ?>
+                                                    
+                                                    <!-- PRINT ID BUTTON -->
+                                                    <a href="print-card.php?uid=<?php echo $card['card_uid']; ?>" 
+                                                       target="_blank" 
+                                                       class="btn btn-info btn-sm-custom">
+                                                        <i class="fas fa-print me-1"></i> Print ID
+                                                    </a>
+                                                    
                                                     <a href="?delete=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
                                                        class="btn btn-danger btn-sm-custom"
                                                        onclick="return confirm('Delete this card permanently?')">
