@@ -5,6 +5,7 @@
  * PURE DARK MODE - WITH SHOW ENTRIES
  * WITH AUTO-EXPIRATION SYSTEM
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
+ * WITH PROFILE PICTURE SUPPORT
  */
 
 session_start();
@@ -137,6 +138,7 @@ $query = "
         u.full_name as user_name,
         u.student_id,
         u.room_number,
+        u.profile_picture,
         rp.course,
         rp.year_level,
         rp.gender
@@ -476,6 +478,32 @@ if (isset($_SESSION['admin_id'])) {
         }
         
         /* ============================================================
+           PROFILE PICTURE STYLES
+           ============================================================ */
+        .profile-img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #1a2a4a;
+            flex-shrink: 0;
+        }
+        .profile-img-placeholder {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4a5a8a, #5a3a7a) !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 14px;
+            flex-shrink: 0;
+            border: 2px solid #1a2a4a;
+        }
+        
+        /* ============================================================
            DARK FILTERS
            ============================================================ */
         .filter-section {
@@ -590,23 +618,6 @@ if (isset($_SESSION['admin_id'])) {
         .card-header h5 { color: #e0e0e0 !important; font-size: 15px; }
         .card-body { background: #111827 !important; padding: 15px 18px; }
         .card .text-muted { color: #808090 !important; }
-        
-        /* ============================================================
-           DARK USER AVATAR
-           ============================================================ */
-        .user-avatar {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #4a5a8a, #5a3a7a) !important;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 11px;
-            flex-shrink: 0;
-        }
         
         /* ============================================================
            DARK ALERTS
@@ -775,6 +786,11 @@ if (isset($_SESSION['admin_id'])) {
             .pagination {
                 justify-content: center !important;
             }
+            .profile-img, .profile-img-placeholder {
+                width: 32px;
+                height: 32px;
+                font-size: 11px;
+            }
         }
         
         /* ============================================================
@@ -859,8 +875,7 @@ if (isset($_SESSION['admin_id'])) {
                 <?php endif; ?>
 
                 <!-- ============================================================
-                STATS CARDS
-                ============================================================ -->
+                STATS CARDS                ============================================================ -->
                 <div class="row g-2 mb-3">
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
@@ -1011,21 +1026,34 @@ if (isset($_SESSION['admin_id'])) {
                                     } else {
                                         $tenant_name = null; // Don't show tenant for non-visitors
                                     }
+                                    
+                                    // Get profile picture
+                                    $profile_pic = $card['profile_picture'] ?? null;
+                                    $has_profile_pic = !empty($profile_pic) && file_exists('../../uploads/profile_pictures/' . $profile_pic);
+                                    $profile_pic_path = $has_profile_pic ? '../../uploads/profile_pictures/' . $profile_pic : null;
+                                    
+                                    // Get initials for placeholder
+                                    $parts = explode(' ', $display_name);
+                                    $initials = '';
+                                    foreach ($parts as $p) {
+                                        if (!empty($p)) $initials .= strtoupper($p[0]);
+                                    }
+                                    $initials = substr($initials, 0, 2) ?: '?';
                                 ?>
                                     <div class="col-md-6 col-lg-4">
                                         <div class="card-item <?php echo $card['status']; ?>">
                                             <div class="d-flex justify-content-between align-items-start">
                                                 <div class="d-flex align-items-center gap-2">
-                                                    <div class="user-avatar">
-                                                        <?php 
-                                                            $parts = explode(' ', $display_name);
-                                                            $initials = '';
-                                                            foreach ($parts as $p) {
-                                                                if (!empty($p)) $initials .= strtoupper($p[0]);
-                                                            }
-                                                            echo substr($initials, 0, 2) ?: '?';
-                                                        ?>
-                                                    </div>
+                                                    <!-- Profile Picture / Avatar -->
+                                                    <?php if ($profile_pic_path && !empty($card['user_name']) && $card['card_type'] != 'visitor'): ?>
+                                                        <img src="<?php echo $profile_pic_path; ?>" 
+                                                             alt="<?php echo htmlspecialchars($display_name); ?>" 
+                                                             class="profile-img"
+                                                             onerror="this.onerror=null; this.parentNode.innerHTML='<div class=\'profile-img-placeholder\'>'+'<?php echo $initials; ?>'+'</div>'">
+                                                    <?php else: ?>
+                                                        <div class="profile-img-placeholder"><?php echo $initials; ?></div>
+                                                    <?php endif; ?>
+                                                    
                                                     <div>
                                                         <div class="name">
                                                             <?php echo htmlspecialchars($display_name); ?>
@@ -1063,6 +1091,10 @@ if (isset($_SESSION['admin_id'])) {
                                                             <?php if (!empty($card['course']) && $card['card_type'] != 'visitor'): ?>
                                                                 <span class="mx-1">•</span>
                                                                 <?php echo htmlspecialchars($card['course']); ?>
+                                                            <?php endif; ?>
+                                                            <?php if (!empty($card['year_level']) && $card['card_type'] != 'visitor'): ?>
+                                                                <span class="mx-1">•</span>
+                                                                Year <?php echo htmlspecialchars($card['year_level']); ?>
                                                             <?php endif; ?>
                                                         </div>
                                                         <div class="detail">
