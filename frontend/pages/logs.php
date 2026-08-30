@@ -29,8 +29,11 @@ $printResidents = isset($_GET['print_residents']) && $_GET['print_residents'] ==
 // Handle Print Request - Visitors
 $printVisitors = isset($_GET['print_visitors']) && $_GET['print_visitors'] === '1';
 
+// Handle Print Request - Staff
+$printStaff = isset($_GET['print_staff']) && $_GET['print_staff'] === '1';
+
 // If print mode, use minimal layout
-if ($printResidents || $printVisitors) {
+if ($printResidents || $printVisitors || $printStaff) {
     // No header/footer for print
 } else {
     include '../includes/header.php';
@@ -107,7 +110,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET RESIDENT ACCESS LOGS WITH COUNT
+// GET RESIDENT ACCESS LOGS WITH COUNT (EXCLUDING STAFF)
 // ============================================================
 $residentLogs = [];
 $residentCountQuery = "
@@ -417,7 +420,7 @@ if ($result && $row = $result->fetch_assoc()) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Access Logs - Tap-and-Go Doorlock</title>
-    <?php if (!$printResidents && !$printVisitors): ?>
+    <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -512,7 +515,7 @@ if ($result && $row = $result->fetch_assoc()) {
         /* ============================================================
            GLOBAL DARK THEME - SAME AS DASHBOARD (for non-print)
            ============================================================ */
-        <?php if (!$printResidents && !$printVisitors): ?>
+        <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
@@ -1046,14 +1049,14 @@ if ($result && $row = $result->fetch_assoc()) {
         <?php endif; ?>
     </style>
 </head>
-<body <?php echo ($printResidents || $printVisitors) ? 'onload="window.print();"' : ''; ?>>
+<body <?php echo ($printResidents || $printVisitors || $printStaff) ? 'onload="window.print();"' : ''; ?>>
     
-    <?php if (!$printResidents && !$printVisitors): ?>
+    <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
     <?php include '../includes/navbar.php'; ?>
     <?php endif; ?>
     
     <?php if ($printResidents): ?>
-    <!-- PRINT HEADER - RESIDENTS ONLY -->
+    <!-- PRINT HEADER - RESIDENTS ONLY (EXCLUDING STAFF) -->
     <div class="print-header">
         <h2>🏠 Resident Access Logs</h2>
         <p>
@@ -1070,7 +1073,7 @@ if ($result && $row = $result->fetch_assoc()) {
             <tr>
                 <th>Date/Time</th>
                 <th>RFID UID</th>
-                <th>Resident</th>
+                <th>Resident Name</th>
                 <th>Room</th>
                 <th>Type</th>
                 <th>Signature</th>
@@ -1197,16 +1200,81 @@ if ($result && $row = $result->fetch_assoc()) {
     </div>
     <?php exit(); ?>
     <?php endif; ?>
+
+    <?php if ($printStaff): ?>
+    <!-- PRINT HEADER - STAFF ONLY -->
+    <div class="print-header">
+        <h2>👔 Staff Access Logs</h2>
+        <p>
+            ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>
+            Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?>
+            <?php if (!empty($statusFilter)): ?> | Status: <?php echo ucfirst($statusFilter); ?><?php endif; ?>
+            <?php if (!empty($typeFilter)): ?> | Type: <?php echo ucfirst($typeFilter); ?><?php endif; ?>
+            <?php if (!empty($searchFilter)): ?> | Search: "<?php echo htmlspecialchars($searchFilter); ?>"<?php endif; ?>
+        </p>
+    </div>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date/Time</th>
+                <th>Staff Name</th>
+                <th>RFID UID</th>
+                <th>Type</th>
+                <th>Signature</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php if (empty($staffLogs)): ?>
+                <tr>
+                    <td colspan="5" style="text-align:center;padding:20px;color:#999;">
+                        No staff access logs found
+                    </td>
+                </tr>
+            <?php else: ?>
+                <?php foreach ($staffLogs as $log): 
+                    $staffName = $log['staff_name'] ?? 'Unknown Staff';
+                ?>
+                    <tr>
+                        <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
+                        <td><?php echo htmlspecialchars($staffName); ?></td>
+                        <td><span style="font-family:monospace;font-weight:600;"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                        <td>
+                            <span class="badge-print <?php echo $log['access_type'] == 'entry' ? 'badge-print-entry' : 'badge-print-exit'; ?>">
+                                <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
+                            </span>
+                        </td>
+                        <td style="text-align:center;">
+                            <span style="display:inline-block; width:80px; border-bottom:1px solid #000; margin-top:8px;"></span>
+                            <span style="display:block; font-size:8px; color:#666;">Signature</span>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </tbody>
+    </table>
+    
+    <div class="print-footer">
+        <p>
+            Printed on: <?php echo date('F d, Y h:i A'); ?> | 
+            Total Staff: <?php echo count($staffLogs); ?>
+        </p>
+        <p style="font-size: 10px; color: #999;">
+            ISU-Echague Dormitory - Tap-and-Go Doorlock System
+        </p>
+    </div>
+    <?php exit(); ?>
+    <?php endif; ?>
     
     <div class="container-fluid">
         <div class="row">
-            <?php if (!$printResidents && !$printVisitors): ?>
+            <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
             <?php include '../includes/sidebar.php'; ?>
             <?php endif; ?>
             
-            <main class="<?php echo ($printResidents || $printVisitors) ? 'col-12' : 'col-md-9 ms-sm-auto col-lg-10 px-md-4'; ?>">
+            <main class="<?php echo ($printResidents || $printVisitors || $printStaff) ? 'col-12' : 'col-md-9 ms-sm-auto col-lg-10 px-md-4'; ?>">
                 
-                <?php if (!$printResidents && !$printVisitors): ?>
+                <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
                 <!-- ============================================================
                 HEADER - SAME AS DASHBOARD
                 ============================================================ -->
@@ -1522,7 +1590,7 @@ if ($result && $row = $result->fetch_assoc()) {
                         <?php endif; ?>
                     </div>
                 </div>
-                <?php endif; // end !printResidents && !printVisitors ?>
+                <?php endif; // end !printResidents && !printVisitors && !printStaff ?>
 
                 <!-- ============================================================
                 RESIDENTS TABLE
@@ -1538,7 +1606,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                 </div>
                             </div>
                             <div>
-                                <?php if (!$printResidents && !$printVisitors): ?>
+                                <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
                                 <a href="?print_residents=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" target="_blank" class="btn btn-print-residents btn-sm">
                                     <i class="fas fa-print me-1"></i> Print Residents
                                 </a>
@@ -1634,7 +1702,7 @@ if ($result && $row = $result->fetch_assoc()) {
                             </table>
                         </div>
                         
-                        <?php if (!$printResidents && !$printVisitors && $residentPages > 1): ?>
+                        <?php if (!$printResidents && !$printVisitors && !$printStaff && $residentPages > 1): ?>
                         <!-- PAGINATION -->
                         <div class="pagination-container">
                             <div class="row align-items-center">
@@ -1721,7 +1789,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                 </div>
                             </div>
                             <div>
-                                <?php if (!$printResidents && !$printVisitors): ?>
+                                <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
                                 <a href="?print_staff=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" target="_blank" class="btn btn-print-staff btn-sm">
                                     <i class="fas fa-print me-1"></i> Print Staff
                                 </a>
@@ -1739,10 +1807,9 @@ if ($result && $row = $result->fetch_assoc()) {
                                 <thead>
                                     <tr>
                                         <th>Date/Time</th>
-                                        <th>RFID UID</th>
                                         <th>Staff Name</th>
+                                        <th>RFID UID</th>
                                         <th>Department</th>
-                                        <th>Staff ID</th>
                                         <th>Type</th>
                                         <th>Status</th>
                                         <th>Power</th>
@@ -1751,7 +1818,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                 <tbody>
                                     <?php if (empty($staffLogs)): ?>
                                         <tr>
-                                            <td colspan="8" class="text-center text-muted py-4">
+                                            <td colspan="7" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                                 No staff access logs found
                                             </td>
@@ -1760,7 +1827,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <?php foreach ($staffLogs as $log): 
                                             $staffName = $log['staff_name'] ?? 'Unknown Staff';
                                             $department = $log['department'] ?? 'N/A';
-                                            $staffId = $log['staff_id_number'] ?? 'N/A';
                                             
                                             $initials = '';
                                             $nameParts = explode(' ', $staffName);
@@ -1771,7 +1837,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
-                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
                                                 <td>
                                                     <div class="user-cell">
                                                         <div class="user-avatar staff">
@@ -1791,13 +1856,9 @@ if ($result && $row = $result->fetch_assoc()) {
                                                         </div>
                                                     </div>
                                                 </td>
+                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
                                                 <td>
                                                     <span style="font-size: 12px; color: #fbbf24;"><?php echo htmlspecialchars($department); ?></span>
-                                                </td>
-                                                <td>
-                                                    <span style="font-family: monospace; font-size: 11px; background: #1a2a4a; padding: 2px 6px; border-radius: 4px; color: #93c5fd;">
-                                                        <?php echo htmlspecialchars($staffId); ?>
-                                                    </span>
                                                 </td>
                                                 <td>
                                                     <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
@@ -1840,7 +1901,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                 </div>
                             </div>
                             <div>
-                                <?php if (!$printResidents && !$printVisitors): ?>
+                                <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
                                 <a href="?print_visitors=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" target="_blank" class="btn btn-print-visitors btn-sm">
                                     <i class="fas fa-print me-1"></i> Print Visitors
                                 </a>
@@ -1937,7 +1998,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <?php if (!$printResidents && !$printVisitors): ?>
+                <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
                 <!-- ============================================================
                 FOOTER - SAME AS DASHBOARD
                 ============================================================ -->
@@ -1967,7 +2028,7 @@ if ($result && $row = $result->fetch_assoc()) {
         </div>
     </div>
 
-    <?php if (!$printResidents && !$printVisitors): ?>
+    <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
     <?php include '../includes/footer.php'; ?>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
