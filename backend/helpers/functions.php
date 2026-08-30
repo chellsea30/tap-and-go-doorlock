@@ -4,6 +4,7 @@
  * WITH MATH PUZZLE, AUTHENTICATION, ENCRYPTION
  * WITH LOGIN ATTEMPTS (5 attempts = 10-minute ban)
  * WITH AUTO-EXPIRATION SYSTEM
+ * WITH ALERT DUPLICATE DETECTION
  * COMPLETE VERSION
  * NOTE: getDBConnection() is defined in config.php
  */
@@ -1019,6 +1020,230 @@ function logStudentAudit(int $student_id, string $action, string $details = ''):
 }
 
 // ============================================================
+// ALERT FUNCTIONS - WITH DUPLICATE DETECTION
+// ============================================================
+
+/**
+ * Log alert with duplicate detection
+ * Prevents duplicate alerts within 10 seconds
+ * 
+ * @param string $card_uid Card UID
+ * @param string $alert_type Type of alert (unauthorized, system, warning)
+ * @param string $reason Reason for the alert
+ * @param string $access_type Type of access (entry, exit)
+ * @param int|null $user_id User ID (optional)
+ * @param string $card_type Type of card (resident, visitor, staff, unknown)
+ * @return array|false Returns alert data or false if duplicate
+ */
+function logAlert($card_uid, $alert_type, $reason, $access_type = 'entry', $user_id = null, $card_type = 'unknown') {
+    try {
+        $conn = getDBConnection();
+        
+        // CHECK FOR DUPLICATE WITHIN 10 SECONDS
+        $checkStmt = $conn->prepare("
+            SELECT alert_id, timestamp 
+            FROM alert_logs 
+            WHERE card_uid = ? 
+            AND alert_type = ? 
+            AND timestamp > DATE_SUB(NOW(), INTERVAL 10 SECOND)
+            AND delivery_status = 'pending'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        ");
+        $checkStmt->bind_param("ss", $card_uid, $alert_type);
+        $checkStmt->execute();
+        $result = $checkStmt->get_result();
+        
+        if ($row = $result->fetch_assoc()) {
+            // Duplicate found - update timestamp instead of inserting
+            $updateStmt = $conn->prepare("
+                UPDATE alert_logs 
+                SET timestamp = NOW(), 
+                    updated_at = NOW(),
+                    reason = ?,
+                    access_type = ?
+                WHERE alert_id = ?
+            ");
+            $updateStmt->bind_param("ssi", $reason, $access_type, $row['alert_id']);
+            $updateStmt->execute();
+            $updateStmt->close();
+            $checkStmt->close();
+            $conn->close();
+            
+            return [
+                'status' => 'updated',
+                'alert_id' => $row['alert_id'],
+                'message' => 'Alert updated (duplicate detected)'
+            ];
+        }
+        $checkStmt->close();
+        
+        // INSERT NEW ALERT
+        $stmt = $conn->prepare("
+            INSERT INTO alert_logs (
+                card_uid, 
+                user_id, 
+                alert_type, 
+                reason, 
+                access_type, 
+                card_type,
+                delivery_status, 
+                timestamp,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
+        ");
+        
+        if ($user_id === null) {
+            $user_id = 0;
+        }
+        
+        $stmt->bind_param("sissss", $card_uid, $user_id, $alert_type, $reason, $access_type, $card_type);
+        $result = $stmt->execute();
+        $alert_id = $stmt->insert_id;
+        $stmt->close();
+        $conn->close();
+        
+        return [
+            'status' => 'inserted',
+            'alert_id' => $alert_id,
+            'message' => 'Alert created successfully'
+        ];
+        
+    } catch (Exception $e) {
+        return [
+            'status' => 'error',
+            'message' => $e->getMessage()
+        ];
+    }
+}
+
+/**
+ * Get pending alerts count
+ * 
+ * @return int Number of pending alerts
+ */
+function getPendingAlertsCount(): int {
+    try {
+        $conn = getDBConnection();
+        $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'pending'");
+        $row = $result->fetch_assoc();
+        $conn->close();
+        return (int)($row['count'] ?? 0);
+    } catch (Exception $e) {
+        return 0;
+    }
+}
+
+/**
+ * Get critical alerts count (pending unauthorized)
+ * 
+ * @return int Number of critical alerts
+ */
+function getCriticalAlertsCount(): int {
+    try {
+        $conn = getDBConnection();
+        $result = $conn->query("
+            SELECT COUNT(*) as count 
+            FROM alert_logs 
+            WHERE delivery_status = 'pending' 
+            AND alert_type = 'unauthorized'
+        ");
+        $row = $result->fetch_assoc();
+        $conn->close();
+        return (int)($row['count'] ?? 0);
+    } catch (Exception $e) {
+        return 0;
+    }
+}
+
+/**
+ * Resolve an alert
+ * 
+ * @param int $alert_id Alert ID
+ * @return bool True on success
+ */
+function resolveAlert(int $alert_id): bool {
+    try {
+        $conn = getDBConnection();
+        $stmt = $conn->prepare("UPDATE alert_logs SET delivery_status = 'resolved', resolved_at = NOW() WHERE alert_id = ?");
+        $stmt->bind_param("i", $alert_id);
+        $result = $stmt->execute();
+        $stmt->close();
+        $conn->close();
+        return $result;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+/**
+ * Resolve all pending alerts
+ * 
+ * @return int Number of alerts resolved
+ */
+function resolveAllAlerts(): int {
+    try {
+        $conn = getDBConnection();
+        $stmt = $conn->prepare("UPDATE alert_logs SET delivery_status = 'resolved', resolved_at = NOW() WHERE delivery_status = 'pending'");
+        $stmt->execute();
+        $count = $stmt->affected_rows;
+        $stmt->close();
+        $conn->close();
+        return $count;
+    } catch (Exception $e) {
+        return 0;
+    }
+}
+
+/**
+ * Delete an alert
+ * 
+ * @param int $alert_id Alert ID
+ * @return bool True on success
+ */
+function deleteAlert(int $alert_id): bool {
+    try {
+        $conn = getDBConnection();
+        $stmt = $conn->prepare("DELETE FROM alert_logs WHERE alert_id = ?");
+        $stmt->bind_param("i", $alert_id);
+        $result = $stmt->execute();
+        $stmt->close();
+        $conn->close();
+        return $result;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+/**
+ * Remove duplicate alerts (keep only the latest per card_uid per minute)
+ * 
+ * @return int Number of duplicates removed
+ */
+function removeDuplicateAlerts(): int {
+    try {
+        $conn = getDBConnection();
+        $stmt = $conn->prepare("
+            DELETE FROM alert_logs 
+            WHERE alert_id NOT IN (
+                SELECT * FROM (
+                    SELECT MAX(alert_id) 
+                    FROM alert_logs 
+                    GROUP BY card_uid, DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i')
+                ) AS temp
+            )
+        ");
+        $stmt->execute();
+        $count = $stmt->affected_rows;
+        $stmt->close();
+        $conn->close();
+        return $count;
+    } catch (Exception $e) {
+        return 0;
+    }
+}
+
+// ============================================================
 // AUTO-EXPIRATION FUNCTIONS
 // ============================================================
 
@@ -1543,4 +1768,143 @@ function getAllUsers(): array {
         return [];
     }
 }
+
+// ============================================================
+// STAFF FUNCTIONS
+// ============================================================
+
+/**
+ * Add new staff member
+ * 
+ * @param array $data Staff data
+ * @return int|false Staff ID on success, false on failure
+ */
+function addStaff(array $data) {
+    try {
+        $conn = getDBConnection();
+        
+        $stmt = $conn->prepare("
+            INSERT INTO staff_users (
+                staff_id_number, 
+                full_name, 
+                email, 
+                department, 
+                card_uid, 
+                password_hash, 
+                is_active, 
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
+        ");
+        
+        $hashed_password = hashPassword($data['password'] ?? 'password123');
+        $stmt->bind_param(
+            "ssssss",
+            $data['staff_id_number'],
+            $data['full_name'],
+            $data['email'],
+            $data['department'],
+            $data['card_uid'],
+            $hashed_password
+        );
+        
+        if ($stmt->execute()) {
+            $id = $stmt->insert_id;
+            $stmt->close();
+            $conn->close();
+            return $id;
+        }
+        $stmt->close();
+        $conn->close();
+        return false;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+/**
+ * Update staff member
+ * 
+ * @param int $staff_id Staff ID
+ * @param array $data Staff data
+ * @return bool True on success
+ */
+function updateStaff(int $staff_id, array $data): bool {
+    try {
+        $conn = getDBConnection();
+        
+        $fields = [];
+        $params = [];
+        $types = '';
+        
+        if (isset($data['full_name'])) {
+            $fields[] = "full_name = ?";
+            $params[] = $data['full_name'];
+            $types .= 's';
+        }
+        if (isset($data['email'])) {
+            $fields[] = "email = ?";
+            $params[] = $data['email'];
+            $types .= 's';
+        }
+        if (isset($data['department'])) {
+            $fields[] = "department = ?";
+            $params[] = $data['department'];
+            $types .= 's';
+        }
+        if (isset($data['card_uid'])) {
+            $fields[] = "card_uid = ?";
+            $params[] = $data['card_uid'];
+            $types .= 's';
+        }
+        if (isset($data['password']) && !empty($data['password'])) {
+            $fields[] = "password_hash = ?";
+            $params[] = hashPassword($data['password']);
+            $types .= 's';
+        }
+        if (isset($data['is_active'])) {
+            $fields[] = "is_active = ?";
+            $params[] = (int)$data['is_active'];
+            $types .= 'i';
+        }
+        
+        if (empty($fields)) {
+            $conn->close();
+            return false;
+        }
+        
+        $params[] = $staff_id;
+        $types .= 'i';
+        
+        $sql = "UPDATE staff_users SET " . implode(", ", $fields) . " WHERE staff_id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param($types, ...$params);
+        $result = $stmt->execute();
+        $stmt->close();
+        $conn->close();
+        return $result;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+/**
+ * Delete staff member
+ * 
+ * @param int $staff_id Staff ID
+ * @return bool True on success
+ */
+function deleteStaff(int $staff_id): bool {
+    try {
+        $conn = getDBConnection();
+        $stmt = $conn->prepare("DELETE FROM staff_users WHERE staff_id = ?");
+        $stmt->bind_param("i", $staff_id);
+        $result = $stmt->execute();
+        $stmt->close();
+        $conn->close();
+        return $result;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
 ?>
