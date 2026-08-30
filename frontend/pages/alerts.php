@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Alerts Dashboard
  * WITH REAL-TIME NOTIFICATIONS AND WARNING INDICATORS
  * PURE DARK MODE - FIXED LAYOUT SAME AS DASHBOARD
+ * WITH DUPLICATE DETECTION AND AUTO-MERGE
  */
 
 session_start();
@@ -20,6 +21,35 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
 // Include header
 include '../includes/header.php'; 
 $conn = getDBConnection();
+
+// ============================================================
+// AUTO-REMOVE DUPLICATE ALERTS ON PAGE LOAD
+// ============================================================
+if (!isset($_GET['skip_dedupe'])) {
+    $duplicates_removed = removeDuplicateAlerts();
+    if ($duplicates_removed > 0) {
+        $success = "✅ $duplicates_removed duplicate alert(s) removed automatically!";
+    }
+}
+
+// ============================================================
+// MERGE DUPLICATES MANUAL
+// ============================================================
+if (isset($_GET['merge_duplicates'])) {
+    $count = removeDuplicateAlerts();
+    if ($count > 0) {
+        $success = "✅ $count duplicate alert(s) merged successfully!";
+    } else {
+        $success = "✅ No duplicate alerts found to merge.";
+    }
+    logAudit($_SESSION['admin_id'], 'Merge Duplicate Alerts', "Merged $count duplicates");
+    header('Location: alerts.php?merged=1');
+    exit();
+}
+
+if (isset($_GET['merged'])) {
+    $success = "✅ Duplicate alerts have been merged!";
+}
 
 // ============================================================
 // PAGINATION SETTINGS
@@ -130,7 +160,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET STATS
+// GET STATS - USING FUNCTIONS FROM functions.php
 // ============================================================
 $stats = [
     'total' => 0,
@@ -141,14 +171,14 @@ $stats = [
     'critical' => 0
 ];
 
+// Use functions
+$stats['pending'] = getPendingAlertsCount();
+$stats['critical'] = getCriticalAlertsCount();
+
+// Get other stats
 $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['total'] = (int)$row['count'];
-}
-
-$result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'pending'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['pending'] = (int)$row['count'];
 }
 
 $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'resolved'");
@@ -166,62 +196,43 @@ if ($result && $row = $result->fetch_assoc()) {
     $stats['today'] = (int)$row['count'];
 }
 
-// Critical alerts = pending unauthorized alerts
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM alert_logs 
-    WHERE delivery_status = 'pending' 
-    AND alert_type = 'unauthorized'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['critical'] = (int)$row['count'];
-}
-
 // ============================================================
-// MARK ALERT AS RESOLVED
+// MARK ALERT AS RESOLVED - USING FUNCTION
 // ============================================================
 if (isset($_GET['resolve']) && !empty($_GET['resolve'])) {
     $alert_id = (int)$_GET['resolve'];
-    $stmt = $conn->prepare("UPDATE alert_logs SET delivery_status = 'resolved', resolved_at = NOW() WHERE alert_id = ?");
-    $stmt->bind_param("i", $alert_id);
-    if ($stmt->execute()) {
+    if (resolveAlert($alert_id)) {
         $success = "✅ Alert resolved successfully!";
         logAudit($_SESSION['admin_id'], 'Resolve Alert', "Resolved alert ID: $alert_id");
     } else {
         $error = "Failed to resolve alert.";
     }
-    $stmt->close();
 }
 
 // ============================================================
-// MARK ALL AS RESOLVED
+// MARK ALL AS RESOLVED - USING FUNCTION
 // ============================================================
 if (isset($_GET['resolve_all'])) {
-    $stmt = $conn->prepare("UPDATE alert_logs SET delivery_status = 'resolved', resolved_at = NOW() WHERE delivery_status = 'pending'");
-    if ($stmt->execute()) {
-        $count = $stmt->affected_rows;
+    $count = resolveAllAlerts();
+    if ($count > 0) {
         $success = "✅ $count alerts resolved successfully!";
         logAudit($_SESSION['admin_id'], 'Resolve All Alerts', "Resolved $count alerts");
     } else {
-        $error = "Failed to resolve all alerts.";
+        $error = "No pending alerts to resolve.";
     }
-    $stmt->close();
 }
 
 // ============================================================
-// DELETE ALERT
+// DELETE ALERT - USING FUNCTION
 // ============================================================
 if (isset($_GET['delete']) && !empty($_GET['delete'])) {
     $alert_id = (int)$_GET['delete'];
-    $stmt = $conn->prepare("DELETE FROM alert_logs WHERE alert_id = ?");
-    $stmt->bind_param("i", $alert_id);
-    if ($stmt->execute()) {
+    if (deleteAlert($alert_id)) {
         $success = "✅ Alert deleted successfully!";
         logAudit($_SESSION['admin_id'], 'Delete Alert', "Deleted alert ID: $alert_id");
     } else {
         $error = "Failed to delete alert.";
     }
-    $stmt->close();
 }
 ?>
 <!DOCTYPE html>
@@ -482,6 +493,12 @@ if (isset($_GET['delete']) && !empty($_GET['delete'])) {
             background: #2a2a4a !important;
             color: #e0e0e0 !important;
         }
+        .btn-warning {
+            background: #4a3a1a !important;
+            color: #fbbf24 !important;
+            border: none !important;
+        }
+        .btn-warning:hover { background: #5a4a2a !important; color: #fcd34d !important; }
         
         /* ============================================================
            DARK WARNING BAR
@@ -959,6 +976,14 @@ if (isset($_GET['delete']) && !empty($_GET['delete'])) {
                                 <?php endif; ?>
                             </div>
                             <div class="d-flex gap-2 flex-wrap">
+                                <!-- MERGE DUPLICATES BUTTON -->
+                                <?php if ($stats['total'] > 0): ?>
+                                    <a href="?merge_duplicates=1" class="btn btn-sm btn-warning" 
+                                       onclick="return confirm('Merge duplicate alerts? This will keep only the latest alert per card per minute.')">
+                                        <i class="fas fa-compress-alt me-1"></i> Merge Dups
+                                    </a>
+                                <?php endif; ?>
+                                
                                 <?php if ($stats['pending'] > 0): ?>
                                     <a href="?resolve_all=1" class="btn btn-sm btn-success" onclick="return confirm('Resolve all pending alerts?')">
                                         <i class="fas fa-check-double me-1"></i> Resolve All
