@@ -4,7 +4,7 @@
  * COMPLETE WORKING VERSION - With Audit Trail Pagination
  * WITH SAVED LOGINS - PURE DARK MODE
  * WITH WORKING BACKUP & RESTORE
- * WITH WORKING EXPORT DATA - NO HTML, NO BOM
+ * WITH WORKING EXPORT DATA - NO HTML, NO BOM - FIXED
  * FIXED LAYOUT: Navbar, Sidebar, Footer aligned with dashboard
  */
 
@@ -186,14 +186,42 @@ if (isset($_GET['logout_session']) && is_numeric($_GET['logout_session'])) {
     $stmt->close();
 }
 
-// Get saved logins
+// ============================================================
+// SAVED LOGINS PAGINATION SETTINGS
+// ============================================================
+$savedPerPage = isset($_GET['saved_per_page']) ? (int)$_GET['saved_per_page'] : 10;
+$savedPage = isset($_GET['saved_page']) ? (int)$_GET['saved_page'] : 1;
+$perPageOptions = [10, 25, 50, 100];
+if (!in_array($savedPerPage, $perPageOptions)) {
+    $savedPerPage = 10;
+}
+
+// Get saved logins count
+$savedTotalResult = $conn->prepare("SELECT COUNT(*) as total FROM saved_logins WHERE admin_id = ?");
+$savedTotalResult->bind_param("i", $_SESSION['admin_id']);
+$savedTotalResult->execute();
+$savedCountResult = $savedTotalResult->get_result();
+$savedTotal = 0;
+if ($savedCountResult && $row = $savedCountResult->fetch_assoc()) {
+    $savedTotal = (int)$row['total'];
+}
+$savedTotalResult->close();
+
+$savedTotalPages = ceil($savedTotal / $savedPerPage);
+if ($savedTotalPages < 1) $savedTotalPages = 1;
+if ($savedPage > $savedTotalPages) $savedPage = $savedTotalPages;
+if ($savedPage < 1) $savedPage = 1;
+$savedOffset = ($savedPage - 1) * $savedPerPage;
+
+// Get saved logins with pagination
 $savedLogins = [];
 $stmt = $conn->prepare("
     SELECT * FROM saved_logins 
     WHERE admin_id = ? 
     ORDER BY last_activity DESC
+    LIMIT ? OFFSET ?
 ");
-$stmt->bind_param("i", $_SESSION['admin_id']);
+$stmt->bind_param("iii", $_SESSION['admin_id'], $savedPerPage, $savedOffset);
 $stmt->execute();
 $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
@@ -416,7 +444,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_settings'])) {
 }
 
 // ============================================================
-// EXPORT DATA - COMPLETE WORKING VERSION (NO HTML, NO BOM)
+// EXPORT DATA - FIXED: Added $escape parameter for PHP 8.1+
 // ============================================================
 if (isset($_GET['export']) && $_GET['export'] == 'true') {
     $export_type = isset($_GET['type']) ? $_GET['type'] : 'residents';
@@ -440,7 +468,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
     
     if ($export_type == 'residents') {
         // Headers
-        fputcsv($output, ['ID', 'Name', 'Student ID', 'Course', 'Year Level', 'Room', 'Contact', 'Status', 'Created At']);
+        fputcsv($output, ['ID', 'Name', 'Student ID', 'Course', 'Year Level', 'Room', 'Contact', 'Status', 'Created At'], ',', '"', '\\');
         
         // Data
         $result = $conn->query("
@@ -463,13 +491,13 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
                     $row['contact_number'] ?? 'N/A',
                     $row['status'],
                     $row['created_at']
-                ]);
+                ], ',', '"', '\\');
             }
         }
         
     } elseif ($export_type == 'access_logs') {
         // Headers
-        fputcsv($output, ['Log ID', 'Card UID', 'User', 'Access Type', 'Status', 'Timestamp', 'Power Source']);
+        fputcsv($output, ['Log ID', 'Card UID', 'User', 'Access Type', 'Status', 'Timestamp', 'Power Source'], ',', '"', '\\');
         
         // Data - Get access logs with user info
         $result = $conn->query("
@@ -492,13 +520,13 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
                     $row['access_status'] ?? 'N/A',
                     $row['timestamp'],
                     $row['power_source'] ?? 'N/A'
-                ]);
+                ], ',', '"', '\\');
             }
         }
         
     } elseif ($export_type == 'visitors') {
         // Headers
-        fputcsv($output, ['ID', 'Visitor Name', 'Resident Visited', 'Purpose', 'Entry Time', 'Exit Time', 'Status']);
+        fputcsv($output, ['ID', 'Visitor Name', 'Resident Visited', 'Purpose', 'Entry Time', 'Exit Time', 'Status'], ',', '"', '\\');
         
         // Data
         $result = $conn->query("
@@ -518,13 +546,13 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
                     $row['entry_timestamp'] ?? 'N/A',
                     $row['exit_timestamp'] ?? 'N/A',
                     $row['access_status'] ?? 'N/A'
-                ]);
+                ], ',', '"', '\\');
             }
         }
         
     } elseif ($export_type == 'audit_logs') {
         // Headers
-        fputcsv($output, ['Log ID', 'Admin', 'Action', 'Details', 'IP Address', 'Date/Time']);
+        fputcsv($output, ['Log ID', 'Admin', 'Action', 'Details', 'IP Address', 'Date/Time'], ',', '"', '\\');
         
         // Data
         $result = $conn->query("
@@ -542,13 +570,13 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
                     $row['details'] ?? '',
                     $row['ip_address'] ?? '',
                     $row['created_at']
-                ]);
+                ], ',', '"', '\\');
             }
         }
         
     } elseif ($export_type == 'alerts') {
         // Headers
-        fputcsv($output, ['Alert ID', 'Card UID', 'User', 'Alert Type', 'Status', 'Reason', 'Timestamp']);
+        fputcsv($output, ['Alert ID', 'Card UID', 'User', 'Alert Type', 'Status', 'Reason', 'Timestamp'], ',', '"', '\\');
         
         // Data
         $result = $conn->query("
@@ -570,13 +598,13 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
                     $row['delivery_status'] ?? 'N/A',
                     $row['reason'] ?? '',
                     $row['timestamp']
-                ]);
+                ], ',', '"', '\\');
             }
         }
         
     } elseif ($export_type == 'rfid_cards') {
         // Headers
-        fputcsv($output, ['Card UID', 'User', 'Card Type', 'Status', 'Issued Date', 'Expiry Date']);
+        fputcsv($output, ['Card UID', 'User', 'Card Type', 'Status', 'Issued Date', 'Expiry Date'], ',', '"', '\\');
         
         // Data
         $result = $conn->query("
@@ -596,7 +624,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
                     $row['status'] ?? 'N/A',
                     $row['issued_date'] ?? 'N/A',
                     $row['expiry_date'] ?? 'N/A'
-                ]);
+                ], ',', '"', '\\');
             }
         }
     }
@@ -671,7 +699,6 @@ if (is_dir($backup_dir)) {
 // ============================================================
 $auditPerPage = isset($_GET['audit_per_page']) ? (int)$_GET['audit_per_page'] : 10;
 $auditPage = isset($_GET['audit_page']) ? (int)$_GET['audit_page'] : 1;
-$perPageOptions = [10, 25, 50, 100];
 if (!in_array($auditPerPage, $perPageOptions)) {
     $auditPerPage = 10;
 }
@@ -728,12 +755,9 @@ $stmt->close();
             background: #0a0e1a !important;
             color: #e0e0e0 !important;
             min-height: 100vh;
-            padding-top: 70px !important; /* FIX: Add padding for fixed navbar */
+            padding-top: 70px !important;
         }
         
-        /* ============================================================
-           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
-           ============================================================ */
         .container-fluid {
             padding-top: 10px !important;
         }
@@ -743,15 +767,6 @@ $stmt->close();
             margin-top: 0 !important;
         }
         
-        /* If navbar is fixed-top, ensure content doesn't hide behind it */
-        .navbar.fixed-top + .container-fluid,
-        .navbar.fixed-top ~ .container-fluid {
-            padding-top: 20px !important;
-        }
-        
-        /* ============================================================
-           DARK NAVBAR OVERRIDE - MATCHES DASHBOARD
-           ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -767,13 +782,10 @@ $stmt->close();
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           DARK SIDEBAR - MATCHES DASHBOARD
-           ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
-            padding-top: 80px !important; /* FIX: Add padding for fixed navbar */
+            padding-top: 80px !important;
             min-height: calc(100vh - 70px) !important;
         }
         .sidebar .nav-link {
@@ -790,9 +802,6 @@ $stmt->close();
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           DARK SETTINGS SIDEBAR
-           ============================================================ */
         .settings-sidebar {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -828,9 +837,6 @@ $stmt->close();
             font-size: 10px;
         }
         
-        /* ============================================================
-           DARK SETTINGS CONTENT
-           ============================================================ */
         .settings-content {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -853,9 +859,6 @@ $stmt->close();
             align-items: flex-start;
         }
         
-        /* ============================================================
-           DARK FORM ELEMENTS
-           ============================================================ */
         .form-control, .form-select {
             background: #1a1a2e !important;
             border: 1px solid #2a2a4a !important;
@@ -871,10 +874,7 @@ $stmt->close();
             color: #e0e0e0 !important;
         }
         .form-control::placeholder { color: #606070 !important; }
-        .form-control:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .form-control:disabled { opacity: 0.5; cursor: not-allowed; }
         .form-label {
             font-weight: 500;
             font-size: 13px;
@@ -886,9 +886,6 @@ $stmt->close();
         .text-danger { color: #f87171 !important; }
         .text-warning { color: #fbbf24 !important; }
         
-        /* ============================================================
-           DARK BUTTONS
-           ============================================================ */
         .btn-submit {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             border: none !important;
@@ -960,9 +957,6 @@ $stmt->close();
             color: #bfdbfe !important;
         }
         
-        /* ============================================================
-           DARK EXPORT CARDS
-           ============================================================ */
         .export-card {
             border: 2px dashed #2a2a4a !important;
             border-radius: 12px;
@@ -986,9 +980,6 @@ $stmt->close();
             background: #2a5a9a !important;
         }
         
-        /* ============================================================
-           DARK TOGGLE SWITCH
-           ============================================================ */
         .toggle-switch {
             position: relative;
             width: 50px;
@@ -1026,9 +1017,6 @@ $stmt->close();
             background: white !important;
         }
         
-        /* ============================================================
-           DARK SETTING ITEMS
-           ============================================================ */
         .setting-item {
             display: flex;
             justify-content: space-between;
@@ -1048,9 +1036,6 @@ $stmt->close();
             color: #808090 !important;
         }
         
-        /* ============================================================
-           DARK BADGES
-           ============================================================ */
         .badge-status { padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 500; }
         .badge-enabled { background: #065f46 !important; color: #34d399 !important; }
         .badge-disabled { background: #2a2a3a !important; color: #808090 !important; }
@@ -1061,9 +1046,6 @@ $stmt->close();
         .badge-secondary { background: #2a2a3a !important; color: #808090 !important; }
         .badge-primary { background: #1a3a6a !important; color: #93c5fd !important; }
         
-        /* ============================================================
-           DARK SAVED LOGINS
-           ============================================================ */
         .saved-login-item {
             background: #1a1a2e !important;
             border: 1px solid #2a2a4a !important;
@@ -1125,9 +1107,6 @@ $stmt->close();
             color: #fca5a5 !important;
         }
         
-        /* ============================================================
-           DARK BACKUP SECTION
-           ============================================================ */
         .backup-card {
             background: #1a1a2e !important;
             border: 1px solid #2a2a4a !important;
@@ -1167,9 +1146,6 @@ $stmt->close();
             border-color: #2a5a9a;
         }
         
-        /* ============================================================
-           DARK TABLE
-           ============================================================ */
         .table {
             color: #e0e0e0 !important;
         }
@@ -1187,9 +1163,6 @@ $stmt->close();
         .table .text-danger { color: #f87171 !important; }
         .table-sm td, .table-sm th { padding: 6px 10px; }
         
-        /* ============================================================
-           DARK ALERTS
-           ============================================================ */
         .alert-success {
             background: #065f46 !important;
             border-color: #065f46 !important;
@@ -1202,9 +1175,6 @@ $stmt->close();
         }
         .alert .btn-close { filter: invert(1) !important; }
         
-        /* ============================================================
-           DARK PAGINATION
-           ============================================================ */
         .pagination .page-link {
             border-radius: 8px;
             margin: 0 2px;
@@ -1231,9 +1201,6 @@ $stmt->close();
         }
         .pagination .page-item .page-link i { font-size: 12px; }
         
-        /* ============================================================
-           DARK BORDER & MISC
-           ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .border-top { border-top-color: #1a2a4a !important; }
         .border { border-color: #1a2a4a !important; }
@@ -1247,9 +1214,6 @@ $stmt->close();
         .bg-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
         .bg-info { background: #1a3a6a !important; color: #93c5fd !important; }
         
-        /* ============================================================
-           DARK SELECT FORM (Per Page)
-           ============================================================ */
         .form-select-sm {
             background: #1a1a2e !important;
             border: 1px solid #2a2a4a !important;
@@ -1263,16 +1227,10 @@ $stmt->close();
             box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
         }
         
-        /* ============================================================
-           DARK PREVIEW BOXES
-           ============================================================ */
         .border.rounded {
             border-color: #2a2a4a !important;
         }
         
-        /* ============================================================
-           DASHBOARD STYLE FOOTER
-           ============================================================ */
         footer {
             color: #808090 !important;
             border-top: 1px solid #1a2a4a !important;
@@ -1283,22 +1241,13 @@ $stmt->close();
             color: #606070 !important;
         }
         
-        /* ============================================================
-           RESPONSIVE - MATCHES DASHBOARD
-           ============================================================ */
         @media (max-width: 992px) {
             .settings-container { flex-direction: column; }
             .settings-sidebar { width: 100%; }
         }
         @media (max-width: 768px) {
-            body {
-                padding-top: 60px !important;
-            }
-            
-            .navbar {
-                height: 60px !important;
-            }
-            
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
@@ -1311,7 +1260,6 @@ $stmt->close();
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            
             .settings-content { padding: 20px; }
             .setting-item { flex-direction: column; align-items: flex-start; gap: 10px; }
             .saved-login-item {
@@ -1388,7 +1336,7 @@ $stmt->close();
                     <div class="settings-sidebar">
                         <ul class="nav flex-column">
                             <li><a class="nav-link <?php echo $active_tab == 'change-password' ? 'active' : ''; ?>" href="?tab=change-password"><i class="fas fa-key"></i> Change Password</a></li>
-                            <li><a class="nav-link <?php echo $active_tab == 'saved-login' ? 'active' : ''; ?>" href="?tab=saved-login"><i class="fas fa-history"></i> Saved Logins</a></li>
+                            <li><a class="nav-link <?php echo $active_tab == 'saved-login' ? 'active' : ''; ?>" href="?tab=saved-login"><i class="fas fa-history"></i> Saved Logins <span class="badge bg-primary"><?php echo $savedTotal; ?></span></a></li>
                             <li><a class="nav-link <?php echo $active_tab == 'security' ? 'active' : ''; ?>" href="?tab=security"><i class="fas fa-lock"></i> Security</a></li>
                             <li><a class="nav-link <?php echo $active_tab == 'notifications' ? 'active' : ''; ?>" href="?tab=notifications"><i class="fas fa-bell"></i> Notifications <span class="badge <?php echo ($userSettings['notifications'] == 'true') ? 'bg-success' : 'bg-secondary'; ?>"><?php echo ($userSettings['notifications'] == 'true') ? 'ON' : 'OFF'; ?></span></a></li>
                             <li><a class="nav-link <?php echo $active_tab == 'activity-log' ? 'active' : ''; ?>" href="?tab=activity-log"><i class="fas fa-chart-line"></i> Activity Log</a></li>
@@ -1420,11 +1368,15 @@ $stmt->close();
                         </form>
                         <?php endif; ?>
 
-                        <!-- ========== SAVED LOGINS ========== -->
+                        <!-- ========== SAVED LOGINS WITH SHOW ENTRIES ========== -->
                         <?php if ($active_tab == 'saved-login'): ?>
                         <h4><i class="fas fa-history me-2"></i>Saved Logins</h4>
                         <p class="text-muted">Manage your active login sessions across different devices.</p>
                         
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                            <span class="text-muted small">Total: <?php echo $savedTotal; ?> session(s)</span>
+                        </div>
+
                         <div class="mt-3">
                             <?php if (empty($savedLogins)): ?>
                                 <div class="text-center text-muted py-4">
@@ -1502,33 +1454,107 @@ $stmt->close();
                                     </div>
                                 <?php endforeach; ?>
                                 
+                                <!-- Saved Logins Pagination with Show Entries -->
+                                <?php if ($savedTotal > $savedPerPage): ?>
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mt-3 pt-3 border-top">
+                                    <div class="text-muted small">
+                                        <i class="fas fa-database me-1"></i>
+                                        Showing <?php echo $savedOffset + 1; ?> to <?php echo min($savedOffset + $savedPerPage, $savedTotal); ?> of <?php echo $savedTotal; ?> entries
+                                    </div>
+                                    
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <!-- Per Page Selector -->
+                                        <div class="d-flex align-items-center gap-2">
+                                            <label class="text-muted small mb-0">Show:</label>
+                                            <select class="form-select form-select-sm" style="width: auto;" 
+                                                    onchange="changeSavedPerPage(this.value)">
+                                                <?php foreach ($perPageOptions as $option): ?>
+                                                    <option value="<?php echo $option; ?>" <?php echo $option == $savedPerPage ? 'selected' : ''; ?>>
+                                                        <?php echo $option; ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Pagination -->
+                                        <nav aria-label="Saved logins pagination">
+                                            <ul class="pagination pagination-sm mb-0">
+                                                <li class="page-item <?php echo $savedPage <= 1 ? 'disabled' : ''; ?>">
+                                                    <a class="page-link" href="?tab=saved-login&saved_page=1&saved_per_page=<?php echo $savedPerPage; ?>">
+                                                        <i class="fas fa-angle-double-left"></i>
+                                                    </a>
+                                                </li>
+                                                <li class="page-item <?php echo $savedPage <= 1 ? 'disabled' : ''; ?>">
+                                                    <a class="page-link" href="?tab=saved-login&saved_page=<?php echo $savedPage - 1; ?>&saved_per_page=<?php echo $savedPerPage; ?>">
+                                                        <i class="fas fa-angle-left"></i>
+                                                    </a>
+                                                </li>
+                                                
+                                                <?php
+                                                $startSavedPage = max(1, $savedPage - 2);
+                                                $endSavedPage = min($savedTotalPages, $savedPage + 2);
+                                                
+                                                if ($startSavedPage > 1) {
+                                                    echo '<li class="page-item"><a class="page-link" href="?tab=saved-login&saved_page=1&saved_per_page=' . $savedPerPage . '">1</a></li>';
+                                                    if ($startSavedPage > 2) {
+                                                        echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                                                    }
+                                                }
+                                                
+                                                for ($i = $startSavedPage; $i <= $endSavedPage; $i++) {
+                                                    $active = $i == $savedPage ? 'active' : '';
+                                                    echo '<li class="page-item ' . $active . '">
+                                                            <a class="page-link" href="?tab=saved-login&saved_page=' . $i . '&saved_per_page=' . $savedPerPage . '">' . $i . '</a>
+                                                          </li>';
+                                                }
+                                                
+                                                if ($endSavedPage < $savedTotalPages) {
+                                                    if ($endSavedPage < $savedTotalPages - 1) {
+                                                        echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                                                    }
+                                                    echo '<li class="page-item"><a class="page-link" href="?tab=saved-login&saved_page=' . $savedTotalPages . '&saved_per_page=' . $savedPerPage . '">' . $savedTotalPages . '</a></li>';
+                                                }
+                                                ?>
+                                                
+                                                <li class="page-item <?php echo $savedPage >= $savedTotalPages ? 'disabled' : ''; ?>">
+                                                    <a class="page-link" href="?tab=saved-login&saved_page=<?php echo $savedPage + 1; ?>&saved_per_page=<?php echo $savedPerPage; ?>">
+                                                        <i class="fas fa-angle-right"></i>
+                                                    </a>
+                                                </li>
+                                                <li class="page-item <?php echo $savedPage >= $savedTotalPages ? 'disabled' : ''; ?>">
+                                                    <a class="page-link" href="?tab=saved-login&saved_page=<?php echo $savedTotalPages; ?>&saved_per_page=<?php echo $savedPerPage; ?>">
+                                                        <i class="fas fa-angle-double-right"></i>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                                
                                 <div class="mt-3 text-muted small">
                                     <i class="fas fa-info-circle me-1"></i>
-                                    Showing <?php echo count($savedLogins); ?> saved session<?php echo count($savedLogins) > 1 ? 's' : ''; ?>.
+                                    Showing <?php echo count($savedLogins); ?> session<?php echo count($savedLogins) > 1 ? 's' : ''; ?> on this page.
                                     <?php 
                                         $activeCount = 0;
                                         foreach ($savedLogins as $login) {
                                             if ($login['is_active'] == 1) $activeCount++;
                                         }
                                     ?>
-                                    <span class="ms-2"><?php echo $activeCount; ?> active, <?php echo count($savedLogins) - $activeCount; ?> inactive.</span>
+                                    <span class="ms-2"><?php echo $activeCount; ?> active, <?php echo count($savedLogins) - $activeCount; ?> inactive on this page.</span>
                                 </div>
                             <?php endif; ?>
                         </div>
-                        <?php endif; ?>
-
-                        <!-- ========== DARK MODE ========== -->
-                        <?php if ($active_tab == 'dark-mode'): ?>
-                        <h4><i class="fas fa-moon me-2"></i>Dark Mode</h4>
-                        <p class="text-muted">Choose your preferred theme for the dashboard.</p>
-                        <div class="setting-item">
-                            <div class="setting-info"><h6>Dark Mode</h6><p>Switch to dark theme for better viewing in low light</p></div>
-                            <div><label class="toggle-switch"><input type="checkbox" id="darkModeToggle" <?php echo ($userSettings['dark_mode'] == 'true') ? 'checked' : ''; ?>><span class="toggle-slider"></span></label></div>
-                        </div>
-                        <div class="row mt-4 g-3">
-                            <div class="col-md-6"><div class="p-3 border rounded" style="background:#1a1a2e; color:#e0e0e0; border-color:#2a2a4a !important;"><h6>🌙 Dark Theme</h6><p class="small text-muted">Current dark theme preview</p></div></div>
-                            <div class="col-md-6"><div class="p-3 border rounded" style="background:#ffffff; color:#333333; border-color:#ddd !important;"><h6>☀️ Light Theme</h6><p class="small text-muted">Light theme preview</p></div></div>
-                        </div>
+                        
+                        <script>
+                            function changeSavedPerPage(value) {
+                                const urlParams = new URLSearchParams(window.location.search);
+                                urlParams.set('tab', 'saved-login');
+                                urlParams.set('saved_per_page', value);
+                                urlParams.set('saved_page', 1);
+                                window.location.href = '?' + urlParams.toString();
+                            }
+                        </script>
                         <?php endif; ?>
 
                         <!-- ========== SECURITY ========== -->
@@ -1573,7 +1599,7 @@ $stmt->close();
                         </div>
                         <?php endif; ?>
 
-                        <!-- ========== EXPORT DATA - COMPLETE WORKING ========== -->
+                        <!-- ========== EXPORT DATA - FIXED ========== -->
                         <?php if ($active_tab == 'export-data'): ?>
                         <h4><i class="fas fa-download me-2"></i>Export Data</h4>
                         <p class="text-muted">Export your data in CSV format for backup or analysis.</p>
@@ -1644,10 +1670,13 @@ $stmt->close();
                         <div class="mt-3 text-muted small">
                             <i class="fas fa-info-circle me-1"></i>
                             All exports are in CSV format compatible with Excel and Google Sheets.
+                            <span class="mx-1">|</span>
+                            <i class="fas fa-check-circle text-success me-1"></i>
+                            No BOM - clean UTF-8 encoding.
                         </div>
                         <?php endif; ?>
 
-                        <!-- ========== AUDIT TRAIL WITH PAGINATION ========== -->
+                        <!-- ========== AUDIT TRAIL ========== -->
                         <?php if ($active_tab == 'audit-trail'): ?>
                         <h4><i class="fas fa-clipboard-list me-2"></i>Audit Trail</h4>
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
@@ -1793,7 +1822,6 @@ $stmt->close();
                         <h4><i class="fas fa-database me-2"></i>Backup & Restore</h4>
                         <p class="text-muted">Manage your data backups and restoration.</p>
                         
-                        <!-- Create Backup -->
                         <div class="backup-card">
                             <div class="row align-items-center">
                                 <div class="col-md-8">
@@ -1808,7 +1836,6 @@ $stmt->close();
                             </div>
                         </div>
                         
-                        <!-- Restore Backup -->
                         <div class="backup-card">
                             <div class="row align-items-center">
                                 <div class="col-md-8">
@@ -1828,7 +1855,6 @@ $stmt->close();
                             </div>
                         </div>
                         
-                        <!-- Auto Backup Setting -->
                         <div class="setting-item">
                             <div class="setting-info">
                                 <h6><i class="fas fa-clock text-warning me-2"></i>Auto Backup</h6>
@@ -1842,7 +1868,6 @@ $stmt->close();
                             </div>
                         </div>
                         
-                        <!-- Existing Backup Files -->
                         <?php if (!empty($backupFiles)): ?>
                         <div class="mt-4">
                             <h6 style="color:#e0e0e0;"><i class="fas fa-file-archive me-2"></i>Existing Backups</h6>
@@ -1901,7 +1926,6 @@ $stmt->close();
                     </div>
                 </div>
                 
-                <!-- Footer - MATCHES DASHBOARD -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
@@ -1915,7 +1939,6 @@ $stmt->close();
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Dark mode toggle
         document.addEventListener('DOMContentLoaded', function() {
             const darkToggle = document.getElementById('darkModeToggle');
             if (darkToggle) {
@@ -1933,7 +1956,6 @@ $stmt->close();
                 });
             }
             
-            // Update server time
             function updateServerTime() {
                 const now = new Date();
                 const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
@@ -1947,7 +1969,6 @@ $stmt->close();
             setInterval(updateServerTime, 60000);
         });
         
-        // Sidebar toggle for mobile - MATCHES DASHBOARD
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
