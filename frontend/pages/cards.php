@@ -120,7 +120,7 @@ if (!empty($searchFilter)) {
 $countResult = $conn->query($countQuery);
 $totalCards = 0;
 if ($countResult && $row = $countResult->fetch_assoc()) {
-    $totalCards = (int)$row['count'];
+    $totalCards = (int)$row['total'];
 }
 
 $totalPages = ceil($totalCards / $perPage);
@@ -169,7 +169,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET STATS
+// GET STATS - FIXED WITH PROPER ERROR HANDLING
 // ============================================================
 $stats = [
     'total' => 0,
@@ -183,57 +183,30 @@ $stats = [
     'expiring_soon' => 0
 ];
 
-$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['total'] = (int)$row['count'];
+// Helper function to safely get count
+function getCount($conn, $query) {
+    $result = $conn->query($query);
+    if ($result && $row = $result->fetch_assoc()) {
+        return (int)$row['count'];
+    }
+    return 0;
 }
 
-$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'active'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['active'] = (int)$row['count'];
-}
-
-$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'deactivated'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['deactivated'] = (int)$row['count'];
-}
-
-$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'expired'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['expired'] = (int)$row['count'];
-}
-
-$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'lost'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['lost'] = (int)$row['count'];
-}
-
-$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE card_type = 'resident'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['resident'] = (int)$row['count'];
-}
-
-$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE card_type = 'staff'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['staff'] = (int)$row['count'];
-}
-
-$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE card_type = 'visitor'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['visitor'] = (int)$row['count'];
-}
-
-// Cards expiring soon (within 3 days)
-$result = $conn->query("
+$stats['total'] = getCount($conn, "SELECT COUNT(*) as count FROM rfid_cards");
+$stats['active'] = getCount($conn, "SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'active'");
+$stats['deactivated'] = getCount($conn, "SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'deactivated'");
+$stats['expired'] = getCount($conn, "SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'expired'");
+$stats['lost'] = getCount($conn, "SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'lost'");
+$stats['resident'] = getCount($conn, "SELECT COUNT(*) as count FROM rfid_cards WHERE card_type = 'resident'");
+$stats['staff'] = getCount($conn, "SELECT COUNT(*) as count FROM rfid_cards WHERE card_type = 'staff'");
+$stats['visitor'] = getCount($conn, "SELECT COUNT(*) as count FROM rfid_cards WHERE card_type = 'visitor'");
+$stats['expiring_soon'] = getCount($conn, "
     SELECT COUNT(*) as count 
     FROM rfid_cards 
     WHERE status = 'active' 
     AND expiry_date IS NOT NULL
     AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
 ");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['expiring_soon'] = (int)$row['count'];
-}
 
 // Get dark mode
 $darkModeClass = '';
