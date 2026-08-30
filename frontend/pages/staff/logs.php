@@ -6,6 +6,7 @@
  * PURE DARK MODE - NO WHITE IN TABLES
  * WITH PROFILE PHOTO FOR RESIDENTS
  * RESIDENTS ONLY (NO STAFF)
+ * FIXED SIDEBAR POSITION
  */
 
 session_start();
@@ -368,24 +369,6 @@ if (isset($_SESSION['staff_id'])) {
         // Silently fail
     }
 }
-
-// Helper function to get profile photo
-function getProfilePhoto($photoPath) {
-    if (empty($photoPath)) {
-        return null;
-    }
-    
-    if (strpos($photoPath, 'uploads/') === 0) {
-        $fullPath = '../../../' . $photoPath;
-    } else {
-        $fullPath = '../../../uploads/resident_photos/' . $photoPath;
-    }
-    
-    if (file_exists($fullPath)) {
-        return $fullPath;
-    }
-    return null;
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -441,16 +424,35 @@ function getProfilePhoto($photoPath) {
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
         /* ============================================================
-           DARK SIDEBAR
+           DARK SIDEBAR - FIXED POSITION
            ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
-            padding-top: 80px !important;
+            padding-top: 0 !important;
+            padding-bottom: 20px !important;
             min-height: calc(100vh - 70px) !important;
+            position: fixed !important;
+            top: 70px !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            width: 260px !important;
+            overflow-y: auto !important;
+            z-index: 1000 !important;
+            display: flex !important;
+            flex-direction: column !important;
         }
         .sidebar .nav-link {
             color: #9090a0 !important;
+            padding: 10px 20px !important;
+            border-radius: 8px !important;
+            margin: 2px 8px !important;
+            transition: all 0.3s ease !important;
+            font-weight: 500 !important;
+            font-size: 14px !important;
+            display: flex !important;
+            align-items: center !important;
+            text-decoration: none !important;
         }
         .sidebar .nav-link:hover {
             background: rgba(255,255,255,0.05) !important;
@@ -459,9 +461,61 @@ function getProfilePhoto($photoPath) {
         .sidebar .nav-link.active {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             color: white !important;
+            box-shadow: 0 4px 15px rgba(26,58,106,0.3) !important;
         }
-        .sidebar-footer { border-top-color: #1a2a4a !important; }
-        .sidebar-footer .text-muted { color: #606070 !important; }
+        .sidebar .nav-link i {
+            width: 20px;
+            text-align: center;
+            color: #606070 !important;
+            margin-right: 12px;
+        }
+        .sidebar .nav-link.active i {
+            color: white !important;
+        }
+        .sidebar .nav-link .badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            margin-left: auto;
+        }
+        .sidebar .nav-link .badge.bg-danger {
+            background: #7a2a2a !important;
+            color: #f87171 !important;
+        }
+        .sidebar .nav-link .badge.bg-success {
+            background: #065f46 !important;
+            color: #34d399 !important;
+        }
+        .sidebar .nav-link .badge.bg-warning {
+            background: #4a3a1a !important;
+            color: #fbbf24 !important;
+        }
+        .sidebar .nav-link .badge.bg-primary {
+            background: #1a3a6a !important;
+            color: #93c5fd !important;
+        }
+        .sidebar .nav-link .badge.bg-secondary {
+            background: #1a2a4a !important;
+            color: #808090 !important;
+        }
+        .sidebar-footer {
+            padding: 15px 20px !important;
+            border-top: 1px solid #1a2a4a !important;
+            margin-top: auto !important;
+        }
+        .sidebar-footer .text-muted {
+            color: #606070 !important;
+            font-size: 11px !important;
+        }
+        
+        /* ============================================================
+           MAIN CONTENT OFFSET
+           ============================================================ */
+        .main-content {
+            margin-left: 260px !important;
+            padding: 20px 30px !important;
+            min-height: calc(100vh - 70px) !important;
+        }
         
         /* ============================================================
            DARK STAT CARDS - NO WHITE
@@ -891,21 +945,23 @@ function getProfilePhoto($photoPath) {
             }
             
             .sidebar {
-                padding-top: 70px !important;
-                position: fixed;
-                top: 60px;
-                bottom: 0;
-                left: -280px;
-                width: 280px;
-                transition: left 0.3s ease;
-                z-index: 999;
+                padding-top: 0 !important;
+                position: fixed !important;
+                top: 60px !important;
+                bottom: 0 !important;
+                left: -280px !important;
+                width: 280px !important;
+                transition: left 0.3s ease !important;
+                z-index: 999 !important;
                 min-height: calc(100vh - 60px) !important;
             }
-            .sidebar.show { left: 0; }
+            .sidebar.show { 
+                left: 0 !important; 
+            }
             
             .main-content {
-                margin-left: 0;
-                padding: 15px;
+                margin-left: 0 !important;
+                padding: 15px !important;
             }
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
