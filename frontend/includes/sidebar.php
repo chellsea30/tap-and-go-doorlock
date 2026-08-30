@@ -581,46 +581,46 @@ SIDEBAR OVERLAY - for mobile close
             </li>
             
             <!-- ===== STAFF ===== -->
-            <li class="nav-item">
-                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'active' : ''; ?>" 
-                   href="#staffMenu" 
-                   data-bs-toggle="collapse" 
-                   role="button" 
-                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'true' : 'false'; ?>">
-                    <i class="fas fa-user-tie"></i> Staff
-                    <i class="fas fa-chevron-down"></i>
-                    <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM staff WHERE status = 'active'");
-                        $row = $result->fetch_assoc();
-                        $staffCount = $row['count'] ?? 0;
-                    ?>
-                    <span class="badge bg-info rounded-pill"><?php echo $staffCount; ?></span>
-                </a>
-                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'show' : ''; ?>" id="staffMenu">
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-info.php' ? 'active' : ''; ?>" href="staff-info.php">
-                            <i class="fas fa-address-card"></i> Staff Info
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-card.php' ? 'active' : ''; ?>" href="staff-card.php">
-                            <i class="fas fa-id-badge"></i> Staff Card
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-logs.php' ? 'active' : ''; ?>" href="staff-logs.php">
-                            <i class="fas fa-clipboard-list"></i> Staff Logs
-                            <?php
-                                $result = $conn->query("SELECT COUNT(*) as count FROM staff_logs WHERE DATE(timestamp) = CURDATE()");
-                                $row = $result->fetch_assoc();
-                                $todayStaffLogs = $row['count'] ?? 0;
-                            ?>
-                            <span class="badge bg-primary rounded-pill"><?php echo $todayStaffLogs; ?></span>
-                        </a>
-                    </li>
-                </ul>
-            </li>
+<li class="nav-item">
+    <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'active' : ''; ?>" 
+       href="#staffMenu" 
+       data-bs-toggle="collapse" 
+       role="button" 
+       aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'true' : 'false'; ?>">
+        <i class="fas fa-user-tie"></i> Staff
+        <i class="fas fa-chevron-down"></i>
+        <?php
+            $conn = getDBConnection();
+            $result = $conn->query("SELECT COUNT(*) as count FROM staff WHERE status = 'active'");
+            $row = $result->fetch_assoc();
+            $staffCount = $row['count'] ?? 0;
+        ?>
+        <span class="badge bg-info rounded-pill"><?php echo $staffCount; ?></span>
+    </a>
+    <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'show' : ''; ?>" id="staffMenu">
+        <li class="nav-item">
+            <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-info.php' ? 'active' : ''; ?>" href="staff-info.php">
+                <i class="fas fa-address-card"></i> Staff Info
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-card.php' ? 'active' : ''; ?>" href="staff-card.php">
+                <i class="fas fa-id-card"></i> Staff Card
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-logs.php' ? 'active' : ''; ?>" href="staff-logs.php">
+                <i class="fas fa-clock"></i> Access Logs
+                <?php
+                    $result = $conn->query("SELECT COUNT(*) as count FROM staff_logs WHERE DATE(timestamp) = CURDATE()");
+                    $row = $result->fetch_assoc();
+                    $todayStaffLogs = $row['count'] ?? 0;
+                ?>
+                <span class="badge bg-primary rounded-pill"><?php echo $todayStaffLogs; ?></span>
+            </a>
+        </li>
+    </ul>
+</li>
             
             <!-- ===== OTHERS ===== -->
             <li class="nav-item">
