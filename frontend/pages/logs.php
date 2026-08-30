@@ -4,6 +4,7 @@
  * WITH SEPARATE PRINT FOR RESIDENTS AND VISITORS
  * PURE DARK MODE - Fixed navbar, sidebar, footer
  * WITH PROFILE PHOTO DISPLAY IN TABLE
+ * WITH STAFF LOGS TABLE
  */
 
 session_start();
@@ -116,7 +117,7 @@ $residentCountQuery = "
     LEFT JOIN users u ON c.user_id = u.user_id
     LEFT JOIN users ru ON c.resident_visited = ru.user_id
     LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE (c.card_type = 'resident' OR c.card_type = 'staff' OR c.card_type IS NULL)
+    WHERE (c.card_type = 'resident' OR c.card_type IS NULL)
 ";
 
 if (!empty($dateFilter)) {
@@ -164,7 +165,7 @@ $residentQuery = "
     LEFT JOIN users u ON c.user_id = u.user_id
     LEFT JOIN users ru ON c.resident_visited = ru.user_id
     LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE (c.card_type = 'resident' OR c.card_type = 'staff' OR c.card_type IS NULL)
+    WHERE (c.card_type = 'resident' OR c.card_type IS NULL)
 ";
 
 if (!empty($dateFilter)) {
@@ -234,6 +235,48 @@ if ($result) {
 }
 
 // ============================================================
+// GET STAFF ACCESS LOGS
+// ============================================================
+$staffLogs = [];
+$staffQuery = "
+    SELECT 
+        al.*,
+        c.card_uid,
+        c.card_type,
+        s.full_name as staff_name,
+        s.staff_id_number,
+        s.department,
+        s.phone as staff_phone,
+        s.avatar as staff_avatar
+    FROM access_logs al
+    LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
+    LEFT JOIN staff_users s ON c.user_id = s.staff_id
+    WHERE c.card_type = 'staff'
+";
+
+if (!empty($dateFilter)) {
+    $staffQuery .= " AND DATE(al.timestamp) = '$dateFilter'";
+}
+if (!empty($statusFilter)) {
+    $staffQuery .= " AND al.access_status = '$statusFilter'";
+}
+if (!empty($typeFilter)) {
+    $staffQuery .= " AND al.access_type = '$typeFilter'";
+}
+if (!empty($searchFilter)) {
+    $staffQuery .= " AND (s.full_name LIKE '%$searchFilter%' OR al.card_uid LIKE '%$searchFilter%')";
+}
+
+$staffQuery .= " ORDER BY al.timestamp DESC LIMIT 500";
+
+$result = $conn->query($staffQuery);
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $staffLogs[] = $row;
+    }
+}
+
+// ============================================================
 // GET UNAUTHORIZED ACCESS LOGS (DENIED)
 // ============================================================
 $unauthorizedLogs = [];
@@ -280,6 +323,7 @@ $stats = [
     'today' => 0,
     'residents' => 0,
     'visitors' => 0,
+    'staff' => 0,
     'unauthorized_today' => 0,
     'unauthorized_total' => 0,
     'pending_alerts' => 0,
@@ -326,7 +370,7 @@ $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM access_logs al
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
-    WHERE c.card_type != 'visitor' OR c.card_type IS NULL
+    WHERE c.card_type = 'resident' OR c.card_type IS NULL
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['residents'] = (int)$row['count'];
@@ -340,6 +384,16 @@ $result = $conn->query("
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['visitors'] = (int)$row['count'];
+}
+
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM access_logs al
+    LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
+    WHERE c.card_type = 'staff'
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['staff'] = (int)$row['count'];
 }
 
 $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'pending'");
@@ -413,11 +467,6 @@ if ($result && $row = $result->fetch_assoc()) {
             padding-top: 10px;
             font-size: 11px;
             color: #666;
-        }
-        .signature-cell { 
-            min-width: 80px; 
-            height: 30px;
-            border-bottom: 1px solid #000;
         }
         .badge-print {
             display: inline-block;
@@ -697,6 +746,7 @@ if ($result && $row = $result->fetch_assoc()) {
         .badge-staff { background: #4a3a1a !important; color: #fbbf24 !important; }
         .badge-resident-header { background: #1a3a6a !important; color: #93c5fd !important; }
         .badge-visitor-header { background: #2a2a6a !important; color: #93c5fd !important; }
+        .badge-staff-header { background: #4a3a1a !important; color: #fbbf24 !important; }
         .badge-pending { background: #4a3a1a !important; color: #fbbf24 !important; }
         .badge-resolved { background: #065f46 !important; color: #34d399 !important; }
         .badge-unauthorized { background: #7a2a2a !important; color: #f87171 !important; }
@@ -915,6 +965,22 @@ if ($result && $row = $result->fetch_assoc()) {
             color: white !important;
         }
         
+        .btn-print-staff {
+            background: linear-gradient(135deg, #4a3a1a, #6a4a2a) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px;
+            padding: 6px 16px;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+        .btn-print-staff:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(74,58,26,0.4);
+            color: white !important;
+        }
+        
         @media (max-width: 768px) {
             body {
                 padding-top: 60px !important;
@@ -989,7 +1055,7 @@ if ($result && $row = $result->fetch_assoc()) {
     <?php if ($printResidents): ?>
     <!-- PRINT HEADER - RESIDENTS ONLY -->
     <div class="print-header">
-        <h2>🏠 Resident / Staff Access Logs</h2>
+        <h2>🏠 Resident Access Logs</h2>
         <p>
             ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>
             Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?>
@@ -1004,7 +1070,7 @@ if ($result && $row = $result->fetch_assoc()) {
             <tr>
                 <th>Date/Time</th>
                 <th>RFID UID</th>
-                <th>Tenant</th>
+                <th>Resident</th>
                 <th>Room</th>
                 <th>Type</th>
                 <th>Signature</th>
@@ -1014,29 +1080,23 @@ if ($result && $row = $result->fetch_assoc()) {
             <?php if (empty($residentLogs)): ?>
                 <tr>
                     <td colspan="6" style="text-align:center;padding:20px;color:#999;">
-                        No resident/staff access logs found
+                        No resident access logs found
                     </td>
                 </tr>
             <?php else: ?>
                 <?php foreach ($residentLogs as $log): 
                     $displayName = $log['user_name'] ?? 'Unknown';
-                    $cardType = $log['card_type'] ?? 'resident';
-                    $typeLabel = $cardType == 'staff' ? 'Staff' : 'Resident';
-                    $roomDisplay = $log['room_number'] ?? 'N/A';
                 ?>
                     <tr>
                         <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
                         <td><span style="font-family:monospace;font-weight:600;"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
                         <td>
                             <?php echo htmlspecialchars($displayName); ?>
-                            <span class="badge-print" style="background:#d4edda;color:#155724;font-size:8px;padding:0 5px;margin-left:3px;">
-                                <?php echo $typeLabel; ?>
-                            </span>
                             <?php if (!empty($log['student_id'])): ?>
                                 <br><span style="font-size:8px;color:#888;">ID: <?php echo htmlspecialchars($log['student_id']); ?></span>
                             <?php endif; ?>
                         </td>
-                        <td><?php echo htmlspecialchars($roomDisplay); ?></td>
+                        <td><?php echo htmlspecialchars($log['room_number'] ?? 'N/A'); ?></td>
                         <td>
                             <span class="badge-print <?php echo $log['access_type'] == 'entry' ? 'badge-print-entry' : 'badge-print-exit'; ?>">
                                 <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
@@ -1055,7 +1115,7 @@ if ($result && $row = $result->fetch_assoc()) {
     <div class="print-footer">
         <p>
             Printed on: <?php echo date('F d, Y h:i A'); ?> | 
-            Total Residents/Staff: <?php echo count($residentLogs); ?>
+            Total Residents: <?php echo count($residentLogs); ?>
         </p>
         <p style="font-size: 10px; color: #999;">
             ISU-Echague Dormitory - Tap-and-Go Doorlock System
@@ -1082,7 +1142,7 @@ if ($result && $row = $result->fetch_assoc()) {
             <tr>
                 <th>Date/Time</th>
                 <th>RFID UID</th>
-                <th>Name</th>
+                <th>Visitor Name</th>
                 <th>Person to Visit</th>
                 <th>Reason/Purpose</th>
                 <th>Room</th>
@@ -1107,12 +1167,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     <tr>
                         <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
                         <td><span style="font-family:monospace;font-weight:600;"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
-                        <td>
-                            <?php echo htmlspecialchars($visitorName); ?>
-                            <span class="badge-print" style="background:#cce5ff;color:#004085;font-size:8px;padding:0 5px;margin-left:3px;">
-                                Visitor
-                            </span>
-                        </td>
+                        <td><?php echo htmlspecialchars($visitorName); ?></td>
                         <td><?php echo htmlspecialchars($residentVisited); ?></td>
                         <td><span style="font-size:10px;"><?php echo htmlspecialchars($purpose); ?></span></td>
                         <td><?php echo htmlspecialchars($roomDisplay); ?></td>
@@ -1252,7 +1307,7 @@ if ($result && $row = $result->fetch_assoc()) {
                 STATS ROW 2 - SAME AS DASHBOARD
                 ============================================================ -->
                 <div class="row g-3 mb-4">
-                    <div class="col-6 col-sm-6 col-xl-3">
+                    <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #ef4444;"><i class="fas fa-times-circle"></i></div>
                             <div>
@@ -1264,7 +1319,7 @@ if ($result && $row = $result->fetch_assoc()) {
                             <?php endif; ?>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-3">
+                    <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-bell"></i></div>
                             <div>
@@ -1278,21 +1333,43 @@ if ($result && $row = $result->fetch_assoc()) {
                             <?php endif; ?>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-3">
+                    <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-users"></i></div>
+                            <div class="stat-icon" style="background: #10b981;"><i class="fas fa-users"></i></div>
                             <div>
                                 <div class="stat-number"><?php echo $stats['residents']; ?></div>
                                 <div class="stat-label">Residents Logs</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-3">
+                    <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #3730a3;"><i class="fas fa-user-clock"></i></div>
                             <div>
                                 <div class="stat-number"><?php echo $stats['visitors']; ?></div>
                                 <div class="stat-label">Visitors Logs</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-6 col-xl-2">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-user-tie"></i></div>
+                            <div>
+                                <div class="stat-number"><?php echo $stats['staff']; ?></div>
+                                <div class="stat-label">Staff Logs</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-6 col-xl-2">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-print"></i></div>
+                            <div>
+                                <div class="stat-number">
+                                    <a href="?print_residents=1" target="_blank" class="btn btn-print-residents btn-sm">
+                                        <i class="fas fa-print me-1"></i> Print
+                                    </a>
+                                </div>
+                                <div class="stat-label">Print Reports</div>
                             </div>
                         </div>
                     </div>
@@ -1456,7 +1533,7 @@ if ($result && $row = $result->fetch_assoc()) {
                             <div class="left">
                                 <div class="section-header">
                                     <span class="icon">🏠</span>
-                                    <span class="title">Residents / Staff</span>
+                                    <span class="title">Residents</span>
                                     <span class="count badge badge-resident-header"><?php echo count($residentLogs); ?> logs</span>
                                 </div>
                             </div>
@@ -1481,7 +1558,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                     <tr>
                                         <th>Date/Time</th>
                                         <th>RFID UID</th>
-                                        <th>Tenant</th>
+                                        <th>Resident</th>
                                         <th>Room</th>
                                         <th>Type</th>
                                         <th>Status</th>
@@ -1493,23 +1570,12 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <tr>
                                             <td colspan="7" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
-                                                No resident/staff access logs found
+                                                No resident access logs found
                                             </td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($residentLogs as $log): 
                                             $displayName = $log['user_name'] ?? 'Unknown';
-                                            $cardType = $log['card_type'] ?? 'resident';
-                                            $avatarClass = '';
-                                            $userTypeTag = '';
-                                            
-                                            if ($cardType == 'staff') {
-                                                $avatarClass = 'staff';
-                                                $userTypeTag = '<span class="staff-tag">Staff</span>';
-                                            } else {
-                                                $userTypeTag = '<span class="resident-tag">Resident</span>';
-                                            }
-                                            
                                             $roomDisplay = $log['room_number'] ?? 'N/A';
                                             
                                             $initials = '';
@@ -1524,7 +1590,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                                 <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
                                                 <td>
                                                     <div class="user-cell">
-                                                        <div class="user-avatar <?php echo $avatarClass; ?>">
+                                                        <div class="user-avatar">
                                                             <?php if (!empty($log['profile_photo']) && file_exists('../../' . $log['profile_photo'])): ?>
                                                                 <img src="../../<?php echo htmlspecialchars($log['profile_photo']); ?>" alt="Photo">
                                                             <?php else: ?>
@@ -1532,7 +1598,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                                             <?php endif; ?>
                                                         </div>
                                                         <div>
-                                                            <div><?php echo htmlspecialchars($displayName); ?> <?php echo $userTypeTag; ?></div>
+                                                            <div><?php echo htmlspecialchars($displayName); ?> <span class="resident-tag">Resident</span></div>
                                                             <?php if (!empty($log['student_id'])): ?>
                                                                 <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['student_id']); ?></div>
                                                             <?php endif; ?>
@@ -1642,6 +1708,125 @@ if ($result && $row = $result->fetch_assoc()) {
                 </div>
 
                 <!-- ============================================================
+                STAFF LOGS TABLE
+                ============================================================ -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="log-header-actions">
+                            <div class="left">
+                                <div class="section-header">
+                                    <span class="icon">👔</span>
+                                    <span class="title">Staff</span>
+                                    <span class="count badge badge-staff-header"><?php echo count($staffLogs); ?> logs</span>
+                                </div>
+                            </div>
+                            <div>
+                                <?php if (!$printResidents && !$printVisitors): ?>
+                                <a href="?print_staff=1<?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" target="_blank" class="btn btn-print-staff btn-sm">
+                                    <i class="fas fa-print me-1"></i> Print Staff
+                                </a>
+                                <span class="text-muted small ms-2">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Showing <?php echo count($staffLogs); ?> staff logs
+                                </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover log-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date/Time</th>
+                                        <th>RFID UID</th>
+                                        <th>Staff Name</th>
+                                        <th>Department</th>
+                                        <th>Staff ID</th>
+                                        <th>Type</th>
+                                        <th>Status</th>
+                                        <th>Power</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($staffLogs)): ?>
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted py-4">
+                                                <i class="fas fa-inbox fa-2x d-block mb-2"></i>
+                                                No staff access logs found
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($staffLogs as $log): 
+                                            $staffName = $log['staff_name'] ?? 'Unknown Staff';
+                                            $department = $log['department'] ?? 'N/A';
+                                            $staffId = $log['staff_id_number'] ?? 'N/A';
+                                            
+                                            $initials = '';
+                                            $nameParts = explode(' ', $staffName);
+                                            foreach ($nameParts as $p) {
+                                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                                            }
+                                            $initials = substr($initials, 0, 2);
+                                        ?>
+                                            <tr>
+                                                <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
+                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                                                <td>
+                                                    <div class="user-cell">
+                                                        <div class="user-avatar staff">
+                                                            <?php if (!empty($log['staff_avatar']) && file_exists('../../' . $log['staff_avatar'])): ?>
+                                                                <img src="../../<?php echo htmlspecialchars($log['staff_avatar']); ?>" alt="Photo">
+                                                            <?php else: ?>
+                                                                <?php echo $initials ?: '?'; ?>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <div>
+                                                            <div><?php echo htmlspecialchars($staffName); ?> <span class="staff-tag">Staff</span></div>
+                                                            <?php if (!empty($log['staff_phone'])): ?>
+                                                                <div style="font-size: 10px; color: #808090;">
+                                                                    <i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($log['staff_phone']); ?>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span style="font-size: 12px; color: #fbbf24;"><?php echo htmlspecialchars($department); ?></span>
+                                                </td>
+                                                <td>
+                                                    <span style="font-family: monospace; font-size: 11px; background: #1a2a4a; padding: 2px 6px; border-radius: 4px; color: #93c5fd;">
+                                                        <?php echo htmlspecialchars($staffId); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
+                                                        <i class="fas <?php echo $log['access_type'] == 'entry' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
+                                                        <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?php echo $log['access_status'] == 'granted' ? 'badge-granted' : 'badge-denied'; ?>">
+                                                        <i class="fas <?php echo $log['access_status'] == 'granted' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
+                                                        <?php echo ucfirst($log['access_status'] ?? 'N/A'); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?php echo isset($log['power_source']) && $log['power_source'] == 'main' ? 'badge-main' : 'badge-battery'; ?>">
+                                                        <i class="fas <?php echo isset($log['power_source']) && $log['power_source'] == 'main' ? 'fa-bolt' : 'fa-battery-quarter'; ?> me-1"></i>
+                                                        <?php echo isset($log['power_source']) ? ucfirst($log['power_source']) : 'N/A'; ?>
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
                 VISITORS TABLE
                 ============================================================ -->
                 <div class="card">
@@ -1674,7 +1859,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                     <tr>
                                         <th>Date/Time</th>
                                         <th>RFID UID</th>
-                                        <th>Name</th>
+                                        <th>Visitor Name</th>
                                         <th>Person to Visit</th>
                                         <th>Reason/Purpose</th>
                                         <th>Room</th>
@@ -1765,6 +1950,10 @@ if ($result && $row = $result->fetch_assoc()) {
                     <span class="text-danger ms-3">
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         <?php echo $stats['unauthorized_total']; ?> unauthorized
+                    </span>
+                    <span class="text-warning ms-3">
+                        <i class="fas fa-user-tie me-1"></i>
+                        <?php echo $stats['staff']; ?> staff logs
                     </span>
                     <?php if ($stats['pending_alerts'] > 0): ?>
                         <span class="text-warning ms-3">
