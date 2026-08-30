@@ -4,13 +4,15 @@
  * VIEW ONLY - Complete with Alerts
  * WITH UNAUTHORIZED TOTAL COUNT
  * PURE DARK MODE - NO WHITE IN TABLES
- * WITH PROFILE PHOTO DISPLAY
- * WITH STAFF LOGS TABLE
- * WITH PRINT BUTTONS
  */
+
+// Enable error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 session_start();
 
+// FIXED: Correct paths
 require_once __DIR__ . '/../../backend/config/config.php';
 require_once __DIR__ . '/../../backend/helpers/functions.php';
 
@@ -268,42 +270,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET UNAUTHORIZED ACCESS LOGS (DENIED)
-// ============================================================
-$unauthorizedLogs = [];
-$unauthorizedQuery = "
-    SELECT 
-        al.*,
-        c.card_uid,
-        c.card_type,
-        c.visitor_name,
-        u.full_name as user_name,
-        u.room_number,
-        u.profile_photo
-    FROM access_logs al
-    LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
-    LEFT JOIN users u ON c.user_id = u.user_id
-    WHERE al.access_status = 'denied'
-";
-
-if (!empty($dateFilter)) {
-    $unauthorizedQuery .= " AND DATE(al.timestamp) = '$dateFilter'";
-}
-if (!empty($searchFilter)) {
-    $unauthorizedQuery .= " AND (al.card_uid LIKE '%$searchFilter%' OR u.full_name LIKE '%$searchFilter%')";
-}
-
-$unauthorizedQuery .= " ORDER BY al.timestamp DESC LIMIT 100";
-
-$result = $conn->query($unauthorizedQuery);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $unauthorizedLogs[] = $row;
-    }
-}
-
-// ============================================================
-// GET STATS - WITH UNAUTHORIZED TOTAL COUNT
+// GET STATS
 // ============================================================
 $stats = [
     'total' => 0,
@@ -402,15 +369,6 @@ if ($result && $row = $result->fetch_assoc()) {
     $stats['critical_alerts'] = (int)$row['count'];
 }
 
-// Get staff info
-$staffInfo = null;
-$stmt = $conn->prepare("SELECT * FROM staff_users WHERE staff_id = ?");
-$stmt->bind_param("i", $_SESSION['staff_id']);
-$stmt->execute();
-$result = $stmt->get_result();
-$staffInfo = $result->fetch_assoc();
-$stmt->close();
-
 // Get dark mode
 $darkModeClass = '';
 $darkModeFromDb = 'false';
@@ -442,63 +400,21 @@ if (isset($_SESSION['staff_id'])) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Print Styles */
-        body { 
-            background: white !important; 
-            color: black !important;
-            font-family: 'Arial', sans-serif;
-            padding: 20px;
-        }
+        body { background: white !important; color: black !important; font-family: Arial, sans-serif; padding: 20px; }
         .no-print { display: none !important; }
-        .table { 
-            font-size: 11px; 
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .table th, .table td { 
-            border: 1px solid #333 !important; 
-            padding: 6px 8px !important;
-            text-align: left;
-            vertical-align: middle;
-        }
-        .table th { 
-            background: #f0f0f0 !important; 
-            font-weight: 700;
-            color: #000 !important;
-        }
+        .table { font-size: 11px; width: 100%; border-collapse: collapse; }
+        .table th, .table td { border: 1px solid #333 !important; padding: 6px 8px !important; text-align: left; }
+        .table th { background: #f0f0f0 !important; font-weight: 700; color: #000 !important; }
         .table td { color: #000 !important; }
-        .print-header { 
-            text-align: center; 
-            margin-bottom: 20px; 
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-        }
+        .print-header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
         .print-header h2 { font-weight: 700; margin: 0; }
         .print-header p { margin: 5px 0 0 0; color: #555; font-size: 13px; }
-        .print-footer { 
-            text-align: center; 
-            margin-top: 20px; 
-            border-top: 1px solid #ccc;
-            padding-top: 10px;
-            font-size: 11px;
-            color: #666;
-        }
-        .badge-print {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
-        }
+        .print-footer { text-align: center; margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; font-size: 11px; color: #666; }
+        .badge-print { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
         .badge-print-granted { background: #d4edda; color: #155724; }
         .badge-print-denied { background: #f8d7da; color: #721c24; }
         .badge-print-entry { background: #cce5ff; color: #004085; }
         .badge-print-exit { background: #e2e3e5; color: #383d41; }
-        @media print {
-            .no-print { display: none !important; }
-            body { padding: 10px !important; }
-            .table th { background: #e9ecef !important; }
-        }
     </style>
     <?php else: ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -508,9 +424,6 @@ if (isset($_SESSION['staff_id'])) {
     <?php endif; ?>
     <style>
         <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
-        /* ============================================================
-           GLOBAL DARK THEME
-           ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', sans-serif;
@@ -519,18 +432,9 @@ if (isset($_SESSION['staff_id'])) {
             min-height: 100vh;
             padding-top: 70px !important;
         }
+        .container-fluid { padding-top: 10px !important; }
+        main { padding-top: 10px !important; margin-top: 0 !important; }
         
-        .container-fluid {
-            padding-top: 10px !important;
-        }
-        main {
-            padding-top: 10px !important;
-            margin-top: 0 !important;
-        }
-        
-        /* ============================================================
-           DARK NAVBAR
-           ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -546,9 +450,6 @@ if (isset($_SESSION['staff_id'])) {
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           DARK SIDEBAR
-           ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
@@ -589,36 +490,20 @@ if (isset($_SESSION['staff_id'])) {
             color: #606070 !important;
             margin-right: 10px;
         }
-        .sidebar .nav-link.active i {
-            color: white !important;
-        }
-        .sidebar .nav-link .badge {
-            font-size: 10px;
-            padding: 2px 8px;
-            border-radius: 20px;
-            margin-left: auto;
-        }
+        .sidebar .nav-link.active i { color: white !important; }
         .sidebar-footer {
             padding: 10px 0 20px 0;
             border-top: 1px solid #1a2a4a !important;
             margin-top: auto;
         }
-        .sidebar-footer .text-muted {
-            color: #606070 !important;
-        }
+        .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           MAIN CONTENT
-           ============================================================ */
         .main-content {
             margin-left: 260px;
             padding: 20px 30px;
             min-height: calc(100vh - 70px);
         }
         
-        /* ============================================================
-           DARK STAT CARDS
-           ============================================================ */
         .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -641,7 +526,6 @@ if (isset($_SESSION['staff_id'])) {
         .stat-number { font-size: 24px; font-weight: 700; color: #e0e0e0; margin: 0; }
         .stat-label { font-size: 12px; color: #808090; margin: 0; }
         .stat-card .text-danger { color: #f87171 !important; }
-        .stat-card .text-muted { color: #606070 !important; }
         .stat-card .pulse-badge {
             position: absolute;
             top: 8px;
@@ -649,14 +533,9 @@ if (isset($_SESSION['staff_id'])) {
             animation: pulseBadge 1s infinite;
         }
         @keyframes pulseBadge {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
+            0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); }
         }
         
-        /* ============================================================
-           DARK CARDS
-           ============================================================ */
         .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -673,9 +552,6 @@ if (isset($_SESSION['staff_id'])) {
         .card-header h5 { margin: 0; font-weight: 600; color: #e0e0e0; font-size: 16px; }
         .card-body { padding: 20px; background: #111827 !important; }
         
-        /* ============================================================
-           DARK FILTERS
-           ============================================================ */
         .filter-section {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -695,7 +571,6 @@ if (isset($_SESSION['staff_id'])) {
             border-color: #2a5a9a !important;
             box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
         }
-        .filter-section .form-control::placeholder { color: #606070 !important; }
         .filter-section .form-label { color: #b0b0c0 !important; font-size: 13px; }
         .filter-section .btn-filter {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
@@ -711,9 +586,6 @@ if (isset($_SESSION['staff_id'])) {
             box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
         
-        /* ============================================================
-           DARK TABLE
-           ============================================================ */
         .log-table {
             font-size: 13px;
             background: #111827 !important;
@@ -740,18 +612,9 @@ if (isset($_SESSION['staff_id'])) {
             border-bottom: 1px solid #1a2a4a !important;
             background: #111827 !important;
         }
-        .log-table tbody tr {
-            background: #111827 !important;
-        }
-        .log-table tbody tr:hover td {
-            background: rgba(255,255,255,0.03) !important;
-        }
-        .log-table tbody tr:nth-child(even) td {
-            background: #0f172a !important;
-        }
-        .log-table tbody tr:nth-child(even):hover td {
-            background: rgba(255,255,255,0.04) !important;
-        }
+        .log-table tbody tr:hover td { background: rgba(255,255,255,0.03) !important; }
+        .log-table tbody tr:nth-child(even) td { background: #0f172a !important; }
+        .log-table tbody tr:nth-child(even):hover td { background: rgba(255,255,255,0.04) !important; }
         .table-responsive {
             background: #111827 !important;
             border-radius: 12px;
@@ -777,15 +640,9 @@ if (isset($_SESSION['staff_id'])) {
             height: 100%;
             object-fit: cover;
         }
-        .log-table .user-avatar.visitor {
-            background: linear-gradient(135deg, #2a3a6a, #3a2a7a);
-        }
-        .log-table .user-avatar.staff {
-            background: linear-gradient(135deg, #4a3a1a, #6a4a2a);
-        }
-        .log-table .user-avatar.denied {
-            background: linear-gradient(135deg, #7a2a2a, #5a1a1a);
-        }
+        .log-table .user-avatar.visitor { background: linear-gradient(135deg, #2a3a6a, #3a2a7a); }
+        .log-table .user-avatar.staff { background: linear-gradient(135deg, #4a3a1a, #6a4a2a); }
+        .log-table .user-avatar.denied { background: linear-gradient(135deg, #7a2a2a, #5a1a1a); }
         .log-table .uid-cell {
             font-family: monospace;
             font-weight: 600;
@@ -795,15 +652,7 @@ if (isset($_SESSION['staff_id'])) {
             border-radius: 4px;
             font-size: 12px;
         }
-        .log-table .uid-cell.denied-uid {
-            color: #f87171 !important;
-            background: #3a1a1a !important;
-        }
-        .log-table .text-muted { color: #808090 !important; }
         
-        /* ============================================================
-           DARK BADGES
-           ============================================================ */
         .badge-granted { background: #065f46 !important; color: #34d399 !important; }
         .badge-denied { background: #7a2a2a !important; color: #f87171 !important; }
         .badge-entry { background: #1a3a6a !important; color: #93c5fd !important; }
@@ -819,18 +668,7 @@ if (isset($_SESSION['staff_id'])) {
         .badge-pending { background: #4a3a1a !important; color: #fbbf24 !important; }
         .badge-resolved { background: #065f46 !important; color: #34d399 !important; }
         .badge-unauthorized { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-buzzer { background: #4a3a1a !important; color: #fbbf24 !important; }
-        .badge-success { background: #065f46 !important; color: #34d399 !important; }
-        .badge-danger { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
-        .badge-secondary { background: #1a2a4a !important; color: #808090 !important; }
-        .badge-primary { background: #1a3a6a !important; color: #93c5fd !important; }
-        .badge-info { background: #1a3a6a !important; color: #93c5fd !important; }
-        .badge-light { background: #2a2a4a !important; color: #b0b0c0 !important; }
         
-        /* ============================================================
-           VIEW ONLY BADGE
-           ============================================================ */
         .view-only-badge {
             background: #4a3a1a !important;
             color: #fbbf24 !important;
@@ -840,9 +678,6 @@ if (isset($_SESSION['staff_id'])) {
             font-weight: 500;
         }
         
-        /* ============================================================
-           DARK ALERT ITEMS
-           ============================================================ */
         .alert-item {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -893,21 +728,9 @@ if (isset($_SESSION['staff_id'])) {
             animation: pulseAlert 1.5s infinite;
         }
         @keyframes pulseAlert {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+            0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; }
         }
         
-        .denied-row {
-            background-color: #2a1a1a !important;
-        }
-        .denied-row:hover {
-            background-color: #3a2a2a !important;
-        }
-        
-        /* ============================================================
-           PRINT BUTTONS
-           ============================================================ */
         .btn-print-residents {
             background: linear-gradient(135deg, #065f46, #0a8a6a) !important;
             color: white !important;
@@ -954,21 +777,13 @@ if (isset($_SESSION['staff_id'])) {
             color: white !important;
         }
         
-        /* ============================================================
-           BORDER & MISC
-           ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
-        .border-top { border-top-color: #1a2a4a !important; }
-        hr { border-color: #1a2a4a !important; }
         .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
         .text-muted { color: #808090 !important; }
         .text-danger { color: #f87171 !important; }
         .text-success { color: #34d399 !important; }
         .text-warning { color: #fbbf24 !important; }
         
-        /* ============================================================
-           LIVE INDICATOR
-           ============================================================ */
         .live-indicator {
             display: inline-block;
             width: 8px;
@@ -983,9 +798,6 @@ if (isset($_SESSION['staff_id'])) {
             100% { opacity: 1; transform: scale(1); }
         }
         
-        /* ============================================================
-           PAGINATION
-           ============================================================ */
         .pagination-container {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -1013,9 +825,7 @@ if (isset($_SESSION['staff_id'])) {
             color: white !important;
             box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
-        .pagination .page-item.disabled .page-link {
-            color: #4a4a5a !important;
-        }
+        .pagination .page-item.disabled .page-link { color: #4a4a5a !important; }
         .page-info { color: #808090 !important; font-size: 14px; }
         .page-info strong { color: #93c5fd !important; }
         
@@ -1081,16 +891,9 @@ if (isset($_SESSION['staff_id'])) {
             margin-left: 4px;
         }
         
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
         @media (max-width: 768px) {
-            body {
-                padding-top: 60px !important;
-            }
-            .navbar {
-                height: 60px !important;
-            }
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
@@ -1103,24 +906,13 @@ if (isset($_SESSION['staff_id'])) {
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            .main-content {
-                margin-left: 0;
-                padding: 15px;
-            }
+            .main-content { margin-left: 0; padding: 15px; }
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
             .stat-icon { width: 40px; height: 40px; font-size: 16px; }
-            .pagination-container .row {
-                flex-direction: column;
-                gap: 10px;
-            }
-            .pagination-container .col-md-6 {
-                width: 100%;
-                text-align: center !important;
-            }
-            .pagination {
-                justify-content: center !important;
-            }
+            .pagination-container .row { flex-direction: column; gap: 10px; }
+            .pagination-container .col-md-6 { width: 100%; text-align: center !important; }
+            .pagination { justify-content: center !important; }
         }
         <?php endif; ?>
     </style>
@@ -1132,16 +924,9 @@ if (isset($_SESSION['staff_id'])) {
     <?php endif; ?>
     
     <?php if ($printResidents): ?>
-    <!-- PRINT HEADER - RESIDENTS ONLY -->
     <div class="print-header">
         <h2>🏠 Resident Access Logs</h2>
-        <p>
-            ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>
-            Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?>
-            <?php if (!empty($statusFilter)): ?> | Status: <?php echo ucfirst($statusFilter); ?><?php endif; ?>
-            <?php if (!empty($typeFilter)): ?> | Type: <?php echo ucfirst($typeFilter); ?><?php endif; ?>
-            <?php if (!empty($searchFilter)): ?> | Search: "<?php echo htmlspecialchars($searchFilter); ?>"<?php endif; ?>
-        </p>
+        <p>ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?></p>
     </div>
     <table class="table">
         <thead><tr><th>Date/Time</th><th>RFID UID</th><th>Resident Name</th><th>Room</th><th>Type</th><th>Signature</th></tr></thead>
@@ -1162,24 +947,14 @@ if (isset($_SESSION['staff_id'])) {
             <?php endif; ?>
         </tbody>
     </table>
-    <div class="print-footer">
-        <p>Printed on: <?php echo date('F d, Y h:i A'); ?> | Total Residents: <?php echo count($residentLogs); ?></p>
-        <p style="font-size: 10px; color: #999;">ISU-Echague Dormitory - Tap-and-Go Doorlock System</p>
-    </div>
+    <div class="print-footer"><p>Printed on: <?php echo date('F d, Y h:i A'); ?> | Total: <?php echo count($residentLogs); ?></p></div>
     <?php exit(); ?>
     <?php endif; ?>
     
     <?php if ($printVisitors): ?>
-    <!-- PRINT HEADER - VISITORS ONLY -->
     <div class="print-header">
         <h2>👤 Visitor Access Logs</h2>
-        <p>
-            ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>
-            Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?>
-            <?php if (!empty($statusFilter)): ?> | Status: <?php echo ucfirst($statusFilter); ?><?php endif; ?>
-            <?php if (!empty($typeFilter)): ?> | Type: <?php echo ucfirst($typeFilter); ?><?php endif; ?>
-            <?php if (!empty($searchFilter)): ?> | Search: "<?php echo htmlspecialchars($searchFilter); ?>"<?php endif; ?>
-        </p>
+        <p>ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?></p>
     </div>
     <table class="table">
         <thead><tr><th>Date/Time</th><th>RFID UID</th><th>Visitor Name</th><th>Person to Visit</th><th>Purpose</th><th>Room</th><th>Type</th><th>Signature</th></tr></thead>
@@ -1202,24 +977,14 @@ if (isset($_SESSION['staff_id'])) {
             <?php endif; ?>
         </tbody>
     </table>
-    <div class="print-footer">
-        <p>Printed on: <?php echo date('F d, Y h:i A'); ?> | Total Visitors: <?php echo count($visitorLogs); ?></p>
-        <p style="font-size: 10px; color: #999;">ISU-Echague Dormitory - Tap-and-Go Doorlock System</p>
-    </div>
+    <div class="print-footer"><p>Printed on: <?php echo date('F d, Y h:i A'); ?> | Total: <?php echo count($visitorLogs); ?></p></div>
     <?php exit(); ?>
     <?php endif; ?>
     
     <?php if ($printStaff): ?>
-    <!-- PRINT HEADER - STAFF ONLY -->
     <div class="print-header">
         <h2>👔 Staff Access Logs</h2>
-        <p>
-            ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>
-            Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?>
-            <?php if (!empty($statusFilter)): ?> | Status: <?php echo ucfirst($statusFilter); ?><?php endif; ?>
-            <?php if (!empty($typeFilter)): ?> | Type: <?php echo ucfirst($typeFilter); ?><?php endif; ?>
-            <?php if (!empty($searchFilter)): ?> | Search: "<?php echo htmlspecialchars($searchFilter); ?>"<?php endif; ?>
-        </p>
+        <p>ISU-Echague Dormitory - Tap-and-Go Doorlock System<br>Date: <?php echo date('F d, Y'); ?> | Filter: <?php echo $dateFilter; ?></p>
     </div>
     <table class="table">
         <thead><tr><th>Date/Time</th><th>Staff Name</th><th>RFID UID</th><th>Type</th><th>Signature</th></tr></thead>
@@ -1239,10 +1004,7 @@ if (isset($_SESSION['staff_id'])) {
             <?php endif; ?>
         </tbody>
     </table>
-    <div class="print-footer">
-        <p>Printed on: <?php echo date('F d, Y h:i A'); ?> | Total Staff: <?php echo count($staffLogs); ?></p>
-        <p style="font-size: 10px; color: #999;">ISU-Echague Dormitory - Tap-and-Go Doorlock System</p>
-    </div>
+    <div class="print-footer"><p>Printed on: <?php echo date('F d, Y h:i A'); ?> | Total: <?php echo count($staffLogs); ?></p></div>
     <?php exit(); ?>
     <?php endif; ?>
     
@@ -1255,54 +1017,36 @@ if (isset($_SESSION['staff_id'])) {
             <main class="<?php echo ($printResidents || $printVisitors || $printStaff) ? 'col-12' : 'col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content'; ?>">
                 
                 <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
-                <!-- ============================================================
-                HEADER
-                ============================================================ -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-eye me-2" style="color: #fbbf24;"></i>
                         <i class="fas fa-history me-1" style="color: #1a3a6a;"></i> Access Logs / Attendance
                     </h1>
                     <div>
-                        <span class="view-only-badge me-2">
-                            <i class="fas fa-eye me-1"></i> View Only
-                        </span>
-                        <span class="badge bg-success me-2">
-                            <span class="live-indicator me-1"></span> Live
-                        </span>
+                        <span class="view-only-badge me-2"><i class="fas fa-eye me-1"></i> View Only</span>
+                        <span class="badge bg-success me-2"><span class="live-indicator me-1"></span> Live</span>
                         <span class="badge bg-secondary" id="lastUpdate">Updated: <?php echo date('h:i A'); ?></span>
                         <?php if ($stats['pending_alerts'] > 0): ?>
                             <a href="alerts.php" class="badge badge-denied-alert ms-2 p-2" style="text-decoration: none;">
-                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                <?php echo $stats['pending_alerts']; ?> Alert<?php echo $stats['pending_alerts'] > 1 ? 's' : ''; ?>
+                                <i class="fas fa-exclamation-triangle me-1"></i> <?php echo $stats['pending_alerts']; ?> Alert<?php echo $stats['pending_alerts'] > 1 ? 's' : ''; ?>
                             </a>
                         <?php endif; ?>
-                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()"><i class="fas fa-sync-alt"></i></button>
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STATS ROW 1
-                ============================================================ -->
+                <!-- Stats Row 1 -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #667eea;"><i class="fas fa-list"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['total']; ?></div>
-                                <div class="stat-label">Total Logs</div>
-                            </div>
+                            <div><div class="stat-number"><?php echo $stats['total']; ?></div><div class="stat-label">Total Logs</div></div>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #10b981;"><i class="fas fa-check-circle"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['granted']; ?></div>
-                                <div class="stat-label">Granted</div>
-                            </div>
+                            <div><div class="stat-number"><?php echo $stats['granted']; ?></div><div class="stat-label">Granted</div></div>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
@@ -1320,46 +1064,30 @@ if (isset($_SESSION['staff_id'])) {
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #3b82f6;"><i class="fas fa-sign-in-alt"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['entry']; ?></div>
-                                <div class="stat-label">Entries</div>
-                            </div>
+                            <div><div class="stat-number"><?php echo $stats['entry']; ?></div><div class="stat-label">Entries</div></div>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #6b7280;"><i class="fas fa-sign-out-alt"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['exit']; ?></div>
-                                <div class="stat-label">Exits</div>
-                            </div>
+                            <div><div class="stat-number"><?php echo $stats['exit']; ?></div><div class="stat-label">Exits</div></div>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-calendar-day"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['today']; ?></div>
-                                <div class="stat-label">Today</div>
-                            </div>
+                            <div><div class="stat-number"><?php echo $stats['today']; ?></div><div class="stat-label">Today</div></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STATS ROW 2
-                ============================================================ -->
+                <!-- Stats Row 2 -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #ef4444;"><i class="fas fa-times-circle"></i></div>
-                            <div>
-                                <div class="stat-number text-danger"><?php echo $stats['unauthorized_today']; ?></div>
-                                <div class="stat-label">Unauthorized Today</div>
-                            </div>
-                            <?php if ($stats['unauthorized_today'] > 0): ?>
-                                <span class="badge bg-danger pulse-badge">🚨</span>
-                            <?php endif; ?>
+                            <div><div class="stat-number text-danger"><?php echo $stats['unauthorized_today']; ?></div><div class="stat-label">Unauthorized Today</div></div>
+                            <?php if ($stats['unauthorized_today'] > 0): ?><span class="badge bg-danger pulse-badge">🚨</span><?php endif; ?>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
@@ -1369,36 +1097,25 @@ if (isset($_SESSION['staff_id'])) {
                                 <div class="stat-number <?php echo $stats['pending_alerts'] > 0 ? 'text-danger' : ''; ?>"><?php echo $stats['pending_alerts']; ?></div>
                                 <div class="stat-label">Pending Alerts</div>
                             </div>
-                            <?php if ($stats['pending_alerts'] > 0): ?>
-                                <span class="badge bg-warning pulse-badge"><?php echo $stats['pending_alerts']; ?></span>
-                            <?php endif; ?>
+                            <?php if ($stats['pending_alerts'] > 0): ?><span class="badge bg-warning pulse-badge"><?php echo $stats['pending_alerts']; ?></span><?php endif; ?>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #10b981;"><i class="fas fa-users"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['residents']; ?></div>
-                                <div class="stat-label">Residents Logs</div>
-                            </div>
+                            <div><div class="stat-number"><?php echo $stats['residents']; ?></div><div class="stat-label">Residents Logs</div></div>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #3730a3;"><i class="fas fa-user-clock"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['visitors']; ?></div>
-                                <div class="stat-label">Visitors Logs</div>
-                            </div>
+                            <div><div class="stat-number"><?php echo $stats['visitors']; ?></div><div class="stat-label">Visitors Logs</div></div>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-user-tie"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['staff']; ?></div>
-                                <div class="stat-label">Staff Logs</div>
-                            </div>
+                            <div><div class="stat-number"><?php echo $stats['staff']; ?></div><div class="stat-label">Staff Logs</div></div>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
@@ -1418,9 +1135,7 @@ if (isset($_SESSION['staff_id'])) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                FILTERS
-                ============================================================ -->
+                <!-- Filters -->
                 <div class="filter-section">
                     <form method="GET" action="" class="row g-2 align-items-end">
                         <div class="col-md-2">
@@ -1433,8 +1148,6 @@ if (isset($_SESSION['staff_id'])) {
                                 <option value="">All</option>
                                 <option value="granted" <?php echo $statusFilter == 'granted' ? 'selected' : ''; ?>>Granted</option>
                                 <option value="denied" <?php echo $statusFilter == 'denied' ? 'selected' : ''; ?>>Denied</option>
-                                <option value="pending" <?php echo $statusFilter == 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                <option value="resolved" <?php echo $statusFilter == 'resolved' ? 'selected' : ''; ?>>Resolved</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -1456,12 +1169,8 @@ if (isset($_SESSION['staff_id'])) {
                         <input type="hidden" name="page" value="1">
                     </form>
                 </div>
-                <?php endif; ?>
 
-                <!-- ============================================================
-                ALERTS TABLE
-                ============================================================ -->
-                <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
+                <!-- Alerts -->
                 <div class="card mb-4">
                     <div class="card-header">
                         <div class="log-header-actions">
@@ -1470,8 +1179,7 @@ if (isset($_SESSION['staff_id'])) {
                                     <span class="icon">🚨</span>
                                     <span class="title" style="<?php echo $stats['critical_alerts'] > 0 ? 'color: #f87171;' : ''; ?>">Alerts</span>
                                     <span class="count badge <?php echo $stats['pending_alerts'] > 0 ? 'badge-pending' : 'badge-resolved'; ?>">
-                                        <?php echo count($alertLogs); ?> logs
-                                        <?php if ($stats['pending_alerts'] > 0): ?> | <?php echo $stats['pending_alerts']; ?> pending<?php endif; ?>
+                                        <?php echo count($alertLogs); ?> logs <?php if ($stats['pending_alerts'] > 0): ?>| <?php echo $stats['pending_alerts']; ?> pending<?php endif; ?>
                                     </span>
                                 </div>
                             </div>
@@ -1496,12 +1204,6 @@ if (isset($_SESSION['staff_id'])) {
                                 $isCritical = $isPending && $alert['alert_type'] == 'unauthorized';
                                 $displayName = !empty($alert['display_name']) ? $alert['display_name'] : 'Unknown';
                                 $cardUid = $alert['card_uid'] ?? 'N/A';
-                                $alertType = $alert['alert_type'] ?? 'unauthorized';
-                                $reason = $alert['reason'] ?? 'Unauthorized access attempt';
-                                $roomDisplay = $alert['room_number'] ?? 'N/A';
-                                if (!empty($alert['rfid_card_type']) && $alert['rfid_card_type'] == 'visitor' && !empty($alert['resident_visited_name'])) {
-                                    $roomDisplay = 'Visit: ' . $alert['resident_visited_name'];
-                                }
                             ?>
                             <div class="alert-item <?php echo $isResolved ? 'resolved' : ''; ?> <?php echo $isCritical ? 'critical' : ''; ?>">
                                 <div class="row align-items-center">
@@ -1515,13 +1217,12 @@ if (isset($_SESSION['staff_id'])) {
                                                     <span class="alert-uid"><?php echo htmlspecialchars($cardUid); ?></span>
                                                     <?php if ($isCritical): ?><span class="badge bg-danger">CRITICAL</span><?php endif; ?>
                                                     <span class="badge <?php echo $isPending ? 'badge-pending' : 'badge-resolved'; ?>"><?php echo ucfirst($alert['delivery_status']); ?></span>
-                                                    <span class="badge <?php echo $alertType == 'unauthorized' ? 'badge-unauthorized' : 'badge-buzzer'; ?>"><?php echo ucfirst($alertType); ?></span>
+                                                    <span class="badge <?php echo $alert['alert_type'] == 'unauthorized' ? 'badge-unauthorized' : 'badge-buzzer'; ?>"><?php echo ucfirst($alert['alert_type']); ?></span>
                                                     <?php if (!empty($alert['rfid_card_type'])): ?><span class="badge bg-secondary"><?php echo ucfirst($alert['rfid_card_type']); ?></span><?php endif; ?>
                                                 </div>
-                                                <div class="alert-reason mt-1"><i class="fas fa-info-circle me-1"></i> <?php echo htmlspecialchars($reason); ?></div>
+                                                <div class="alert-reason mt-1"><i class="fas fa-info-circle me-1"></i> <?php echo htmlspecialchars($alert['reason'] ?? 'Unauthorized access attempt'); ?></div>
                                                 <div class="alert-meta mt-1">
                                                     <i class="fas fa-user me-1"></i> <span class="alert-user"><?php echo htmlspecialchars($displayName); ?></span>
-                                                    <span class="mx-2">|</span> <i class="fas fa-door-open me-1"></i> <?php echo htmlspecialchars($roomDisplay); ?>
                                                     <span class="mx-2">|</span> <i class="fas fa-clock me-1"></i> <?php echo date('M d, Y h:i A', strtotime($alert['timestamp'])); ?>
                                                 </div>
                                             </div>
@@ -1543,9 +1244,7 @@ if (isset($_SESSION['staff_id'])) {
                 </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                RESIDENTS TABLE
-                ============================================================ -->
+                <!-- Residents Table -->
                 <div class="card">
                     <div class="card-header">
                         <div class="log-header-actions">
@@ -1611,7 +1310,6 @@ if (isset($_SESSION['staff_id'])) {
                                                         <div>
                                                             <div><?php echo htmlspecialchars($displayName); ?> <span class="resident-tag">Resident</span></div>
                                                             <?php if (!empty($log['student_id'])): ?><div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['student_id']); ?></div><?php endif; ?>
-                                                            <?php if (!empty($log['course'])): ?><div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['course']); ?></div><?php endif; ?>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -1681,9 +1379,7 @@ if (isset($_SESSION['staff_id'])) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STAFF LOGS TABLE
-                ============================================================ -->
+                <!-- Staff Table -->
                 <div class="card">
                     <div class="card-header">
                         <div class="log-header-actions">
@@ -1761,9 +1457,7 @@ if (isset($_SESSION['staff_id'])) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                VISITORS TABLE
-                ============================================================ -->
+                <!-- Visitors Table -->
                 <div class="card">
                     <div class="card-header">
                         <div class="log-header-actions">
@@ -1840,9 +1534,7 @@ if (isset($_SESSION['staff_id'])) {
                 </div>
 
                 <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
-                <!-- ============================================================
-                FOOTER
-                ============================================================ -->
+                <!-- Footer -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
@@ -1865,9 +1557,6 @@ if (isset($_SESSION['staff_id'])) {
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // CHANGE PER PAGE
-        // ============================================================
         function changePerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
@@ -1875,27 +1564,16 @@ if (isset($_SESSION['staff_id'])) {
             window.location.href = '?' + urlParams.toString();
         }
         
-        // ============================================================
-        // UPDATE TIME
-        // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
-            const timeString = now.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: true 
-            });
+            const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
             const updateElement = document.getElementById('lastUpdate');
             if (updateElement) {
                 updateElement.textContent = 'Updated: ' + timeString;
             }
             const serverTimeElement = document.getElementById('serverTime');
             if (serverTimeElement) {
-                const dateString = now.toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                });
+                const dateString = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                 serverTimeElement.textContent = 'Server Time: ' + dateString + ' ' + timeString;
             }
         }
@@ -1903,9 +1581,6 @@ if (isset($_SESSION['staff_id'])) {
         setInterval(updateLastUpdateTime, 10000);
         document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
         
-        // ============================================================
-        // SIDEBAR TOGGLE (mobile)
-        // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
