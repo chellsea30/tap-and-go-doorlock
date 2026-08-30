@@ -5,7 +5,7 @@
  * PURE DARK MODE - WITH SHOW ENTRIES
  * WITH AUTO-EXPIRATION SYSTEM
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
- * WITH PROFILE PICTURE SUPPORT
+ * WITH PROFILE PHOTO SUPPORT
  */
 
 session_start();
@@ -478,14 +478,14 @@ if (isset($_SESSION['admin_id'])) {
         }
         
         /* ============================================================
-           PROFILE PHOTO STYLES
+           PROFILE PHOTO STYLES - MATCHES RESIDENTS PAGE
            ============================================================ */
         .profile-img {
             width: 40px;
             height: 40px;
             border-radius: 50%;
             object-fit: cover;
-            border: 2px solid #1a2a4a;
+            border: 2px solid #2a2a4a;
             flex-shrink: 0;
             background: #1a1a2e;
         }
@@ -493,7 +493,7 @@ if (isset($_SESSION['admin_id'])) {
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #4a5a8a, #5a3a7a) !important;
+            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -501,7 +501,7 @@ if (isset($_SESSION['admin_id'])) {
             font-weight: 700;
             font-size: 14px;
             flex-shrink: 0;
-            border: 2px solid #1a2a4a;
+            border: 2px solid #2a2a4a;
         }
         
         /* ============================================================
@@ -1029,10 +1029,25 @@ if (isset($_SESSION['admin_id'])) {
                                         $tenant_name = null; // Don't show tenant for non-visitors
                                     }
                                     
-                                    // Get profile photo
+                                    // Get profile photo - using the same path as residents page
                                     $profile_photo = $card['profile_photo'] ?? null;
-                                    $has_profile_photo = !empty($profile_photo) && file_exists('../../uploads/profile_photos/' . $profile_photo);
-                                    $profile_photo_path = $has_profile_photo ? '../../uploads/profile_photos/' . $profile_photo : null;
+                                    // Check if the photo exists using the same path structure as residents page
+                                    $has_profile_photo = false;
+                                    $profile_photo_path = null;
+                                    
+                                    if (!empty($profile_photo)) {
+                                        // Check if path already has 'uploads/' prefix or not
+                                        if (strpos($profile_photo, 'uploads/') === 0) {
+                                            $full_path = '../../' . $profile_photo;
+                                        } else {
+                                            $full_path = '../../uploads/resident_photos/' . $profile_photo;
+                                        }
+                                        
+                                        if (file_exists($full_path)) {
+                                            $has_profile_photo = true;
+                                            $profile_photo_path = $full_path;
+                                        }
+                                    }
                                     
                                     // Get initials for placeholder
                                     $parts = explode(' ', $display_name);
@@ -1047,7 +1062,7 @@ if (isset($_SESSION['admin_id'])) {
                                             <div class="d-flex justify-content-between align-items-start">
                                                 <div class="d-flex align-items-center gap-2">
                                                     <!-- Profile Photo / Avatar -->
-                                                    <?php if ($profile_photo_path && !empty($card['user_name']) && $card['card_type'] != 'visitor'): ?>
+                                                    <?php if ($has_profile_photo && !empty($card['user_name']) && $card['card_type'] != 'visitor'): ?>
                                                         <img src="<?php echo $profile_photo_path; ?>" 
                                                              alt="<?php echo htmlspecialchars($display_name); ?>" 
                                                              class="profile-img"
