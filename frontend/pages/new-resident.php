@@ -644,7 +644,8 @@ $formData = $_POST ?? [];
                 color: #000 !important;
                 font-family: 'Times New Roman', 'Arial', serif !important;
                 font-size: 11px !important;
-                padding: 30px !important;
+                padding: 20px 30px !important;
+                margin: 0 !important;
             }
             
             .main-content {
@@ -670,6 +671,16 @@ $formData = $_POST ?? [];
                 display: none !important;
             }
             
+            .print-only {
+                display: block !important;
+                background: #fff !important;
+                padding: 10px 0 !important;
+            }
+            
+            .screen-only {
+                display: none !important;
+            }
+            
             /* ============================================================
                PRINT HEADER
                ============================================================ */
@@ -685,30 +696,35 @@ $formData = $_POST ?? [];
                 margin: 0 !important;
                 font-weight: 700 !important;
                 letter-spacing: 2px !important;
+                color: #000 !important;
             }
             
             .print-header .sub-text {
-                font-size: 11px !important;
+                font-size: 10px !important;
                 margin: 0 !important;
                 line-height: 1.3 !important;
+                color: #000 !important;
             }
             
             .print-header .form-title {
                 font-size: 13px !important;
                 font-weight: 700 !important;
                 margin: 3px 0 !important;
+                color: #000 !important;
             }
             
             .print-header .dorm-name {
                 font-size: 11px !important;
                 font-weight: 600 !important;
                 margin: 0 !important;
+                color: #000 !important;
             }
             
             .print-header .photo-label {
-                font-size: 10px !important;
+                font-size: 9px !important;
                 font-weight: 600 !important;
                 margin: 0 !important;
+                color: #000 !important;
             }
             
             /* ============================================================
@@ -717,33 +733,36 @@ $formData = $_POST ?? [];
             .print-table {
                 width: 100% !important;
                 border-collapse: collapse !important;
-                font-size: 11px !important;
+                font-size: 10.5px !important;
+                margin-bottom: 1px !important;
             }
             
             .print-table td {
-                padding: 2px 4px !important;
-                vertical-align: top !important;
+                padding: 1px 3px !important;
+                vertical-align: middle !important;
                 border: none !important;
             }
             
             .print-table .label {
                 font-weight: 600 !important;
                 white-space: nowrap !important;
+                color: #000 !important;
             }
             
             .print-table .value {
                 font-weight: normal !important;
+                color: #000 !important;
             }
             
             .print-table .value-line {
                 border-bottom: 1px solid #000 !important;
                 min-width: 80px !important;
-                padding: 0 5px !important;
+                padding: 0 3px !important;
             }
             
             .print-table .value-line-sm {
                 border-bottom: 1px solid #000 !important;
-                min-width: 60px !important;
+                min-width: 50px !important;
                 padding: 0 3px !important;
             }
             
@@ -751,39 +770,37 @@ $formData = $_POST ?? [];
                 display: inline-flex !important;
                 align-items: center !important;
                 gap: 2px !important;
-                margin-right: 8px !important;
+                margin-right: 6px !important;
             }
             
             .print-table .checkbox-item .box {
-                width: 12px !important;
-                height: 12px !important;
+                width: 11px !important;
+                height: 11px !important;
                 border: 1px solid #000 !important;
                 display: inline-block !important;
                 flex-shrink: 0 !important;
+                background: #fff !important;
             }
             
             .print-table .checkbox-item .box.checked {
                 background: #000 !important;
+                position: relative !important;
+            }
+            
+            .print-table .checkbox-item .box.checked::after {
+                content: '✓' !important;
+                color: #fff !important;
+                font-size: 9px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                width: 100% !important;
+                height: 100% !important;
             }
             
             .print-table .checkbox-item .box-text {
-                font-size: 11px !important;
-            }
-            
-            /* ============================================================
-               SECTION HEADERS
-               ============================================================ */
-            .print-section-label {
-                font-weight: 700 !important;
-                font-size: 11px !important;
-                margin: 5px 0 2px 0 !important;
-            }
-            
-            /* ============================================================
-               SPACING
-               ============================================================ */
-            .print-spacer {
-                height: 4px !important;
+                font-size: 10px !important;
+                color: #000 !important;
             }
             
             /* ============================================================
@@ -791,11 +808,12 @@ $formData = $_POST ?? [];
                ============================================================ */
             .print-form-number {
                 text-align: center !important;
-                font-size: 10px !important;
-                margin-top: 15px !important;
-                padding-top: 8px !important;
+                font-size: 9px !important;
+                margin-top: 10px !important;
+                padding-top: 6px !important;
                 font-weight: 600 !important;
                 border-top: 1px solid #000 !important;
+                color: #000 !important;
             }
             
             .print-form-number .rev {
@@ -803,21 +821,22 @@ $formData = $_POST ?? [];
             }
             
             /* ============================================================
-               HIDE/SHOW
+               SPACING
                ============================================================ */
-            .screen-only {
-                display: none !important;
+            .print-spacer {
+                height: 3px !important;
             }
             
-            .print-only {
-                display: block !important;
+            /* ============================================================
+               BORDER LINES
+               ============================================================ */
+            .print-border-bottom {
+                border-bottom: 1px solid #000 !important;
             }
             
-            /* Bootstrap overrides */
-            .row { margin: 0 !important; }
-            .col-md-3, .col-md-4, .col-md-5, .col-md-6, .col-md-8, .col-md-12 { padding: 0 !important; }
-            .d-flex.flex-wrap.gap-2 { gap: 0 !important; }
-            .form-check { margin: 0 !important; padding: 0 !important; }
+            .print-border-top {
+                border-top: 1px solid #000 !important;
+            }
         }
         
         /* ============================================================
@@ -898,7 +917,7 @@ $formData = $_POST ?? [];
                         </div>
 
                         <!-- ============================================================
-                             PRINT VERSION - EXACT MATCH OF OFFICIAL FORM
+                             PRINT VERSION - EXACT MATCH OF OFFICIAL FORM WITH LINES
                              ============================================================ -->
                         <div class="form-section print-only" style="display:none;">
                             
@@ -916,9 +935,9 @@ $formData = $_POST ?? [];
                             <!-- NAME OF DORM OCCUPANT & DATE -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:180px;">Name of Dorm Occupant:</td>
+                                    <td class="label" style="width:160px;">Name of Dorm Occupant:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?></td>
-                                    <td class="label" style="width:60px; padding-left:20px;">Date:</td>
+                                    <td class="label" style="width:50px; padding-left:15px;">Date:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo date('Y-m-d'); ?></td>
                                 </tr>
                             </table>
@@ -928,15 +947,15 @@ $formData = $_POST ?? [];
                             <!-- NAME -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:80px;"><strong>Name:</strong></td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:300px;">&nbsp;<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?></td>
+                                    <td class="label" style="width:60px;"><strong>Name:</strong></td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:350px;">&nbsp;<?php echo htmlspecialchars($formData['full_name'] ?? ''); ?></td>
                                 </tr>
                             </table>
 
                             <!-- GENDER -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:80px;"><strong>Gender:</strong></td>
+                                    <td class="label" style="width:70px;"><strong>Gender:</strong></td>
                                     <td class="value">
                                         <span class="checkbox-item">
                                             <span class="box <?php echo (isset($formData['gender']) && $formData['gender'] == 'Female') ? 'checked' : ''; ?>"></span>
@@ -950,8 +969,8 @@ $formData = $_POST ?? [];
                                             <span class="box <?php echo (isset($formData['gender']) && $formData['gender'] == 'LGBT') ? 'checked' : ''; ?>"></span>
                                             <span class="box-text">LGBTQ:</span>
                                         </span>
-                                        <span style="border-bottom:1px solid #000; min-width:100px; display:inline-block; padding:0 5px;"><?php echo htmlspecialchars($formData['gender_other'] ?? ''); ?></span>
-                                        <span style="font-size:9px; margin-left:2px;">(Pls. specify)</span>
+                                        <span style="border-bottom:1px solid #000; min-width:80px; display:inline-block; padding:0 3px;"><?php echo htmlspecialchars($formData['gender_other'] ?? ''); ?></span>
+                                        <span style="font-size:8px; margin-left:2px;">(Pls. specify)</span>
                                     </td>
                                 </tr>
                             </table>
@@ -959,25 +978,25 @@ $formData = $_POST ?? [];
                             <!-- BIRTHDAY, AGE, NO. OF SIBLINGS, BIRTH NO -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:70px;">Birthday:</td>
+                                    <td class="label" style="width:60px;">Birthday:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:80px;">&nbsp;<?php echo htmlspecialchars($formData['birth_date'] ?? ''); ?></td>
-                                    <td class="label" style="width:40px; padding-left:15px;">Age:</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:40px;">&nbsp;<?php echo htmlspecialchars($formData['age'] ?? ''); ?></td>
-                                    <td class="label" style="width:100px; padding-left:15px;">No. of Siblings:</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:60px;">&nbsp;<?php echo htmlspecialchars($formData['no_siblings'] ?? ''); ?></td>
-                                    <td class="label" style="width:70px; padding-left:15px;">Birth No.:</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:80px;">&nbsp;<?php echo htmlspecialchars($formData['birth_no'] ?? ''); ?></td>
+                                    <td class="label" style="width:35px; padding-left:10px;">Age:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:35px;">&nbsp;<?php echo htmlspecialchars($formData['age'] ?? ''); ?></td>
+                                    <td class="label" style="width:90px; padding-left:10px;">No. of Siblings:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:50px;">&nbsp;<?php echo htmlspecialchars($formData['no_siblings'] ?? ''); ?></td>
+                                    <td class="label" style="width:65px; padding-left:10px;">Birth No.:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:70px;">&nbsp;<?php echo htmlspecialchars($formData['birth_no'] ?? ''); ?></td>
                                 </tr>
                             </table>
 
                             <!-- COURSE, YEAR LEVEL, SCHOLARSHIP -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:60px;">Course:</td>
+                                    <td class="label" style="width:55px;">Course:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['course'] ?? ''); ?></td>
-                                    <td class="label" style="width:80px; padding-left:15px;">Year Level:</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:80px;">&nbsp;<?php echo htmlspecialchars($formData['year_level'] ?? ''); ?></td>
-                                    <td class="label" style="width:110px; padding-left:15px;">Scholarship grant:</td>
+                                    <td class="label" style="width:75px; padding-left:10px;">Year Level:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:70px;">&nbsp;<?php echo htmlspecialchars($formData['year_level'] ?? ''); ?></td>
+                                    <td class="label" style="width:100px; padding-left:10px;">Scholarship grant:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['scholarship'] ?? ''); ?></td>
                                 </tr>
                             </table>
@@ -985,37 +1004,37 @@ $formData = $_POST ?? [];
                             <!-- OTHER SOURCES -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:180px;"><strong>Other sources of allowance for school</strong></td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['allowance_source'] ?? ''); ?></td>
+                                    <td class="label" style="width:160px;"><strong>Other sources of allowance for school</strong></td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:250px;">&nbsp;<?php echo htmlspecialchars($formData['allowance_source'] ?? ''); ?></td>
                                 </tr>
                             </table>
 
                             <!-- SCHOOL LAST ATTENDED -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:140px;">School last attended:</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['school_last'] ?? ''); ?></td>
+                                    <td class="label" style="width:130px;">School last attended:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:250px;">&nbsp;<?php echo htmlspecialchars($formData['school_last'] ?? ''); ?></td>
                                 </tr>
                             </table>
 
                             <!-- SCHOOL ADDRESS -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:140px;">School Address:</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['school_address'] ?? ''); ?></td>
+                                    <td class="label" style="width:130px;">School Address:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:250px;">&nbsp;<?php echo htmlspecialchars($formData['school_address'] ?? ''); ?></td>
                                 </tr>
                             </table>
 
                             <!-- CULTURAL ORIGIN & RELIGION -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:180px;">Cultural Origin</td>
+                                    <td class="label" style="width:160px;">Cultural Origin</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:120px;">&nbsp;<?php echo htmlspecialchars($formData['cultural_origin'] ?? ''); ?></td>
-                                    <td class="label" style="width:70px; padding-left:15px;">Religion:</td>
+                                    <td class="label" style="width:65px; padding-left:10px;">Religion:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['religion'] ?? ''); ?></td>
                                 </tr>
                                 <tr>
-                                    <td class="label" style="font-size:9px; padding-top:0;">(Pinanggalinan na Lahi):</td>
+                                    <td class="label" style="font-size:8px; padding-top:0;">(Pinanggalinan na Lahi):</td>
                                     <td colspan="3"></td>
                                 </tr>
                             </table>
@@ -1023,9 +1042,9 @@ $formData = $_POST ?? [];
                             <!-- DIALECT & CP NO -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:110px;">Dialect spoken:</td>
+                                    <td class="label" style="width:100px;">Dialect spoken:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:120px;">&nbsp;<?php echo htmlspecialchars($formData['dialect'] ?? ''); ?></td>
-                                    <td class="label" style="width:60px; padding-left:15px;">CP No.:</td>
+                                    <td class="label" style="width:55px; padding-left:10px;">CP No.:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['cp_no'] ?? ''); ?></td>
                                 </tr>
                             </table>
@@ -1033,15 +1052,15 @@ $formData = $_POST ?? [];
                             <!-- COMPLETE HOME ADDRESS -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:160px;"><strong>Complete Home Address:</strong></td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:250px;">&nbsp;<?php echo htmlspecialchars($formData['home_address'] ?? ''); ?></td>
+                                    <td class="label" style="width:145px;"><strong>Complete Home Address:</strong></td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:300px;">&nbsp;<?php echo htmlspecialchars($formData['home_address'] ?? ''); ?></td>
                                 </tr>
                             </table>
 
                             <!-- CIVIL STATUS -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:100px;"><strong>Civil Status:</strong></td>
+                                    <td class="label" style="width:90px;"><strong>Civil Status:</strong></td>
                                     <td class="value">
                                         <span class="checkbox-item">
                                             <span class="box <?php echo (isset($formData['civil_status']) && $formData['civil_status'] == 'Married') ? 'checked' : ''; ?>"></span>
@@ -1070,7 +1089,7 @@ $formData = $_POST ?? [];
                             <!-- FATHER'S EDUCATION -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:220px;">Father's highest educational attainment</td>
+                                    <td class="label" style="width:200px;">Father's highest educational attainment</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['father_education'] ?? ''); ?></td>
                                 </tr>
                             </table>
@@ -1078,7 +1097,7 @@ $formData = $_POST ?? [];
                             <!-- MOTHER'S EDUCATION -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:220px;">Mother's highest educational attainment</td>
+                                    <td class="label" style="width:200px;">Mother's highest educational attainment</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['mother_education'] ?? ''); ?></td>
                                 </tr>
                             </table>
@@ -1086,7 +1105,7 @@ $formData = $_POST ?? [];
                             <!-- FATHER'S OCCUPATION -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:150px;">Father's Occupation</td>
+                                    <td class="label" style="width:140px;">Father's Occupation</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['father_occupation'] ?? ''); ?></td>
                                 </tr>
                             </table>
@@ -1094,7 +1113,7 @@ $formData = $_POST ?? [];
                             <!-- MOTHER'S OCCUPATION -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:150px;">Mother's Occupation</td>
+                                    <td class="label" style="width:140px;">Mother's Occupation</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:200px;">&nbsp;<?php echo htmlspecialchars($formData['mother_occupation'] ?? ''); ?></td>
                                 </tr>
                             </table>
@@ -1102,7 +1121,7 @@ $formData = $_POST ?? [];
                             <!-- PERSON TO CONTACT -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:220px;"><strong>Person to be contacted in case of emergency:</strong></td>
+                                    <td class="label" style="width:200px;"><strong>Person to be contacted in case of emergency:</strong></td>
                                     <td></td>
                                 </tr>
                             </table>
@@ -1110,9 +1129,9 @@ $formData = $_POST ?? [];
                             <!-- NAME & RELATIONSHIP -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:60px;">Name:</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:150px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_name'] ?? ''); ?></td>
-                                    <td class="label" style="width:90px; padding-left:15px;">Relationship:</td>
+                                    <td class="label" style="width:55px;">Name:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:160px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_name'] ?? ''); ?></td>
+                                    <td class="label" style="width:85px; padding-left:10px;">Relationship:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:100px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_relationship'] ?? ''); ?></td>
                                 </tr>
                             </table>
@@ -1120,15 +1139,15 @@ $formData = $_POST ?? [];
                             <!-- ADDRESS -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:60px;">Address:</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:300px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_address'] ?? ''); ?></td>
+                                    <td class="label" style="width:55px;">Address:</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:350px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_address'] ?? ''); ?></td>
                                 </tr>
                             </table>
 
                             <!-- CONTACT NO -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:90px;">Contact No.:</td>
+                                    <td class="label" style="width:85px;">Contact No.:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:150px;">&nbsp;<?php echo htmlspecialchars($formData['emergency_contact'] ?? ''); ?></td>
                                 </tr>
                             </table>
@@ -1136,7 +1155,7 @@ $formData = $_POST ?? [];
                             <!-- PARENT'S MARITAL STATUS -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:160px;"><strong>Parent's Marital Status:</strong></td>
+                                    <td class="label" style="width:150px;"><strong>Parent's Marital Status:</strong></td>
                                     <td class="value">
                                         <span class="checkbox-item">
                                             <span class="box <?php echo (isset($formData['parents_marital_status']) && $formData['parents_marital_status'] == 'Living Together') ? 'checked' : ''; ?>"></span>
@@ -1170,7 +1189,7 @@ $formData = $_POST ?? [];
                             <!-- FORMER BOARDING HOUSE -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:280px;">Length of months/years you stayed in your former boarding house:</td>
+                                    <td class="label" style="width:260px;">Length of months/years you stayed in your former boarding house:</td>
                                     <td class="value" style="border-bottom:1px solid #000; min-width:150px;">&nbsp;<?php echo htmlspecialchars($formData['former_boarding_years'] ?? ''); ?></td>
                                 </tr>
                             </table>
@@ -1178,7 +1197,7 @@ $formData = $_POST ?? [];
                             <!-- PLAN TO TRANSFER -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:320px;">Do you plan to transfer to the other boarding house after this semester?</td>
+                                    <td class="label" style="width:300px;">Do you plan to transfer to the other boarding house after this semester?</td>
                                     <td class="value">
                                         <span class="checkbox-item">
                                             <span class="box <?php echo (isset($formData['plan_transfer']) && $formData['plan_transfer'] == 'Yes') ? 'checked' : ''; ?>"></span>
@@ -1195,16 +1214,16 @@ $formData = $_POST ?? [];
                             <!-- WHY YES -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:100px;">Why, if Yes?</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:250px;">&nbsp;<?php echo htmlspecialchars($formData['plan_transfer_yes'] ?? ''); ?></td>
+                                    <td class="label" style="width:90px;">Why, if Yes?</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:300px;">&nbsp;<?php echo htmlspecialchars($formData['plan_transfer_yes'] ?? ''); ?></td>
                                 </tr>
                             </table>
 
                             <!-- WHY NO -->
                             <table class="print-table">
                                 <tr>
-                                    <td class="label" style="width:100px;">Why, if No?</td>
-                                    <td class="value" style="border-bottom:1px solid #000; min-width:250px;">&nbsp;<?php echo htmlspecialchars($formData['plan_transfer_no'] ?? ''); ?></td>
+                                    <td class="label" style="width:90px;">Why, if No?</td>
+                                    <td class="value" style="border-bottom:1px solid #000; min-width:300px;">&nbsp;<?php echo htmlspecialchars($formData['plan_transfer_no'] ?? ''); ?></td>
                                 </tr>
                             </table>
 
