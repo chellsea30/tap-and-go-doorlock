@@ -1,6 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Print Staff ID Card
+ * NO QR CODE - ISSUED DATE ONLY
  */
 
 session_start();
@@ -55,7 +56,7 @@ if (!$staff) {
         @media print {
             body { margin: 0; padding: 0; background: #fff; }
             .no-print { display: none !important; }
-            .card {
+            .id-card {
                 box-shadow: none !important;
                 border: 1px solid #ddd !important;
             }
@@ -97,7 +98,7 @@ if (!$staff) {
         }
         
         .id-card .body {
-            padding: 20px;
+            padding: 25px 20px;
             text-align: center;
         }
         
@@ -144,26 +145,15 @@ if (!$staff) {
         .id-card .dept {
             font-size: 14px;
             color: #4b5563;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         
-        .id-card .uid {
-            background: #f3f4f6;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-weight: 700;
-            font-size: 16px;
-            color: #1a2a4a;
-            display: inline-block;
-            margin: 6px 0;
-            border: 1px solid #e5e7eb;
-        }
-        
-        .id-card .expiry {
-            font-size: 12px;
+        .id-card .issued {
+            font-size: 13px;
             color: #6b7280;
-            margin-top: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e5e7eb;
         }
         
         .id-card .footer {
@@ -197,6 +187,14 @@ if (!$staff) {
         .btn-print:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 15px rgba(26,58,106,0.3);
+        }
+        
+        .id-card .divider {
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(135deg, #1a2a4a, #2a5a9a);
+            margin: 8px auto;
+            border-radius: 2px;
         }
     </style>
 </head>
@@ -247,6 +245,9 @@ if (!$staff) {
                 <div class="photo-placeholder"><?php echo $initials; ?></div>
             <?php endif; ?>
             
+            <!-- Divider -->
+            <div class="divider"></div>
+            
             <!-- Name -->
             <div class="name"><?php echo htmlspecialchars($staff['full_name']); ?></div>
             
@@ -256,21 +257,10 @@ if (!$staff) {
             <!-- Department -->
             <div class="dept"><?php echo htmlspecialchars($staff['department'] ?? 'Staff'); ?></div>
             
-            <!-- Card UID -->
-            <div class="uid">
-                <i class="fas fa-id-card me-2" style="color:#6b7280;"></i>
-                <?php echo htmlspecialchars($staff['card_uid']); ?>
-            </div>
-            
-            <!-- Expiry -->
-            <div class="expiry">
-                <i class="far fa-calendar-alt me-1"></i>
-                Issued: <?php echo date('M d, Y', strtotime($staff['issued_date'] ?? date('Y-m-d'))); ?>
-                <?php if (!empty($staff['expiry_date'])): ?>
-                    <span class="mx-1">|</span>
-                    <i class="far fa-clock me-1"></i>
-                    Expires: <?php echo date('M d, Y', strtotime($staff['expiry_date'])); ?>
-                <?php endif; ?>
+            <!-- Issued Date Only -->
+            <div class="issued">
+                <i class="far fa-calendar-alt me-2"></i>
+                Issued: <?php echo date('F d, Y', strtotime($staff['issued_date'] ?? date('Y-m-d'))); ?>
             </div>
         </div>
         
@@ -296,7 +286,6 @@ if (!$staff) {
     </div>
 
     <script>
-        // Auto-print when loaded
         document.addEventListener('DOMContentLoaded', function() {
             // Uncomment below to auto-print
             // window.print();
