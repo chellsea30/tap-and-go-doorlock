@@ -2,6 +2,7 @@
 /**
  * Tap-and-Go Doorlock - Staff Card Management
  * DARK MODE - WITH CARD UID - FIXED LAYOUT SAME AS STAFF INFO
+ * WITH PRINT ID BUTTON - WITH PROFILE PHOTO
  */
 
 session_start();
@@ -256,14 +257,28 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
 }
 
 // ============================================================
-// GET STAFF LIST WITH CARD UID
+// GET STAFF LIST WITH CARD UID AND PROFILE PHOTO
 // ============================================================
 $staffList = [];
-$result = $conn->query("
-    SELECT staff_id, staff_id_number, full_name, email, department, card_uid, created_at
-    FROM staff_users
-    ORDER BY full_name
-");
+
+// Check if avatar column exists
+$tableCheck = $conn->query("SHOW COLUMNS FROM staff_users LIKE 'avatar'");
+$hasAvatar = $tableCheck && $tableCheck->num_rows > 0;
+
+if ($hasAvatar) {
+    $result = $conn->query("
+        SELECT staff_id, staff_id_number, full_name, email, department, card_uid, avatar, created_at
+        FROM staff_users
+        ORDER BY full_name
+    ");
+} else {
+    $result = $conn->query("
+        SELECT staff_id, staff_id_number, full_name, email, department, card_uid, NULL as avatar, created_at
+        FROM staff_users
+        ORDER BY full_name
+    ");
+}
+
 if ($result) {
     while ($row = $result->fetch_assoc()) {
         $staffList[] = $row;
@@ -402,7 +417,7 @@ $nextStaffId = getNextStaffId($conn);
         .staff-card .text-muted { color: #6b7280 !important; }
         
         /* ============================================================
-           STAFF AVATAR / ICON
+           STAFF AVATAR / ICON - WITH PROFILE PHOTO SUPPORT
            ============================================================ */
         .staff-avatar {
             width: 80px;
@@ -419,6 +434,11 @@ $nextStaffId = getNextStaffId($conn);
             border: 3px solid #1a2a4a;
             background: linear-gradient(135deg, #667eea, #764ba2);
         }
+        .staff-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
         .staff-avatar .no-photo {
             display: flex;
             align-items: center;
@@ -428,6 +448,26 @@ $nextStaffId = getNextStaffId($conn);
             font-size: 28px;
             font-weight: 700;
             color: white;
+        }
+        .staff-avatar .has-photo-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #111827;
+        }
+        
+        .staff-avatar-wrapper {
+            position: relative;
+            display: inline-block;
         }
         
         /* Card UID Badge */
@@ -524,6 +564,23 @@ $nextStaffId = getNextStaffId($conn);
         .btn-card-remove:hover {
             background: rgba(239, 68, 68, 0.3) !important;
             color: #fca5a5 !important;
+        }
+        
+        /* PRINT ID BUTTON - NEW */
+        .btn-print-id {
+            background: rgba(59, 130, 246, 0.2) !important;
+            color: #93c5fd !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-print-id:hover {
+            background: rgba(59, 130, 246, 0.3) !important;
+            color: #93c5fd !important;
         }
         
         .btn-outline-primary {
@@ -853,20 +910,49 @@ $nextStaffId = getNextStaffId($conn);
                     </div>
                 <?php else: ?>
                     <div class="row g-4">
-                        <?php foreach ($staffList as $staff): ?>
+                        <?php foreach ($staffList as $staff): 
+                            // Get initials for avatar fallback
+                            $name = $staff['full_name'] ?? 'Staff';
+                            $initials = '';
+                            $parts = explode(' ', $name);
+                            foreach ($parts as $p) {
+                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                            }
+                            $initials = substr($initials, 0, 2) ?: 'ST';
+                            
+                            // Check if profile photo exists
+                            $photoPath = $staff['avatar'] ?? '';
+                            $hasPhoto = false;
+                            $fullPhotoPath = '';
+                            
+                            if (!empty($photoPath)) {
+                                if (strpos($photoPath, 'uploads/') === 0) {
+                                    $fullPhotoPath = '../../' . $photoPath;
+                                } else {
+                                    $fullPhotoPath = '../../uploads/staff_photos/' . $photoPath;
+                                }
+                                
+                                if (file_exists($fullPhotoPath)) {
+                                    $hasPhoto = true;
+                                }
+                            }
+                        ?>
                             <div class="col-md-4 col-lg-3">
                                 <div class="staff-card">
-                                    <!-- Staff Avatar -->
-                                    <div class="staff-avatar">
-                                        <?php 
-                                            $name = $staff['full_name'] ?? 'Staff';
-                                            $initials = '';
-                                            $parts = explode(' ', $name);
-                                            foreach ($parts as $p) {
-                                                if (!empty($p)) $initials .= strtoupper($p[0]);
-                                            }
-                                            echo '<div class="no-photo">' . substr($initials, 0, 2) . '</div>';
-                                        ?>
+                                    <!-- Staff Avatar with Profile Photo -->
+                                    <div class="staff-avatar-wrapper">
+                                        <div class="staff-avatar">
+                                            <?php if ($hasPhoto): ?>
+                                                <img src="<?php echo $fullPhotoPath; ?>" 
+                                                     alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
+                                                     onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
+                                                <span class="has-photo-badge">
+                                                    <i class="fas fa-check-circle"></i>
+                                                </span>
+                                            <?php else: ?>
+                                                <div class="no-photo"><?php echo $initials; ?></div>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                     
                                     <div class="name"><?php echo htmlspecialchars($staff['full_name']); ?></div>
@@ -901,6 +987,15 @@ $nextStaffId = getNextStaffId($conn);
                                     
                                     <!-- Staff Actions -->
                                     <div class="staff-actions">
+                                        <!-- PRINT ID BUTTON - NEW -->
+                                        <?php if (!empty($staff['card_uid'])): ?>
+                                            <a href="print-staff-id.php?uid=<?php echo $staff['card_uid']; ?>" 
+                                               target="_blank" 
+                                               class="btn-print-id">
+                                                <i class="fas fa-print me-1"></i> Print ID
+                                            </a>
+                                        <?php endif; ?>
+                                        
                                         <button type="button" 
                                                 class="btn btn-card"
                                                 data-bs-toggle="modal" 
@@ -941,16 +1036,16 @@ $nextStaffId = getNextStaffId($conn);
                                         </div>
                                         <div class="modal-body">
                                             <div class="mb-3 text-center">
-                                                <?php 
-                                                    $name = $staff['full_name'] ?? 'Staff';
-                                                    $initials = '';
-                                                    $parts = explode(' ', $name);
-                                                    foreach ($parts as $p) {
-                                                        if (!empty($p)) $initials .= strtoupper($p[0]);
-                                                    }
-                                                ?>
-                                                <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:32px;font-weight:700;color:white;">
-                                                    <?php echo substr($initials, 0, 2); ?>
+                                                <!-- Profile Photo in Modal -->
+                                                <div style="width:80px;height:80px;border-radius:50%;margin:0 auto;overflow:hidden;border:3px solid #1a2a4a;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:white;">
+                                                    <?php if ($hasPhoto): ?>
+                                                        <img src="<?php echo $fullPhotoPath; ?>" 
+                                                             alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
+                                                             style="width:100%;height:100%;object-fit:cover;"
+                                                             onerror="this.style.display='none'; this.parentElement.textContent='<?php echo $initials; ?>';">
+                                                    <?php else: ?>
+                                                        <?php echo $initials; ?>
+                                                    <?php endif; ?>
                                                 </div>
                                                 <div class="mt-2">
                                                     <strong><?php echo htmlspecialchars($staff['full_name']); ?></strong>
