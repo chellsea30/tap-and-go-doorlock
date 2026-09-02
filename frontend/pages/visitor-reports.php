@@ -5,7 +5,7 @@
  * WITH DAY, WEEK, MONTH, YEAR FILTERS
  * WITH SHOW ENTRIES PAGINATION
  * PURE DARK MODE
- * FIXED: Removed access_type and card_uid columns
+ * DATA FROM visitor_logs TABLE
  */
 
 session_start();
@@ -49,29 +49,29 @@ $dateLabel = "";
 
 switch ($period) {
     case 'day':
-        $dateCondition = "DATE(vl.entry_timestamp) = '$dateFilter'";
+        $dateCondition = "DATE(vl.created_at) = '$dateFilter'";
         $dateLabel = date('F d, Y', strtotime($dateFilter));
         break;
     case 'week':
         $weekStart = date('Y-m-d', strtotime('monday this week', strtotime($dateFilter)));
         $weekEnd = date('Y-m-d', strtotime('sunday this week', strtotime($dateFilter)));
-        $dateCondition = "DATE(vl.entry_timestamp) BETWEEN '$weekStart' AND '$weekEnd'";
+        $dateCondition = "DATE(vl.created_at) BETWEEN '$weekStart' AND '$weekEnd'";
         $dateLabel = "Week of " . date('M d', strtotime($weekStart)) . " - " . date('M d, Y', strtotime($weekEnd));
         break;
     case 'month':
         $monthStart = date('Y-m-01', strtotime($dateFilter));
         $monthEnd = date('Y-m-t', strtotime($dateFilter));
-        $dateCondition = "DATE(vl.entry_timestamp) BETWEEN '$monthStart' AND '$monthEnd'";
+        $dateCondition = "DATE(vl.created_at) BETWEEN '$monthStart' AND '$monthEnd'";
         $dateLabel = date('F Y', strtotime($dateFilter));
         break;
     case 'year':
         $yearStart = date('Y-01-01', strtotime($dateFilter));
         $yearEnd = date('Y-12-31', strtotime($dateFilter));
-        $dateCondition = "DATE(vl.entry_timestamp) BETWEEN '$yearStart' AND '$yearEnd'";
+        $dateCondition = "DATE(vl.created_at) BETWEEN '$yearStart' AND '$yearEnd'";
         $dateLabel = date('Y', strtotime($dateFilter));
         break;
     default:
-        $dateCondition = "DATE(vl.entry_timestamp) = '$dateFilter'";
+        $dateCondition = "DATE(vl.created_at) = '$dateFilter'";
         $dateLabel = date('F d, Y', strtotime($dateFilter));
 }
 
@@ -134,7 +134,7 @@ if (!empty($searchFilter)) {
     )";
 }
 
-$query .= " ORDER BY vl.entry_timestamp DESC LIMIT $perPage OFFSET $offset";
+$query .= " ORDER BY vl.created_at DESC LIMIT $perPage OFFSET $offset";
 
 $result = $conn->query($query);
 if ($result) {
@@ -150,6 +150,8 @@ $stats = [
     'total' => 0,
     'granted' => 0,
     'denied' => 0,
+    'pending' => 0,
+    'exited' => 0,
     'unique_visitors' => 0,
     'residents_visited' => 0
 ];
@@ -182,6 +184,24 @@ if ($result && $row = $result->fetch_assoc()) {
 }
 
 $result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM visitor_logs vl
+    WHERE $dateCondition AND vl.access_status = 'pending'
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['pending'] = (int)$row['count'];
+}
+
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM visitor_logs vl
+    WHERE $dateCondition AND vl.access_status = 'exited'
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['exited'] = (int)$row['count'];
+}
+
+$result = $conn->query("
     SELECT COUNT(DISTINCT vl.visitor_name) as count 
     FROM visitor_logs vl
     WHERE $dateCondition
@@ -205,13 +225,14 @@ if ($result && $row = $result->fetch_assoc()) {
 $chartData = [];
 $chartQuery = "
     SELECT 
-        DATE(vl.entry_timestamp) as date,
+        DATE(vl.created_at) as date,
         COUNT(*) as total,
         SUM(CASE WHEN vl.access_status = 'granted' THEN 1 ELSE 0 END) as granted,
-        SUM(CASE WHEN vl.access_status = 'denied' THEN 1 ELSE 0 END) as denied
+        SUM(CASE WHEN vl.access_status = 'denied' THEN 1 ELSE 0 END) as denied,
+        SUM(CASE WHEN vl.access_status = 'pending' THEN 1 ELSE 0 END) as pending
     FROM visitor_logs vl
     WHERE $dateCondition
-    GROUP BY DATE(vl.entry_timestamp)
+    GROUP BY DATE(vl.created_at)
     ORDER BY date ASC
 ";
 
@@ -464,8 +485,8 @@ function getInitials($name) {
            ============================================================ */
         .badge-granted { background: #065f46 !important; color: #34d399 !important; }
         .badge-denied { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-visitor { background: #1a2a5a !important; color: #93c5fd !important; }
-        .badge-resident { background: #065f46 !important; color: #34d399 !important; }
+        .badge-pending { background: #4a3a1a !important; color: #fbbf24 !important; }
+        .badge-exited { background: #1a2a4a !important; color: #808090 !important; }
         
         /* ============================================================
            DARK FILTERS
@@ -567,6 +588,7 @@ function getInitials($name) {
         }
         .chart-bar-item .bar.granted { background: #10b981; }
         .chart-bar-item .bar.denied { background: #ef4444; }
+        .chart-bar-item .bar.pending { background: #f59e0b; }
         .chart-bar-item .bar-label {
             font-size: 9px;
             color: #808090;
@@ -812,19 +834,28 @@ function getInitials($name) {
                     </div>
                     <div class="col-4 col-sm-4 col-xl-2">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-users"></i></div>
+                            <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-clock"></i></div>
                             <div>
-                                <div class="stat-number"><?php echo $stats['unique_visitors']; ?></div>
-                                <div class="stat-label">Unique Visitors</div>
+                                <div class="stat-number text-warning"><?php echo $stats['pending']; ?></div>
+                                <div class="stat-label">Pending</div>
                             </div>
                         </div>
                     </div>
                     <div class="col-4 col-sm-4 col-xl-2">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: #3b82f6;"><i class="fas fa-user"></i></div>
+                            <div class="stat-icon" style="background: #6b7280;"><i class="fas fa-check-double"></i></div>
                             <div>
-                                <div class="stat-number"><?php echo $stats['residents_visited']; ?></div>
-                                <div class="stat-label">Residents Visited</div>
+                                <div class="stat-number"><?php echo $stats['exited']; ?></div>
+                                <div class="stat-label">Exited</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-4 col-sm-4 col-xl-2">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-users"></i></div>
+                            <div>
+                                <div class="stat-number"><?php echo $stats['unique_visitors']; ?></div>
+                                <div class="stat-label">Unique Visitors</div>
                             </div>
                         </div>
                     </div>
@@ -871,6 +902,8 @@ function getInitials($name) {
                                 <option value="">All</option>
                                 <option value="granted" <?php echo $statusFilter == 'granted' ? 'selected' : ''; ?>>Granted</option>
                                 <option value="denied" <?php echo $statusFilter == 'denied' ? 'selected' : ''; ?>>Denied</option>
+                                <option value="pending" <?php echo $statusFilter == 'pending' ? 'selected' : ''; ?>>Pending</option>
+                                <option value="exited" <?php echo $statusFilter == 'exited' ? 'selected' : ''; ?>>Exited</option>
                             </select>
                         </div>
                         <div class="col-md-3">
@@ -899,7 +932,8 @@ function getInitials($name) {
                         </h6>
                         <span class="text-muted small">
                             <span class="badge badge-granted me-2">Granted</span>
-                            <span class="badge badge-denied">Denied</span>
+                            <span class="badge badge-denied me-2">Denied</span>
+                            <span class="badge badge-pending">Pending</span>
                         </span>
                     </div>
                     <div class="chart-bar">
@@ -910,9 +944,11 @@ function getInitials($name) {
                             $total = $data['total'];
                             $granted = $data['granted'];
                             $denied = $data['denied'];
+                            $pending = $data['pending'] ?? 0;
                             $height = max(4, ($total / $maxValue) * 100);
                             $grantedHeight = max(2, ($granted / $maxValue) * 100);
                             $deniedHeight = max(2, ($denied / $maxValue) * 100);
+                            $pendingHeight = max(2, ($pending / $maxValue) * 100);
                             $dateDisplay = date('M d', strtotime($data['date']));
                         ?>
                             <div class="chart-bar-item">
@@ -920,6 +956,7 @@ function getInitials($name) {
                                 <div style="width:100%; display:flex; flex-direction:column; align-items:center; height:<?php echo $height; ?>%; justify-content:flex-end;">
                                     <div class="bar granted" style="height:<?php echo $grantedHeight; ?>%;"></div>
                                     <div class="bar denied" style="height:<?php echo $deniedHeight; ?>%;"></div>
+                                    <div class="bar pending" style="height:<?php echo $pendingHeight; ?>%;"></div>
                                 </div>
                                 <div class="bar-label"><?php echo $dateDisplay; ?></div>
                             </div>
@@ -944,9 +981,13 @@ function getInitials($name) {
                                     <i class="fas fa-check-circle me-1"></i>
                                     <?php echo $stats['granted']; ?> Granted
                                 </span>
-                                <span class="badge bg-danger">
+                                <span class="badge bg-danger me-1">
                                     <i class="fas fa-times-circle me-1"></i>
                                     <?php echo $stats['denied']; ?> Denied
+                                </span>
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-clock me-1"></i>
+                                    <?php echo $stats['pending']; ?> Pending
                                 </span>
                             </div>
                         </div>
@@ -956,11 +997,11 @@ function getInitials($name) {
                             <table class="table table-hover visitor-table">
                                 <thead>
                                     <tr>
-                                        <th>Entry Time</th>
-                                        <th>Exit Time</th>
-                                        <th>Visitor</th>
-                                        <th>Visiting</th>
+                                        <th>Registered Date</th>
+                                        <th>Visitor Name</th>
                                         <th>Purpose</th>
+                                        <th>Visiting</th>
+                                        <th>Validity</th>
                                         <th>Status</th>
                                     </tr>
                                 </thead>
@@ -977,7 +1018,11 @@ function getInitials($name) {
                                             $visitorName = $log['visitor_name'] ?? 'Unknown Visitor';
                                             $residentName = $log['resident_name'] ?? 'Unknown';
                                             $purpose = $log['purpose_of_visit'] ?? 'N/A';
-                                            $isDenied = $log['access_status'] == 'denied';
+                                            $status = $log['access_status'] ?? 'pending';
+                                            $isDenied = $status == 'denied';
+                                            $isGranted = $status == 'granted';
+                                            $isPending = $status == 'pending';
+                                            $isExited = $status == 'exited';
                                             
                                             // Get profile photo
                                             $photoPath = $log['profile_photo'] ?? null;
@@ -998,16 +1043,22 @@ function getInitials($name) {
                                             
                                             $initials = getInitials($visitorName);
                                             $residentInitials = getInitials($residentName);
+                                            
+                                            $statusBadge = '';
+                                            if ($isGranted) {
+                                                $statusBadge = 'badge-granted';
+                                            } elseif ($isDenied) {
+                                                $statusBadge = 'badge-denied';
+                                            } elseif ($isPending) {
+                                                $statusBadge = 'badge-pending';
+                                            } elseif ($isExited) {
+                                                $statusBadge = 'badge-exited';
+                                            }
+                                            
+                                            $statusIcon = $isGranted ? 'fa-check-circle' : ($isDenied ? 'fa-times-circle' : ($isPending ? 'fa-clock' : 'fa-check-double'));
                                         ?>
                                             <tr class="<?php echo $isDenied ? 'denied-row' : ''; ?>">
-                                                <td><?php echo date('M d, Y h:i A', strtotime($log['entry_timestamp'])); ?></td>
-                                                <td>
-                                                    <?php if (!empty($log['exit_timestamp'])): ?>
-                                                        <?php echo date('M d, Y h:i A', strtotime($log['exit_timestamp'])); ?>
-                                                    <?php else: ?>
-                                                        <span class="text-muted">Not yet exited</span>
-                                                    <?php endif; ?>
-                                                </td>
+                                                <td><?php echo date('M d, Y h:i A', strtotime($log['created_at'])); ?></td>
                                                 <td>
                                                     <div class="user-cell">
                                                         <div class="user-avatar visitor-avatar">
@@ -1015,8 +1066,16 @@ function getInitials($name) {
                                                         </div>
                                                         <div>
                                                             <div><?php echo htmlspecialchars($visitorName); ?></div>
+                                                            <?php if (!empty($log['temporary_card_uid'])): ?>
+                                                                <div style="font-size: 10px; color: #808090;">
+                                                                    Card: <?php echo htmlspecialchars($log['temporary_card_uid']); ?>
+                                                                </div>
+                                                            <?php endif; ?>
                                                         </div>
                                                     </div>
+                                                </td>
+                                                <td>
+                                                    <span style="font-size: 12px;"><?php echo htmlspecialchars($purpose); ?></span>
                                                 </td>
                                                 <td>
                                                     <div class="user-cell">
@@ -1040,13 +1099,29 @@ function getInitials($name) {
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <span style="font-size: 12px;"><?php echo htmlspecialchars($purpose); ?></span>
+                                                    <span style="font-size: 11px; color: #808090;">
+                                                        <?php echo date('M d', strtotime($log['validity_start'] ?? 'now')); ?> - 
+                                                        <?php echo date('M d', strtotime($log['validity_end'] ?? 'now')); ?>
+                                                    </span>
+                                                    <?php if (!empty($log['validity_end']) && strtotime($log['validity_end']) < time() && $status != 'exited'): ?>
+                                                        <br><span class="badge badge-denied" style="font-size: 9px;">EXPIRED</span>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td>
-                                                    <span class="badge <?php echo $isDenied ? 'badge-denied' : 'badge-granted'; ?>">
-                                                        <i class="fas <?php echo $isDenied ? 'fa-times-circle' : 'fa-check-circle'; ?> me-1"></i>
-                                                        <?php echo ucfirst($log['access_status'] ?? 'N/A'); ?>
+                                                    <span class="badge <?php echo $statusBadge; ?>">
+                                                        <i class="fas <?php echo $statusIcon; ?> me-1"></i>
+                                                        <?php echo ucfirst($status); ?>
                                                     </span>
+                                                    <?php if (!empty($log['entry_timestamp'])): ?>
+                                                        <br><span style="font-size: 10px; color: #808090;">
+                                                            Entry: <?php echo date('h:i A', strtotime($log['entry_timestamp'])); ?>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($log['exit_timestamp'])): ?>
+                                                        <br><span style="font-size: 10px; color: #808090;">
+                                                            Exit: <?php echo date('h:i A', strtotime($log['exit_timestamp'])); ?>
+                                                        </span>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -1143,6 +1218,9 @@ function getInitials($name) {
                     <span class="mx-1">|</span>
                     <i class="fas fa-times-circle me-1 text-danger"></i>
                     <?php echo $stats['denied']; ?> denied
+                    <span class="mx-1">|</span>
+                    <i class="fas fa-clock me-1 text-warning"></i>
+                    <?php echo $stats['pending']; ?> pending
                     <span class="mx-1">|</span>
                     <i class="fas fa-users me-1 text-primary"></i>
                     <?php echo $stats['unique_visitors']; ?> unique visitors
