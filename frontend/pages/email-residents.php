@@ -1,14 +1,17 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Email Residents
- * MANUAL PHPMailer - No Composer needed
- * FIXED LAYOUT SAME AS DASHBOARD
+ * FIXED: Timeout issue, SSL/Port options, Error handling
  */
 
 session_start();
 
+// Enable error reporting
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 // ============================================================
-// MANUAL LOADING NG PHPMailer (walang composer)
+// MANUAL LOADING NG PHPMailer
 // ============================================================
 require_once '../../includes/PHPMailer/src/PHPMailer.php';
 require_once '../../includes/PHPMailer/src/SMTP.php';
@@ -27,6 +30,7 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
 }
+
 // Include header
 include '../includes/header.php'; 
 $conn = getDBConnection();
@@ -34,16 +38,31 @@ $error = '';
 $success = '';
 
 // ============================================================
-// EMAIL CONFIGURATION - UPDATE THIS!
+// EMAIL CONFIGURATION - TRY BOTH PORTS
 // ============================================================
+// Option 1: SSL (Port 465) - Recommended for most hosting
+$mail_config = [
+    'host' => 'smtp.gmail.com',
+    'username' => 'albanochellsea30@gmail.com',
+    'password' => 'gofmjbdjelbvhrmo', // WALANG SPACES!
+    'port' => 465, // SSL
+    'encryption' => 'ssl', // ssl or tls
+    'from_email' => 'albanochellsea30@gmail.com',
+    'from_name' => 'tap-and-go doorlock'
+];
+
+// Option 2: TLS (Port 587) - If port 465 doesn't work, uncomment this
+/*
 $mail_config = [
     'host' => 'smtp.gmail.com',
     'username' => 'albanochellsea30@gmail.com',
     'password' => 'gofmjbdjelbvhrmo',
     'port' => 587,
+    'encryption' => 'tls',
     'from_email' => 'albanochellsea30@gmail.com',
-    'from_name' => 'tap-and-go doorlock'
+    'from_name' => 'Tap-and-Go Doorlock System'
 ];
+*/
 
 // ============================================================
 // GET RESIDENT LIST
@@ -95,19 +114,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_email'])) {
         $sent_count = 0;
         $failed_count = 0;
         $failed_emails = [];
+        $error_messages = [];
         
         foreach ($recipients as $recipient) {
             try {
                 $mail = new PHPMailer(true);
                 
+                // Increase timeout to prevent "Maximum execution time" error
+                $mail->Timeout = 60;
+                $mail->SMTPKeepAlive = true;
+                
+                // Server settings
                 $mail->isSMTP();
                 $mail->Host       = $mail_config['host'];
                 $mail->SMTPAuth   = true;
                 $mail->Username   = $mail_config['username'];
                 $mail->Password   = $mail_config['password'];
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port       = $mail_config['port'];
+                
+                // Set encryption based on port
+                if ($mail_config['port'] == 465) {
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // SSL
+                } else {
+                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; // TLS
+                }
+                $mail->Port = $mail_config['port'];
+                
+                // Bypass SSL verification (sometimes needed for shared hosting)
+                $mail->SMTPOptions = array(
+                    'ssl' => array(
+                        'verify_peer' => false,
+                        'verify_peer_name' => false,
+                        'allow_self_signed' => true
+                    )
+                );
+                
                 $mail->setLanguage('en');
+                $mail->CharSet = 'UTF-8';
                 
                 $mail->setFrom($mail_config['from_email'], $mail_config['from_name']);
                 $mail->addAddress($recipient['email'], $recipient['full_name']);
@@ -150,42 +192,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_email'])) {
                 $mail->Body    = $htmlMessage;
                 $mail->AltBody = strip_tags($message);
                 
-                $mail->send();
+                // Send email
+                if ($mail->send()) {
+                    $sent_count++;
+                    
+                    // Log to database
+                    $stmt = $conn->prepare("
+                        INSERT INTO email_logs (
+                            recipient_type, recipient_id, recipient_email, recipient_name, 
+                            subject, message, sent_by, sent_at, status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), 'sent')
+                    ");
+                    $sent_by = $_SESSION['admin_id'];
+                    $recipient_type = 'resident';
+                    $stmt->bind_param("sissssi", 
+                        $recipient_type, 
+                        $recipient['user_id'], 
+                        $recipient['email'], 
+                        $recipient['full_name'],
+                        $subject, 
+                        $message, 
+                        $sent_by
+                    );
+                    $stmt->execute();
+                    $stmt->close();
+                }
                 
+            } catch (Exception $e) {
+                $failed_count++;
+                $failed_emails[] = $recipient['email'];
+                $error_messages[] = $recipient['email'] . ": " . $e->getMessage();
+                
+                // Log error to database
                 $stmt = $conn->prepare("
                     INSERT INTO email_logs (
                         recipient_type, recipient_id, recipient_email, recipient_name, 
-                        subject, message, sent_by, sent_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                        subject, message, sent_by, sent_at, status, error_message
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), 'failed', ?)
                 ");
                 $sent_by = $_SESSION['admin_id'];
                 $recipient_type = 'resident';
-                $stmt->bind_param("sissssi", 
+                $error_msg = $e->getMessage();
+                $stmt->bind_param("sissssis", 
                     $recipient_type, 
                     $recipient['user_id'], 
                     $recipient['email'], 
                     $recipient['full_name'],
                     $subject, 
                     $message, 
-                    $sent_by
+                    $sent_by,
+                    $error_msg
                 );
                 $stmt->execute();
                 $stmt->close();
-                
-                $sent_count++;
-                
-            } catch (Exception $e) {
-                $failed_count++;
-                $failed_emails[] = $recipient['email'];
             }
         }
         
         $success = "✅ Email sent to $sent_count resident(s).";
         if ($failed_count > 0) {
             $success .= " Failed: $failed_count";
+            if (!empty($error_messages)) {
+                $success .= "<br><small>Errors: " . htmlspecialchars(implode("; ", $error_messages)) . "</small>";
+            }
         }
         
         logAudit($_SESSION['admin_id'], 'Send Resident Email', "Sent email to $sent_count residents");
+    }
+}
+
+// ============================================================
+// TEST CONNECTION FUNCTION
+// ============================================================
+function testSMTPConnection() {
+    global $mail_config;
+    try {
+        $mail = new PHPMailer(true);
+        $mail->Timeout = 10;
+        $mail->isSMTP();
+        $mail->Host = $mail_config['host'];
+        $mail->SMTPAuth = true;
+        $mail->Username = $mail_config['username'];
+        $mail->Password = $mail_config['password'];
+        
+        if ($mail_config['port'] == 465) {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+        } else {
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        }
+        $mail->Port = $mail_config['port'];
+        
+        // Bypass SSL verification
+        $mail->SMTPOptions = array(
+            'ssl' => array(
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true
+            )
+        );
+        
+        // Try to connect
+        $mail->smtpConnect();
+        return ['success' => true, 'message' => 'Connected successfully!'];
+    } catch (Exception $e) {
+        return ['success' => false, 'message' => $e->getMessage()];
     }
 }
 ?>
@@ -200,7 +309,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_email'])) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
-        /* Same dark theme styles as dashboard */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', sans-serif;
@@ -359,6 +467,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_email'])) {
             100% { opacity: 1; transform: scale(1); }
         }
         
+        .connection-test {
+            background: #1a1a2e;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #2a2a4a;
+        }
+        .connection-test .status-success { color: #6ee7b7; }
+        .connection-test .status-failed { color: #fca5a5; }
+        
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a0e1a; }
         ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 4px; }
@@ -393,7 +511,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_email'])) {
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 
-                <!-- HEADER - SAME AS DASHBOARD -->
+                <!-- HEADER -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-users me-2" style="color: #1a3a6a;"></i>
@@ -424,6 +542,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_email'])) {
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 <?php endif; ?>
+
+                <!-- Connection Test -->
+                <div class="connection-test">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>SMTP Connection Status:</strong>
+                            <?php 
+                            $testResult = testSMTPConnection();
+                            if ($testResult['success']): ?>
+                                <span class="status-success">✅ <?php echo $testResult['message']; ?></span>
+                            <?php else: ?>
+                                <span class="status-failed">❌ <?php echo $testResult['message']; ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div>
+                            <span class="badge bg-secondary">Port: <?php echo $mail_config['port']; ?></span>
+                            <span class="badge bg-secondary ms-1">Encryption: <?php echo strtoupper($mail_config['encryption']); ?></span>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="form-section">
                     <h5><i class="fas fa-pen me-2"></i>Compose Email to Residents</h5>
