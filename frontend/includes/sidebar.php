@@ -2,6 +2,7 @@
 /**
  * Admin Sidebar - Tap-and-Go Theme
  * DARK MODE - Desktop and Mobile
+ * WITH RESIDENTS REPORT - PERMANENT STORAGE (NO DELETE)
  */
 ?>
 
@@ -559,25 +560,36 @@ SIDEBAR OVERLAY - for mobile close
                 </ul>
             </li>
             
-            <!-- ===== REPORTS with SUBMENU ===== -->
+            <!-- ===== REPORTS with SUBMENU - WITH RESIDENTS REPORT (PERMANENT) ===== -->
             <li class="nav-item">
-                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'active' : ''; ?>" 
+                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'active' : ''; ?>" 
                    href="#reportsMenu" 
                    data-bs-toggle="collapse" 
                    role="button" 
-                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'true' : 'false'; ?>">
+                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'true' : 'false'; ?>">
                     <i class="fas fa-chart-bar"></i> Reports
                     <i class="fas fa-chevron-down"></i>
+                    <?php
+                        // Get total residents count for badge
+                        $conn = getDBConnection();
+                        $result = $conn->query("SELECT COUNT(*) as count FROM users WHERE status = 'active' OR status = 'inactive'");
+                        $row = $result->fetch_assoc();
+                        $totalResidents = $row['count'] ?? 0;
+                    ?>
+                    <span class="badge bg-info rounded-pill"><?php echo $totalResidents; ?></span>
                 </a>
-                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'show' : ''; ?>" id="reportsMenu">
+                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'show' : ''; ?>" id="reportsMenu">
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>" href="reports.php">
                             <i class="fas fa-chart-pie"></i> Overview
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'resident-reports.php' ? 'active' : ''; ?>" href="resident-reports.php">
-                            <i class="fas fa-users"></i> Resident Reports
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'resident-reports.php' || basename($_SERVER['PHP_SELF']) == 'residents-report.php' ? 'active' : ''; ?>" href="residents-report.php">
+                            <i class="fas fa-users"></i> Residents Report
+                            <?php if ($totalResidents > 0): ?>
+                                <span class="badge bg-success rounded-pill"><?php echo $totalResidents; ?></span>
+                            <?php endif; ?>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -628,7 +640,7 @@ SIDEBAR OVERLAY - for mobile close
                     <i class="fas fa-chevron-down"></i>
                     <?php
                         $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM staff WHERE status = 'active'");
+                        $result = $conn->query("SELECT COUNT(*) as count FROM staff_users WHERE is_active = 1");
                         $row = $result->fetch_assoc();
                         $staffCount = $row['count'] ?? 0;
                     ?>
