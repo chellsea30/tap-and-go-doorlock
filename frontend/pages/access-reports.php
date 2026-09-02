@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Access Reports
  * PERMANENT STORAGE - NO DELETE OPTION
  * WITH DAY, WEEK, MONTH, YEAR FILTERS
+ * WITH SHOW ENTRIES PAGINATION
  * PURE DARK MODE - WITH PROFILE PHOTO
  * FIXED: ALL timestamp CHANGED TO created_at
  */
@@ -659,7 +660,7 @@ function getProfilePhotoPath($photoPath) {
         }
         
         /* ============================================================
-           PAGINATION
+           PAGINATION WITH SHOW ENTRIES
            ============================================================ */
         .pagination-container {
             background: #111827 !important;
@@ -1151,7 +1152,6 @@ function getProfilePhotoPath($photoPath) {
                         <!-- ============================================================
                         PAGINATION WITH SHOW ENTRIES
                         ============================================================ -->
-                        <?php if ($totalPages > 1): ?>
                         <div class="pagination-container">
                             <div class="row align-items-center">
                                 <div class="col-md-6">
@@ -1164,6 +1164,7 @@ function getProfilePhotoPath($photoPath) {
                                 </div>
                                 <div class="col-md-6">
                                     <div class="d-flex align-items-center justify-content-end gap-3 flex-wrap">
+                                        <!-- Per Page Selector -->
                                         <div class="per-page-selector d-flex align-items-center gap-2">
                                             <label>Show:</label>
                                             <select onchange="changePerPage(this.value)">
@@ -1174,6 +1175,8 @@ function getProfilePhotoPath($photoPath) {
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
+                                        
+                                        <!-- Pagination -->
                                         <nav aria-label="Page navigation">
                                             <ul class="pagination justify-content-end mb-0">
                                                 <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
@@ -1219,7 +1222,6 @@ function getProfilePhotoPath($photoPath) {
                                 </div>
                             </div>
                         </div>
-                        <?php endif; ?>
                     </div>
                 </div>
 
