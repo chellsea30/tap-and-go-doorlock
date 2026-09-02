@@ -5,6 +5,7 @@
  * WITH DAY, WEEK, MONTH, YEAR FILTERS
  * WITH SHOW ENTRIES PAGINATION
  * PURE DARK MODE
+ * FIXED: Removed card_uid from visitor_logs join
  */
 
 session_start();
@@ -117,12 +118,9 @@ $query = "
         vl.*,
         u.full_name as resident_name,
         u.room_number as resident_room,
-        u.profile_photo,
-        c.card_uid,
-        c.card_type
+        u.profile_photo
     FROM visitor_logs vl
     LEFT JOIN users u ON vl.resident_visited = u.user_id
-    LEFT JOIN rfid_cards c ON vl.card_uid = c.card_uid
     WHERE $dateCondition
 ";
 
@@ -474,15 +472,6 @@ function getInitials($name) {
         }
         .visitor-table .resident-avatar {
             background: linear-gradient(135deg, #065f46, #0a7a5a);
-        }
-        .visitor-table .uid-cell {
-            font-family: monospace;
-            font-weight: 600;
-            color: #93c5fd;
-            background: #1a2a4a;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
         }
         .visitor-table .denied-row {
             background-color: #1a0a0a !important;
@@ -1059,11 +1048,6 @@ function getInitials($name) {
                                                         </div>
                                                         <div>
                                                             <div><?php echo htmlspecialchars($visitorName); ?></div>
-                                                            <?php if (!empty($log['card_uid'])): ?>
-                                                                <div style="font-size: 10px; color: #808090;">
-                                                                    <span class="uid-cell" style="font-size: 10px;"><?php echo htmlspecialchars($log['card_uid']); ?></span>
-                                                                </div>
-                                                            <?php endif; ?>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -1173,7 +1157,7 @@ function getInitials($name) {
                                                     </a>
                                                 </li>
                                                 <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $totalPages; ?>&period=<?php echo $period; ?>&date=<?php echo urlencode($dateFilter); ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode(searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <a class="page-link" href="?page=<?php echo $totalPages; ?>&period=<?php echo $period; ?>&date=<?php echo urlencode($dateFilter); ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                         <i class="fas fa-angle-double-right"></i>
                                                     </a>
                                                 </li>
