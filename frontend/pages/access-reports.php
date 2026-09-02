@@ -4,6 +4,7 @@
  * PERMANENT STORAGE - NO DELETE OPTION
  * WITH DAY, WEEK, MONTH, YEAR FILTERS
  * PURE DARK MODE - WITH PROFILE PHOTO
+ * FIXED: ALL timestamp CHANGED TO created_at
  */
 
 session_start();
@@ -34,44 +35,43 @@ if (!in_array($perPage, $perPageOptions)) {
 // ============================================================
 // GET FILTERS
 // ============================================================
-$period = isset($_GET['period']) ? $_GET['period'] : 'day'; // day, week, month, year
+$period = isset($_GET['period']) ? $_GET['period'] : 'day';
 $dateFilter = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 $typeFilter = isset($_GET['type']) ? $_GET['type'] : '';
 $searchFilter = isset($_GET['search']) ? trim($_GET['search']) : '';
 
 // ============================================================
-// BUILD DATE FILTER BASED ON PERIOD
+// BUILD DATE FILTER BASED ON PERIOD - USING created_at
 // ============================================================
 $dateCondition = "";
 $dateLabel = "";
 
 switch ($period) {
     case 'day':
-        $dateCondition = "DATE(al.timestamp) = '$dateFilter'";
+        $dateCondition = "DATE(al.created_at) = '$dateFilter'";
         $dateLabel = date('F d, Y', strtotime($dateFilter));
         break;
     case 'week':
-        // Get week start and end
         $weekStart = date('Y-m-d', strtotime('monday this week', strtotime($dateFilter)));
         $weekEnd = date('Y-m-d', strtotime('sunday this week', strtotime($dateFilter)));
-        $dateCondition = "DATE(al.timestamp) BETWEEN '$weekStart' AND '$weekEnd'";
+        $dateCondition = "DATE(al.created_at) BETWEEN '$weekStart' AND '$weekEnd'";
         $dateLabel = "Week of " . date('M d', strtotime($weekStart)) . " - " . date('M d, Y', strtotime($weekEnd));
         break;
     case 'month':
         $monthStart = date('Y-m-01', strtotime($dateFilter));
         $monthEnd = date('Y-m-t', strtotime($dateFilter));
-        $dateCondition = "DATE(al.timestamp) BETWEEN '$monthStart' AND '$monthEnd'";
+        $dateCondition = "DATE(al.created_at) BETWEEN '$monthStart' AND '$monthEnd'";
         $dateLabel = date('F Y', strtotime($dateFilter));
         break;
     case 'year':
         $yearStart = date('Y-01-01', strtotime($dateFilter));
         $yearEnd = date('Y-12-31', strtotime($dateFilter));
-        $dateCondition = "DATE(al.timestamp) BETWEEN '$yearStart' AND '$yearEnd'";
+        $dateCondition = "DATE(al.created_at) BETWEEN '$yearStart' AND '$yearEnd'";
         $dateLabel = date('Y', strtotime($dateFilter));
         break;
     default:
-        $dateCondition = "DATE(al.timestamp) = '$dateFilter'";
+        $dateCondition = "DATE(al.created_at) = '$dateFilter'";
         $dateLabel = date('F d, Y', strtotime($dateFilter));
 }
 
@@ -156,7 +156,7 @@ if (!empty($searchFilter)) {
     )";
 }
 
-$query .= " ORDER BY al.timestamp DESC LIMIT $perPage OFFSET $offset";
+$query .= " ORDER BY al.created_at DESC LIMIT $perPage OFFSET $offset";
 
 $result = $conn->query($query);
 if ($result) {
@@ -192,7 +192,7 @@ if ($result && $row = $result->fetch_assoc()) {
 $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM access_logs al
-    WHERE $dateCondition AND access_status = 'granted'
+    WHERE $dateCondition AND al.access_status = 'granted'
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['granted'] = (int)$row['count'];
@@ -201,7 +201,7 @@ if ($result && $row = $result->fetch_assoc()) {
 $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM access_logs al
-    WHERE $dateCondition AND access_status = 'denied'
+    WHERE $dateCondition AND al.access_status = 'denied'
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['denied'] = (int)$row['count'];
@@ -210,7 +210,7 @@ if ($result && $row = $result->fetch_assoc()) {
 $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM access_logs al
-    WHERE $dateCondition AND access_type = 'entry'
+    WHERE $dateCondition AND al.access_type = 'entry'
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['entry'] = (int)$row['count'];
@@ -219,7 +219,7 @@ if ($result && $row = $result->fetch_assoc()) {
 $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM access_logs al
-    WHERE $dateCondition AND access_type = 'exit'
+    WHERE $dateCondition AND al.access_type = 'exit'
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['exit'] = (int)$row['count'];
@@ -266,18 +266,18 @@ if ($result && $row = $result->fetch_assoc()) {
 }
 
 // ============================================================
-// GET CHART DATA - DAILY ACCESS TRENDS
+// GET CHART DATA - DAILY ACCESS TRENDS - USING created_at
 // ============================================================
 $chartData = [];
 $chartQuery = "
     SELECT 
-        DATE(timestamp) as date,
+        DATE(al.created_at) as date,
         COUNT(*) as total,
-        SUM(CASE WHEN access_status = 'granted' THEN 1 ELSE 0 END) as granted,
-        SUM(CASE WHEN access_status = 'denied' THEN 1 ELSE 0 END) as denied
-    FROM access_logs
+        SUM(CASE WHEN al.access_status = 'granted' THEN 1 ELSE 0 END) as granted,
+        SUM(CASE WHEN al.access_status = 'denied' THEN 1 ELSE 0 END) as denied
+    FROM access_logs al
     WHERE $dateCondition
-    GROUP BY DATE(timestamp)
+    GROUP BY DATE(al.created_at)
     ORDER BY date ASC
 ";
 
@@ -1093,7 +1093,7 @@ function getProfilePhotoPath($photoPath) {
                                             $cardTypeBadge = $isVisitor ? 'badge-visitor' : ($cardType == 'staff' ? 'badge-staff' : 'badge-resident');
                                         ?>
                                             <tr class="<?php echo $isDenied ? 'denied-row' : ''; ?>">
-                                                <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
+                                                <td><?php echo date('M d, Y h:i A', strtotime($log['created_at'])); ?></td>
                                                 <td><span class="uid-cell <?php echo $isDenied ? 'text-danger' : ''; ?>"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
                                                 <td>
                                                     <div class="user-cell">
