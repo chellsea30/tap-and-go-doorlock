@@ -5,7 +5,7 @@
  * WITH DAY, WEEK, MONTH, YEAR FILTERS
  * WITH SHOW ENTRIES PAGINATION
  * PURE DARK MODE
- * FIXED: Removed card_uid from visitor_logs join
+ * FIXED: Removed access_type and card_uid columns
  */
 
 session_start();
@@ -39,7 +39,6 @@ if (!in_array($perPage, $perPageOptions)) {
 $period = isset($_GET['period']) ? $_GET['period'] : 'day';
 $dateFilter = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
-$typeFilter = isset($_GET['type']) ? $_GET['type'] : '';
 $searchFilter = isset($_GET['search']) ? trim($_GET['search']) : '';
 
 // ============================================================
@@ -151,8 +150,6 @@ $stats = [
     'total' => 0,
     'granted' => 0,
     'denied' => 0,
-    'entry' => 0,
-    'exit' => 0,
     'unique_visitors' => 0,
     'residents_visited' => 0
 ];
@@ -182,24 +179,6 @@ $result = $conn->query("
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['denied'] = (int)$row['count'];
-}
-
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM visitor_logs vl
-    WHERE $dateCondition AND vl.access_type = 'entry'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['entry'] = (int)$row['count'];
-}
-
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM visitor_logs vl
-    WHERE $dateCondition AND vl.access_type = 'exit'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['exit'] = (int)$row['count'];
 }
 
 $result = $conn->query("
@@ -485,8 +464,6 @@ function getInitials($name) {
            ============================================================ */
         .badge-granted { background: #065f46 !important; color: #34d399 !important; }
         .badge-denied { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-entry { background: #1a3a6a !important; color: #93c5fd !important; }
-        .badge-exit { background: #2a2a4a !important; color: #808090 !important; }
         .badge-visitor { background: #1a2a5a !important; color: #93c5fd !important; }
         .badge-resident { background: #065f46 !important; color: #34d399 !important; }
         
@@ -835,28 +812,19 @@ function getInitials($name) {
                     </div>
                     <div class="col-4 col-sm-4 col-xl-2">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: #3b82f6;"><i class="fas fa-sign-in-alt"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['entry']; ?></div>
-                                <div class="stat-label">Entries</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-4 col-sm-4 col-xl-2">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #6b7280;"><i class="fas fa-sign-out-alt"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['exit']; ?></div>
-                                <div class="stat-label">Exits</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-4 col-sm-4 col-xl-2">
-                        <div class="stat-card">
                             <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-users"></i></div>
                             <div>
                                 <div class="stat-number"><?php echo $stats['unique_visitors']; ?></div>
                                 <div class="stat-label">Unique Visitors</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-4 col-sm-4 col-xl-2">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #3b82f6;"><i class="fas fa-user"></i></div>
+                            <div>
+                                <div class="stat-number"><?php echo $stats['residents_visited']; ?></div>
+                                <div class="stat-label">Residents Visited</div>
                             </div>
                         </div>
                     </div>
@@ -993,14 +961,13 @@ function getInitials($name) {
                                         <th>Visitor</th>
                                         <th>Visiting</th>
                                         <th>Purpose</th>
-                                        <th>Type</th>
                                         <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($logs)): ?>
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted py-4">
+                                            <td colspan="6" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                                 No visitor logs found for this period
                                             </td>
@@ -1074,12 +1041,6 @@ function getInitials($name) {
                                                 </td>
                                                 <td>
                                                     <span style="font-size: 12px;"><?php echo htmlspecialchars($purpose); ?></span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge <?php echo $log['access_type'] == 'entry' ? 'badge-entry' : 'badge-exit'; ?>">
-                                                        <i class="fas <?php echo $log['access_type'] == 'entry' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'; ?> me-1"></i>
-                                                        <?php echo ucfirst($log['access_type'] ?? 'N/A'); ?>
-                                                    </span>
                                                 </td>
                                                 <td>
                                                     <span class="badge <?php echo $isDenied ? 'badge-denied' : 'badge-granted'; ?>">
