@@ -1,7 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Student Profile
- * DARK MODE - WITH PROFILE PHOTO
+ * DARK MODE - WITH PROFILE PHOTO FROM users TABLE
  */
 
 session_start();
@@ -30,7 +30,7 @@ $studentInfo = $result->fetch_assoc();
 $stmt->close();
 
 // ============================================================
-// GET PROFILE PHOTO FROM users TABLE
+// GET PROFILE PHOTO FROM users TABLE (SAME AS RESIDENTS)
 // ============================================================
 $profilePhoto = '';
 $user_id = null;
@@ -74,8 +74,30 @@ if (empty($profilePhoto) && !empty($_SESSION['full_name'])) {
     $stmt->close();
 }
 
-$fullPhotoPath = '../../../' . $profilePhoto;
-$hasPhoto = !empty($profilePhoto) && file_exists($fullPhotoPath);
+// Determine full photo path (same as residents)
+$fullPhotoPath = '';
+$hasPhoto = false;
+
+if (!empty($profilePhoto)) {
+    // Check if path already has 'uploads/'
+    if (strpos($profilePhoto, 'uploads/') === 0) {
+        $fullPhotoPath = '../../../' . $profilePhoto;
+    } else {
+        $fullPhotoPath = '../../../uploads/resident_photos/' . $profilePhoto;
+    }
+    
+    // Check if file exists
+    if (file_exists($fullPhotoPath)) {
+        $hasPhoto = true;
+    } else {
+        // Try alternative path
+        $altPath = '../../../uploads/' . $profilePhoto;
+        if (file_exists($altPath)) {
+            $fullPhotoPath = $altPath;
+            $hasPhoto = true;
+        }
+    }
+}
 
 // ============================================================
 // GET RFID CARD
@@ -567,7 +589,8 @@ $initials = substr($initials, 0, 2) ?: 'S';
                         <div class="photo-badge">
                             <div class="profile-avatar">
                                 <?php if ($hasPhoto): ?>
-                                    <img src="<?php echo $fullPhotoPath; ?>" alt="Profile Photo" onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
+                                    <img src="<?php echo $fullPhotoPath; ?>" alt="Profile Photo" 
+                                         onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
                                     <div class="no-photo" style="display:none;">
                                         <?php echo $initials; ?>
                                     </div>
