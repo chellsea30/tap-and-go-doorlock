@@ -4,6 +4,7 @@
  * PIE CHART FOR COURSE AND YEAR LEVEL
  * PURE DARK MODE
  * WITH SHOW ENTRIES
+ * REMOVED GENDER
  */
 
 session_start();
@@ -76,33 +77,6 @@ if ($result) {
 }
 
 // ============================================================
-// GET GENDER DATA FOR PIE CHART
-// ============================================================
-$genderData = [];
-$genderQuery = "
-    SELECT 
-        rp.gender,
-        COUNT(*) as count
-    FROM users u
-    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE u.status != 'deleted'
-    AND rp.gender IS NOT NULL
-    AND rp.gender != ''
-    GROUP BY rp.gender
-    ORDER BY count DESC
-";
-
-$result = $conn->query($genderQuery);
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $genderData[] = [
-            'label' => $row['gender'],
-            'count' => (int)$row['count']
-        ];
-    }
-}
-
-// ============================================================
 // GET TOTAL STATS
 // ============================================================
 $stats = [
@@ -111,9 +85,7 @@ $stats = [
     'inactive' => 0,
     'archived' => 0,
     'with_card' => 0,
-    'no_card' => 0,
-    'male' => 0,
-    'female' => 0
+    'no_card' => 0
 ];
 
 $result = $conn->query("SELECT COUNT(*) as count FROM users WHERE status != 'deleted'");
@@ -147,14 +119,6 @@ if ($result && $row = $result->fetch_assoc()) {
 }
 $stats['no_card'] = $stats['total'] - $stats['with_card'];
 
-foreach ($genderData as $g) {
-    if (strtolower($g['label']) == 'male') {
-        $stats['male'] = $g['count'];
-    } elseif (strtolower($g['label']) == 'female') {
-        $stats['female'] = $g['count'];
-    }
-}
-
 // Get dark mode
 $darkModeClass = '';
 $darkModeFromDb = 'false';
@@ -185,10 +149,10 @@ function generateColors($count) {
         'rgba(251, 191, 36, 0.8)',  // Amber
         'rgba(248, 113, 113, 0.8)', // Red
         'rgba(196, 181, 253, 0.8)', // Violet
-        'rgba(52, 211, 153, 0.8)',  // Emerald
         'rgba(251, 146, 60, 0.8)',  // Orange
         'rgba(167, 139, 250, 0.8)', // Purple
         'rgba(56, 189, 248, 0.8)',  // Sky
+        'rgba(244, 114, 182, 0.8)', // Pink
     ];
     $result = [];
     for ($i = 0; $i < $count; $i++) {
@@ -199,7 +163,6 @@ function generateColors($count) {
 
 $courseColors = generateColors(count($courseData));
 $yearColors = generateColors(count($yearData));
-$genderColors = ['rgba(52, 211, 153, 0.8)', 'rgba(248, 113, 113, 0.8)'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -329,25 +292,6 @@ $genderColors = ['rgba(52, 211, 153, 0.8)', 'rgba(248, 113, 113, 0.8)'];
         .chart-card .chart-wrapper canvas {
             max-height: 300px;
             max-width: 100%;
-        }
-        .chart-card .chart-legend {
-            margin-top: 10px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: center;
-        }
-        .chart-card .chart-legend .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 12px;
-            color: #b0b0c0;
-        }
-        .chart-card .chart-legend .legend-color {
-            width: 12px;
-            height: 12px;
-            border-radius: 3px;
         }
         .chart-card .chart-total {
             text-align: center;
@@ -519,12 +463,10 @@ $genderColors = ['rgba(52, 211, 153, 0.8)', 'rgba(248, 113, 113, 0.8)'];
                     </div>
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: <?php echo ($stats['male'] > 0 && $stats['female'] > 0) ? '#8b5cf6' : '#6b7280'; ?>;">
-                                <i class="fas fa-venus-mars"></i>
-                            </div>
+                            <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-id-card"></i></div>
                             <div>
-                                <div class="stat-number"><?php echo $stats['male'] + $stats['female']; ?></div>
-                                <div class="stat-label">Male/Female</div>
+                                <div class="stat-number"><?php echo $stats['no_card']; ?></div>
+                                <div class="stat-label">No Card</div>
                             </div>
                         </div>
                     </div>
@@ -569,26 +511,9 @@ $genderColors = ['rgba(52, 211, 153, 0.8)', 'rgba(248, 113, 113, 0.8)'];
                     </div>
                 </div>
 
-                <!-- Gender Pie Chart -->
+                <!-- Summary Cards -->
                 <div class="row g-4 mb-4">
-                    <div class="col-md-6">
-                        <div class="chart-card">
-                            <div class="chart-title">
-                                <i class="fas fa-venus-mars"></i>
-                                Gender Distribution
-                                <span class="badge bg-info ms-2"><?php echo count($genderData); ?> genders</span>
-                            </div>
-                            <div class="chart-wrapper">
-                                <canvas id="genderChart"></canvas>
-                            </div>
-                            <div class="chart-total">
-                                Total: <strong><?php echo array_sum(array_column($genderData, 'count')); ?></strong> students
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Summary Card -->
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <div class="chart-card">
                             <div class="chart-title">
                                 <i class="fas fa-chart-simple"></i>
@@ -596,40 +521,40 @@ $genderColors = ['rgba(52, 211, 153, 0.8)', 'rgba(248, 113, 113, 0.8)'];
                                 <span class="badge bg-success ms-2"><?php echo $stats['total']; ?> total</span>
                             </div>
                             <div class="row g-2">
-                                <div class="col-6">
-                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a;">
-                                        <div style="font-size: 24px; font-weight: 700; color: #34d399;"><?php echo $stats['active']; ?></div>
-                                        <div style="font-size: 11px; color: #808090;">Active Residents</div>
+                                <div class="col-4 col-md-2">
+                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a; text-align: center;">
+                                        <div style="font-size: 28px; font-weight: 700; color: #34d399;"><?php echo $stats['active']; ?></div>
+                                        <div style="font-size: 11px; color: #808090;">Active</div>
                                     </div>
                                 </div>
-                                <div class="col-6">
-                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a;">
-                                        <div style="font-size: 24px; font-weight: 700; color: #fbbf24;"><?php echo $stats['inactive']; ?></div>
-                                        <div style="font-size: 11px; color: #808090;">Inactive Residents</div>
+                                <div class="col-4 col-md-2">
+                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a; text-align: center;">
+                                        <div style="font-size: 28px; font-weight: 700; color: #fbbf24;"><?php echo $stats['inactive']; ?></div>
+                                        <div style="font-size: 11px; color: #808090;">Inactive</div>
                                     </div>
                                 </div>
-                                <div class="col-6">
-                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a;">
-                                        <div style="font-size: 24px; font-weight: 700; color: #93c5fd;"><?php echo $stats['with_card']; ?></div>
-                                        <div style="font-size: 11px; color: #808090;">With RFID Card</div>
+                                <div class="col-4 col-md-2">
+                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a; text-align: center;">
+                                        <div style="font-size: 28px; font-weight: 700; color: #6b7280;"><?php echo $stats['archived']; ?></div>
+                                        <div style="font-size: 11px; color: #808090;">Archived</div>
                                     </div>
                                 </div>
-                                <div class="col-6">
-                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a;">
-                                        <div style="font-size: 24px; font-weight: 700; color: #f87171;"><?php echo $stats['no_card']; ?></div>
-                                        <div style="font-size: 11px; color: #808090;">No RFID Card</div>
+                                <div class="col-4 col-md-2">
+                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a; text-align: center;">
+                                        <div style="font-size: 28px; font-weight: 700; color: #93c5fd;"><?php echo $stats['with_card']; ?></div>
+                                        <div style="font-size: 11px; color: #808090;">With Card</div>
                                     </div>
                                 </div>
-                                <div class="col-6">
-                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a;">
-                                        <div style="font-size: 24px; font-weight: 700; color: #a78bfa;"><?php echo $stats['male']; ?></div>
-                                        <div style="font-size: 11px; color: #808090;">Male</div>
+                                <div class="col-4 col-md-2">
+                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a; text-align: center;">
+                                        <div style="font-size: 28px; font-weight: 700; color: #f87171;"><?php echo $stats['no_card']; ?></div>
+                                        <div style="font-size: 11px; color: #808090;">No Card</div>
                                     </div>
                                 </div>
-                                <div class="col-6">
-                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a;">
-                                        <div style="font-size: 24px; font-weight: 700; color: #f472b6;"><?php echo $stats['female']; ?></div>
-                                        <div style="font-size: 11px; color: #808090;">Female</div>
+                                <div class="col-4 col-md-2">
+                                    <div class="p-3" style="background: #1a1a2e; border-radius: 10px; border: 1px solid #1a2a4a; text-align: center;">
+                                        <div style="font-size: 28px; font-weight: 700; color: #ffd700;"><?php echo $stats['total']; ?></div>
+                                        <div style="font-size: 11px; color: #808090;">Total</div>
                                     </div>
                                 </div>
                             </div>
@@ -864,50 +789,6 @@ $genderColors = ['rgba(52, 211, 153, 0.8)', 'rgba(248, 113, 113, 0.8)'];
                     datasets: [{
                         data: yearCounts,
                         backgroundColor: yearColors,
-                        borderColor: '#0a0e1a',
-                        borderWidth: 2,
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: '#b0b0c0',
-                                padding: 10,
-                                font: { size: 11 }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    let percentage = ((context.parsed / total) * 100).toFixed(1);
-                                    return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            // ============================================================
-            // GENDER PIE CHART
-            // ============================================================
-            const genderCtx = document.getElementById('genderChart').getContext('2d');
-            const genderLabels = <?php echo json_encode(array_column($genderData, 'label')); ?>;
-            const genderCounts = <?php echo json_encode(array_column($genderData, 'count')); ?>;
-            const genderColors = <?php echo json_encode($genderColors); ?>;
-            
-            new Chart(genderCtx, {
-                type: 'pie',
-                data: {
-                    labels: genderLabels,
-                    datasets: [{
-                        data: genderCounts,
-                        backgroundColor: genderColors,
                         borderColor: '#0a0e1a',
                         borderWidth: 2,
                     }]
