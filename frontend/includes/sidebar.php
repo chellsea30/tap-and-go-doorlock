@@ -3,6 +3,7 @@
  * Admin Sidebar - Tap-and-Go Theme
  * DARK MODE - Desktop and Mobile
  * WITH RESIDENTS REPORT - PERMANENT STORAGE (NO DELETE)
+ * WITH CHART REPORT - PIE CHART FOR COURSE & YEAR LEVEL
  */
 ?>
 
@@ -560,13 +561,13 @@ SIDEBAR OVERLAY - for mobile close
                 </ul>
             </li>
             
-            <!-- ===== REPORTS with SUBMENU - WITH RESIDENTS REPORT (PERMANENT) ===== -->
+            <!-- ===== REPORTS with SUBMENU - WITH CHART REPORT ===== -->
             <li class="nav-item">
-                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'active' : ''; ?>" 
+                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'active' : ''; ?>" 
                    href="#reportsMenu" 
                    data-bs-toggle="collapse" 
                    role="button" 
-                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'true' : 'false'; ?>">
+                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'true' : 'false'; ?>">
                     <i class="fas fa-chart-bar"></i> Reports
                     <i class="fas fa-chevron-down"></i>
                     <?php
@@ -578,7 +579,7 @@ SIDEBAR OVERLAY - for mobile close
                     ?>
                     <span class="badge bg-info rounded-pill"><?php echo $totalResidents; ?></span>
                 </a>
-                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'show' : ''; ?>" id="reportsMenu">
+                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="reportsMenu">
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>" href="reports.php">
                             <i class="fas fa-chart-pie"></i> Overview
@@ -603,13 +604,8 @@ SIDEBAR OVERLAY - for mobile close
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'occupancy-reports.php' ? 'active' : ''; ?>" href="occupancy-reports.php">
-                            <i class="fas fa-building"></i> Occupancy Reports
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'daily-reports.php' ? 'active' : ''; ?>" href="daily-reports.php">
-                            <i class="fas fa-calendar-day"></i> Daily Reports
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'chart-report.php' ? 'active' : ''; ?>" href="chart-report.php">
+                            <i class="fas fa-chart-pie"></i> Chart Report
                         </a>
                     </li>
                 </ul>
