@@ -1,7 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Residents List
- * WITH PROFILE PHOTO UPLOAD AND DISPLAY
+ * WITH PROFILE PHOTO UPLOAD AND DISPLAY - FIXED PATH
  * PURE DARK MODE - No white backgrounds
  * WITH SHOW ENTRIES PAGINATION
  */
@@ -32,11 +32,102 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
         $stmt->bind_param("i", $delete_id);
         
         if ($stmt->execute()) {
-            // Redirect with success message
             header('Location: residents.php?msg=deleted');
             exit();
         } else {
             $error = "Failed to delete resident: " . $stmt->error;
+        }
+        $stmt->close();
+    } catch (Exception $e) {
+        $error = "Error: " . $e->getMessage();
+    }
+}
+
+// ============================================================
+// HANDLE PROFILE PHOTO UPLOAD - FIXED
+// ============================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && isset($_POST['user_id'])) {
+    $user_id = (int)$_POST['user_id'];
+    
+    if (isset($_FILES['profile_photo']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
+        $upload_dir = '../../uploads/resident_photos/';
+        
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+        }
+        
+        $file_extension = pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION);
+        $file_name = time() . '_' . $user_id . '.' . $file_extension;
+        $target_file = $upload_dir . $file_name;
+        
+        $image_info = getimagesize($_FILES['profile_photo']['tmp_name']);
+        if ($image_info !== false) {
+            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (in_array($image_info['mime'], $allowed_types)) {
+                if (move_uploaded_file($_FILES['profile_photo']['tmp_name'], $target_file)) {
+                    // FIX: Store relative path from root
+                    $photo_path = 'uploads/resident_photos/' . $file_name;
+                    
+                    $conn = getDBConnection();
+                    $stmt = $conn->prepare("UPDATE users SET profile_photo = ? WHERE user_id = ?");
+                    $stmt->bind_param("si", $photo_path, $user_id);
+                    
+                    if ($stmt->execute()) {
+                        $success = "Profile photo uploaded successfully!";
+                    } else {
+                        $error = "Failed to update database: " . $stmt->error;
+                    }
+                    $stmt->close();
+                } else {
+                    $error = "Failed to upload photo. Please check folder permissions.";
+                }
+            } else {
+                $error = "Invalid file type. Please upload JPEG, PNG, GIF, or WEBP.";
+            }
+        } else {
+            $error = "Uploaded file is not a valid image.";
+        }
+    } else {
+        $error = "Please select a photo to upload.";
+    }
+}
+
+// ============================================================
+// HANDLE PHOTO REMOVE - FIXED
+// ============================================================
+if (isset($_GET['remove_photo']) && is_numeric($_GET['remove_photo'])) {
+    $user_id = (int)$_GET['remove_photo'];
+    
+    try {
+        $conn = getDBConnection();
+        
+        $stmt = $conn->prepare("SELECT profile_photo FROM users WHERE user_id = ?");
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        $stmt->close();
+        
+        if (!empty($row['profile_photo'])) {
+            // FIX: Determine correct file path
+            if (strpos($row['profile_photo'], 'uploads/') === 0) {
+                $file_path = '../../' . $row['profile_photo'];
+            } else {
+                $file_path = '../../uploads/resident_photos/' . $row['profile_photo'];
+            }
+            
+            if (file_exists($file_path)) {
+                unlink($file_path);
+            }
+        }
+        
+        $stmt = $conn->prepare("UPDATE users SET profile_photo = NULL WHERE user_id = ?");
+        $stmt->bind_param("i", $user_id);
+        
+        if ($stmt->execute()) {
+            $success = "Profile photo removed successfully!";
+        } else {
+            $error = "Failed to remove photo: " . $stmt->error;
         }
         $stmt->close();
     } catch (Exception $e) {
@@ -87,91 +178,6 @@ if (isset($_SESSION['admin_id'])) {
         $stmt->close();
     } catch (Exception $e) {
         // Silently fail
-    }
-}
-
-// ============================================================
-// HANDLE PROFILE PHOTO UPLOAD
-// ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && isset($_POST['user_id'])) {
-    $user_id = (int)$_POST['user_id'];
-    
-    if (isset($_FILES['profile_photo']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = '../../uploads/resident_photos/';
-        
-        if (!is_dir($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
-        }
-        
-        $file_extension = pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION);
-        $file_name = time() . '_' . $user_id . '.' . $file_extension;
-        $target_file = $upload_dir . $file_name;
-        
-        $image_info = getimagesize($_FILES['profile_photo']['tmp_name']);
-        if ($image_info !== false) {
-            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            if (in_array($image_info['mime'], $allowed_types)) {
-                if (move_uploaded_file($_FILES['profile_photo']['tmp_name'], $target_file)) {
-                    $photo_path = 'uploads/resident_photos/' . $file_name;
-                    
-                    $conn = getDBConnection();
-                    $stmt = $conn->prepare("UPDATE users SET profile_photo = ? WHERE user_id = ?");
-                    $stmt->bind_param("si", $photo_path, $user_id);
-                    
-                    if ($stmt->execute()) {
-                        $success = "Profile photo uploaded successfully!";
-                    } else {
-                        $error = "Failed to update database: " . $stmt->error;
-                    }
-                    $stmt->close();
-                } else {
-                    $error = "Failed to upload photo. Please check folder permissions.";
-                }
-            } else {
-                $error = "Invalid file type. Please upload JPEG, PNG, GIF, or WEBP.";
-            }
-        } else {
-            $error = "Uploaded file is not a valid image.";
-        }
-    } else {
-        $error = "Please select a photo to upload.";
-    }
-}
-
-// ============================================================
-// HANDLE PHOTO REMOVE
-// ============================================================
-if (isset($_GET['remove_photo']) && is_numeric($_GET['remove_photo'])) {
-    $user_id = (int)$_GET['remove_photo'];
-    
-    try {
-        $conn = getDBConnection();
-        
-        $stmt = $conn->prepare("SELECT profile_photo FROM users WHERE user_id = ?");
-        $stmt->bind_param("i", $user_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
-        $stmt->close();
-        
-        if (!empty($row['profile_photo'])) {
-            $file_path = '../../' . $row['profile_photo'];
-            if (file_exists($file_path)) {
-                unlink($file_path);
-            }
-        }
-        
-        $stmt = $conn->prepare("UPDATE users SET profile_photo = NULL WHERE user_id = ?");
-        $stmt->bind_param("i", $user_id);
-        
-        if ($stmt->execute()) {
-            $success = "Profile photo removed successfully!";
-        } else {
-            $error = "Failed to remove photo: " . $stmt->error;
-        }
-        $stmt->close();
-    } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
     }
 }
 
@@ -270,6 +276,42 @@ try {
 }
 
 $delete_success = isset($_GET['msg']) && $_GET['msg'] === 'deleted';
+
+// ============================================================
+// HELPER FUNCTION: GET PROFILE PHOTO PATH - FIXED
+// ============================================================
+function getProfilePhotoPath($photoPath) {
+    if (empty($photoPath)) {
+        return null;
+    }
+    
+    // Check if path already has 'uploads/'
+    if (strpos($photoPath, 'uploads/') === 0) {
+        $fullPath = '../../' . $photoPath;
+    } else {
+        $fullPath = '../../uploads/resident_photos/' . $photoPath;
+    }
+    
+    if (file_exists($fullPath)) {
+        return $fullPath;
+    }
+    return null;
+}
+
+// ============================================================
+// HELPER FUNCTION: GET INITIALS
+// ============================================================
+function getInitials($name) {
+    if (empty($name)) return '?';
+    $parts = explode(' ', $name);
+    $initials = '';
+    foreach ($parts as $part) {
+        if (!empty($part)) {
+            $initials .= strtoupper($part[0]);
+        }
+    }
+    return substr($initials, 0, 2) ?: '?';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -905,7 +947,26 @@ $delete_success = isset($_GET['msg']) && $_GET['msg'] === 'deleted';
                     </div>
                 </div>
             <?php else: ?>
-                <?php foreach ($residents as $resident): ?>
+                <?php foreach ($residents as $resident): 
+                    $photoPath = $resident['profile_photo'] ?? '';
+                    $hasPhoto = false;
+                    $fullPhotoPath = '';
+                    
+                    // FIX: Get correct photo path
+                    if (!empty($photoPath)) {
+                        if (strpos($photoPath, 'uploads/') === 0) {
+                            $fullPhotoPath = '../../' . $photoPath;
+                        } else {
+                            $fullPhotoPath = '../../uploads/resident_photos/' . $photoPath;
+                        }
+                        
+                        if (file_exists($fullPhotoPath)) {
+                            $hasPhoto = true;
+                        }
+                    }
+                    
+                    $initials = getInitials($resident['full_name'] ?? '');
+                ?>
                     <div class="resident-card">
                         <div class="row align-items-center">
                             <!-- Avatar & Name -->
@@ -915,29 +976,16 @@ $delete_success = isset($_GET['msg']) && $_GET['msg'] === 'deleted';
                                          data-bs-toggle="modal" 
                                          data-bs-target="#photoModal<?php echo $resident['user_id']; ?>"
                                          title="Click to upload/change photo">
-                                        <?php 
-                                            $photoPath = $resident['profile_photo'] ?? '';
-                                            $fullPath = '../../' . $photoPath;
-                                            
-                                            if (!empty($photoPath) && file_exists($fullPath)):
-                                        ?>
-                                            <img src="<?php echo $fullPath; ?>" 
+                                        <?php if ($hasPhoto): ?>
+                                            <img src="<?php echo $fullPhotoPath; ?>" 
                                                  alt="Photo of <?php echo htmlspecialchars($resident['full_name'] ?? ''); ?>"
                                                  onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
                                             <span class="has-photo-overlay">
                                                 <i class="fas fa-check-circle"></i>
                                             </span>
-                                        <?php else: 
-                                            $nameParts = explode(' ', $resident['full_name'] ?? '');
-                                            $initials = '';
-                                            foreach ($nameParts as $part) {
-                                                if (!empty($part)) {
-                                                    $initials .= strtoupper($part[0]);
-                                                }
-                                            }
-                                            echo '<div class="no-photo">' . (substr($initials, 0, 2) ?: '?') . '</div>';
-                                        endif; 
-                                        ?>
+                                        <?php else: ?>
+                                            <div class="no-photo"><?php echo $initials; ?></div>
+                                        <?php endif; ?>
                                         <div class="upload-overlay">
                                             <i class="fas fa-camera me-1"></i> Upload
                                         </div>
@@ -1059,7 +1107,7 @@ $delete_success = isset($_GET['msg']) && $_GET['msg'] === 'deleted';
                         </div>
                     </div>
 
-                    <!-- PHOTO UPLOAD MODAL -->
+                    <!-- PHOTO UPLOAD MODAL - FIXED -->
                     <div class="modal fade" id="photoModal<?php echo $resident['user_id']; ?>" tabindex="-1">
                         <div class="modal-dialog modal-dialog-centered">
                             <div class="modal-content">
@@ -1071,14 +1119,28 @@ $delete_success = isset($_GET['msg']) && $_GET['msg'] === 'deleted';
                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                 </div>
                                 <div class="modal-body text-center">
-                                    <!-- Current Photo Preview -->
+                                    <!-- Current Photo Preview - FIXED -->
                                     <div class="mb-3">
                                         <?php 
                                             $photoPath = $resident['profile_photo'] ?? '';
-                                            $fullPath = '../../' . $photoPath;
-                                            if (!empty($photoPath) && file_exists($fullPath)):
+                                            $hasModalPhoto = false;
+                                            $fullModalPhotoPath = '';
+                                            
+                                            if (!empty($photoPath)) {
+                                                if (strpos($photoPath, 'uploads/') === 0) {
+                                                    $fullModalPhotoPath = '../../' . $photoPath;
+                                                } else {
+                                                    $fullModalPhotoPath = '../../uploads/resident_photos/' . $photoPath;
+                                                }
+                                                
+                                                if (file_exists($fullModalPhotoPath)) {
+                                                    $hasModalPhoto = true;
+                                                }
+                                            }
                                         ?>
-                                            <img src="<?php echo $fullPath; ?>" 
+                                        
+                                        <?php if ($hasModalPhoto): ?>
+                                            <img src="<?php echo $fullModalPhotoPath; ?>" 
                                                  alt="Current Photo"
                                                  style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #2a2a4a;">
                                             <div class="mt-2">
@@ -1090,16 +1152,7 @@ $delete_success = isset($_GET['msg']) && $_GET['msg'] === 'deleted';
                                             </div>
                                         <?php else: ?>
                                             <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#1a3a6a,#2a5a9a);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:40px;font-weight:700;color:white;">
-                                                <?php 
-                                                    $nameParts = explode(' ', $resident['full_name'] ?? '');
-                                                    $initials = '';
-                                                    foreach ($nameParts as $part) {
-                                                        if (!empty($part)) {
-                                                            $initials .= strtoupper($part[0]);
-                                                        }
-                                                    }
-                                                    echo substr($initials, 0, 2) ?: '?';
-                                                ?>
+                                                <?php echo $initials; ?>
                                             </div>
                                             <div class="mt-2 text-muted small">
                                                 <i class="fas fa-info-circle me-1"></i>
