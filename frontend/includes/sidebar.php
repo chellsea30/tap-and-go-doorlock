@@ -559,11 +559,48 @@ SIDEBAR OVERLAY - for mobile close
                 </ul>
             </li>
             
-            <!-- ===== REPORTS ===== -->
+            <!-- ===== REPORTS with SUBMENU ===== -->
             <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>" href="reports.php">
+                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'active' : ''; ?>" 
+                   href="#reportsMenu" 
+                   data-bs-toggle="collapse" 
+                   role="button" 
+                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'true' : 'false'; ?>">
                     <i class="fas fa-chart-bar"></i> Reports
+                    <i class="fas fa-chevron-down"></i>
                 </a>
+                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'access-reports.php', 'visitor-reports.php', 'occupancy-reports.php', 'daily-reports.php']) ? 'show' : ''; ?>" id="reportsMenu">
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>" href="reports.php">
+                            <i class="fas fa-chart-pie"></i> Overview
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'resident-reports.php' ? 'active' : ''; ?>" href="resident-reports.php">
+                            <i class="fas fa-users"></i> Resident Reports
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'access-reports.php' ? 'active' : ''; ?>" href="access-reports.php">
+                            <i class="fas fa-door-open"></i> Access Reports
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'visitor-reports.php' ? 'active' : ''; ?>" href="visitor-reports.php">
+                            <i class="fas fa-user-friends"></i> Visitor Reports
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'occupancy-reports.php' ? 'active' : ''; ?>" href="occupancy-reports.php">
+                            <i class="fas fa-building"></i> Occupancy Reports
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'daily-reports.php' ? 'active' : ''; ?>" href="daily-reports.php">
+                            <i class="fas fa-calendar-day"></i> Daily Reports
+                        </a>
+                    </li>
+                </ul>
             </li>
             
             <!-- ===== ANNOUNCEMENTS ===== -->
@@ -581,46 +618,46 @@ SIDEBAR OVERLAY - for mobile close
             </li>
             
             <!-- ===== STAFF ===== -->
-<li class="nav-item">
-    <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'active' : ''; ?>" 
-       href="#staffMenu" 
-       data-bs-toggle="collapse" 
-       role="button" 
-       aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'true' : 'false'; ?>">
-        <i class="fas fa-user-tie"></i> Staff
-        <i class="fas fa-chevron-down"></i>
-        <?php
-            $conn = getDBConnection();
-            $result = $conn->query("SELECT COUNT(*) as count FROM staff WHERE status = 'active'");
-            $row = $result->fetch_assoc();
-            $staffCount = $row['count'] ?? 0;
-        ?>
-        <span class="badge bg-info rounded-pill"><?php echo $staffCount; ?></span>
-    </a>
-    <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'show' : ''; ?>" id="staffMenu">
-        <li class="nav-item">
-            <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-info.php' ? 'active' : ''; ?>" href="staff-info.php">
-                <i class="fas fa-address-card"></i> Staff Info
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-card.php' ? 'active' : ''; ?>" href="staff-card.php">
-                <i class="fas fa-id-card"></i> Staff Card
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-logs.php' ? 'active' : ''; ?>" href="staff-logs.php">
-                <i class="fas fa-clock"></i> Access Logs
-                <?php
-                    $result = $conn->query("SELECT COUNT(*) as count FROM staff_logs WHERE DATE(timestamp) = CURDATE()");
-                    $row = $result->fetch_assoc();
-                    $todayStaffLogs = $row['count'] ?? 0;
-                ?>
-                <span class="badge bg-primary rounded-pill"><?php echo $todayStaffLogs; ?></span>
-            </a>
-        </li>
-    </ul>
-</li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'active' : ''; ?>" 
+                   href="#staffMenu" 
+                   data-bs-toggle="collapse" 
+                   role="button" 
+                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'true' : 'false'; ?>">
+                    <i class="fas fa-user-tie"></i> Staff
+                    <i class="fas fa-chevron-down"></i>
+                    <?php
+                        $conn = getDBConnection();
+                        $result = $conn->query("SELECT COUNT(*) as count FROM staff WHERE status = 'active'");
+                        $row = $result->fetch_assoc();
+                        $staffCount = $row['count'] ?? 0;
+                    ?>
+                    <span class="badge bg-info rounded-pill"><?php echo $staffCount; ?></span>
+                </a>
+                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'show' : ''; ?>" id="staffMenu">
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-info.php' ? 'active' : ''; ?>" href="staff-info.php">
+                            <i class="fas fa-address-card"></i> Staff Info
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-card.php' ? 'active' : ''; ?>" href="staff-card.php">
+                            <i class="fas fa-id-card"></i> Staff Card
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-logs.php' ? 'active' : ''; ?>" href="staff-logs.php">
+                            <i class="fas fa-clock"></i> Access Logs
+                            <?php
+                                $result = $conn->query("SELECT COUNT(*) as count FROM staff_logs WHERE DATE(timestamp) = CURDATE()");
+                                $row = $result->fetch_assoc();
+                                $todayStaffLogs = $row['count'] ?? 0;
+                            ?>
+                            <span class="badge bg-primary rounded-pill"><?php echo $todayStaffLogs; ?></span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
             
             <!-- ===== OTHERS ===== -->
             <li class="nav-item">
