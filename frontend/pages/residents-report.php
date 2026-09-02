@@ -85,11 +85,6 @@ $query = "
         rp.year_level,
         rp.gender,
         rp.contact_number as profile_contact,
-        rp.date_of_birth,
-        rp.address,
-        rp.guardian_name,
-        rp.guardian_contact,
-        rp.emergency_contact,
         rf.card_uid,
         rf.status as card_status,
         rf.issued_date,
@@ -173,24 +168,28 @@ if ($result && $row = $result->fetch_assoc()) {
 }
 $stats['no_card'] = $stats['total'] - $stats['with_card'];
 
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM users u
-    INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE rp.gender = 'Male' AND u.status != 'deleted'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['male'] = (int)$row['count'];
-}
+// Gender stats - check if column exists
+$genderCheck = $conn->query("SHOW COLUMNS FROM resident_profiles LIKE 'gender'");
+if ($genderCheck && $genderCheck->num_rows > 0) {
+    $result = $conn->query("
+        SELECT COUNT(*) as count 
+        FROM users u
+        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
+        WHERE rp.gender = 'Male' AND u.status != 'deleted'
+    ");
+    if ($result && $row = $result->fetch_assoc()) {
+        $stats['male'] = (int)$row['count'];
+    }
 
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM users u
-    INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE rp.gender = 'Female' AND u.status != 'deleted'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['female'] = (int)$row['count'];
+    $result = $conn->query("
+        SELECT COUNT(*) as count 
+        FROM users u
+        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
+        WHERE rp.gender = 'Female' AND u.status != 'deleted'
+    ");
+    if ($result && $row = $result->fetch_assoc()) {
+        $stats['female'] = (int)$row['count'];
+    }
 }
 
 $result = $conn->query("SELECT COUNT(DISTINCT room_number) as count FROM users WHERE room_number IS NOT NULL AND room_number != '' AND status != 'deleted'");
@@ -198,44 +197,48 @@ if ($result && $row = $result->fetch_assoc()) {
     $stats['rooms_used'] = (int)$row['count'];
 }
 
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM users u
-    INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE rp.year_level = 1 AND u.status != 'deleted'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['year1'] = (int)$row['count'];
-}
+// Year level stats - check if column exists
+$yearCheck = $conn->query("SHOW COLUMNS FROM resident_profiles LIKE 'year_level'");
+if ($yearCheck && $yearCheck->num_rows > 0) {
+    $result = $conn->query("
+        SELECT COUNT(*) as count 
+        FROM users u
+        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
+        WHERE rp.year_level = 1 AND u.status != 'deleted'
+    ");
+    if ($result && $row = $result->fetch_assoc()) {
+        $stats['year1'] = (int)$row['count'];
+    }
 
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM users u
-    INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE rp.year_level = 2 AND u.status != 'deleted'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['year2'] = (int)$row['count'];
-}
+    $result = $conn->query("
+        SELECT COUNT(*) as count 
+        FROM users u
+        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
+        WHERE rp.year_level = 2 AND u.status != 'deleted'
+    ");
+    if ($result && $row = $result->fetch_assoc()) {
+        $stats['year2'] = (int)$row['count'];
+    }
 
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM users u
-    INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE rp.year_level = 3 AND u.status != 'deleted'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['year3'] = (int)$row['count'];
-}
+    $result = $conn->query("
+        SELECT COUNT(*) as count 
+        FROM users u
+        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
+        WHERE rp.year_level = 3 AND u.status != 'deleted'
+    ");
+    if ($result && $row = $result->fetch_assoc()) {
+        $stats['year3'] = (int)$row['count'];
+    }
 
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM users u
-    INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE rp.year_level = 4 AND u.status != 'deleted'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['year4'] = (int)$row['count'];
+    $result = $conn->query("
+        SELECT COUNT(*) as count 
+        FROM users u
+        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
+        WHERE rp.year_level = 4 AND u.status != 'deleted'
+    ");
+    if ($result && $row = $result->fetch_assoc()) {
+        $stats['year4'] = (int)$row['count'];
+    }
 }
 
 // ============================================================
@@ -937,10 +940,14 @@ function getProfilePhotoPath($photoPath) {
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>
-                                                    <span class="badge badge-gender">
-                                                        <i class="fas <?php echo strtolower($gender) == 'male' ? 'fa-mars' : (strtolower($gender) == 'female' ? 'fa-venus' : 'fa-genderless'); ?> me-1"></i>
-                                                        <?php echo htmlspecialchars($gender); ?>
-                                                    </span>
+                                                    <?php if (!empty($gender) && $gender != 'N/A'): ?>
+                                                        <span class="badge badge-gender">
+                                                            <i class="fas <?php echo strtolower($gender) == 'male' ? 'fa-mars' : (strtolower($gender) == 'female' ? 'fa-venus' : 'fa-genderless'); ?> me-1"></i>
+                                                            <?php echo htmlspecialchars($gender); ?>
+                                                        </span>
+                                                    <?php else: ?>
+                                                        <span class="text-muted">N/A</span>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td>
                                                     <?php if ($hasCard): ?>
