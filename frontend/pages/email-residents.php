@@ -42,7 +42,7 @@ $mail_config = [
     'password' => 'gofm jbdj elbv hrmo',
     'port' => 587,
     'from_email' => 'albanochellsea30@gmail.com',
-    'from_name' => 'Tap-and-Go Doorlock'
+    'from_name' => 'tap-and-go doorlock'
 ];
 
 // ============================================================
