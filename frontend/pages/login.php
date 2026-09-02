@@ -35,10 +35,10 @@ $puzzle_name = '';
 $puzzle_data = null;
 $is_blocked = false;
 $reset_success = '';
-$remaining_attempts = 3; // CHANGED: 3 attempts max
+$remaining_attempts = 3;
 $block_minutes = 10;
 $block_until = '';
-$max_attempts = 3; // CHANGED: Maximum attempts set to 3
+$max_attempts = 3;
 
 // ============================================================
 // HANDLE PASSWORD RESET REQUEST
@@ -97,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
             $error = 'Email not found. Please check your email address or contact admin.';
         }
         $stmt->close();
+        $conn->close();
     }
 }
 
@@ -129,12 +130,12 @@ function checkLoginBlock($role, $user_id) {
     $result = $stmt->get_result();
     $row = $result->fetch_assoc();
     $stmt->close();
+    $conn->close();
     
     if (!$row) {
         return false;
     }
     
-    // Check if blocked and block time hasn't expired
     if (!empty($row['login_blocked_until'])) {
         $blocked_until = strtotime($row['login_blocked_until']);
         if ($blocked_until > time()) {
@@ -144,11 +145,11 @@ function checkLoginBlock($role, $user_id) {
                 'remaining_seconds' => $blocked_until - time()
             ];
         } else {
-            // Block expired - reset attempts
             $stmt = $conn->prepare("UPDATE $table SET login_attempts = 0, login_blocked_until = NULL WHERE $id_field = ?");
             $stmt->bind_param("i", $user_id);
             $stmt->execute();
             $stmt->close();
+            $conn->close();
             return false;
         }
     }
@@ -196,16 +197,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 if ($result['success']) {
                     $user_id = $result['student_id'];
                     $full_name = $result['full_name'];
-                    $email = $result['email'];
+                    // FIX: Get email from result or use the input email
+                    $email = $result['email'] ?? $email;
                 }
                 break;
         }
         
         if ($result && $result['success']) {
-            // Reset login attempts on successful login
             resetLoginAttempts($role, $user_id);
             
-            // Check if user is blocked for math puzzle
             if (isMathBlocked($role, $user_id)) {
                 $blocked_until = '';
                 $conn = getDBConnection();
@@ -219,11 +219,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                     $blocked_until = date('h:i A', strtotime($row['math_blocked_until']));
                 }
                 $stmt->close();
+                $conn->close();
                 
                 $error = "⛔ Too many failed puzzle attempts. You are blocked until $blocked_until. Please try again later.";
                 $is_blocked = true;
             } else {
-                // Generate simple addition puzzle
                 $num1 = rand(1, 20);
                 $num2 = rand(1, 20);
                 $answer = $num1 + $num2;
@@ -236,7 +236,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                     'display' => $display
                 ];
                 
-                // Store in session
                 $_SESSION['puzzle_user_id'] = $user_id;
                 $_SESSION['puzzle_user_type'] = $role;
                 $_SESSION['puzzle_email'] = $email;
@@ -252,15 +251,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $puzzle_name = $full_name;
             }
         } else {
-            // INCORRECT PASSWORD - Increment login attempts
             $conn = getDBConnection();
             
-            // Find user by email first
             $user_found = false;
             $found_user_id = 0;
             $found_role = '';
             
-            // Check admin
             $stmt = $conn->prepare("SELECT admin_id FROM admin_users WHERE email = ?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
@@ -272,7 +268,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             }
             $stmt->close();
             
-            // Check staff if not found
             if (!$user_found) {
                 $stmt = $conn->prepare("SELECT staff_id FROM staff_users WHERE email = ?");
                 $stmt->bind_param("s", $email);
@@ -286,7 +281,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $stmt->close();
             }
             
-            // Check student if not found
             if (!$user_found) {
                 $stmt = $conn->prepare("SELECT student_id FROM student_users WHERE email = ? AND is_active = 1");
                 $stmt->bind_param("s", $email);
@@ -304,7 +298,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $table = $found_role . '_users';
                 $id_field = $found_role . '_id';
                 
-                // Get current attempts
                 $stmt = $conn->prepare("SELECT login_attempts, login_blocked_until FROM $table WHERE $id_field = ?");
                 $stmt->bind_param("i", $found_user_id);
                 $stmt->execute();
@@ -315,18 +308,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $current_attempts = (int)($row['login_attempts'] ?? 0);
                 $new_attempts = $current_attempts + 1;
                 
-                // Check if block exists but expired
                 if (!empty($row['login_blocked_until'])) {
                     $blocked_until_time = strtotime($row['login_blocked_until']);
                     if ($blocked_until_time < time()) {
-                        // Block expired, reset attempts
                         $new_attempts = 1;
                         $stmt = $conn->prepare("UPDATE $table SET login_attempts = 1, login_blocked_until = NULL WHERE $id_field = ?");
                         $stmt->bind_param("i", $found_user_id);
                         $stmt->execute();
                         $stmt->close();
                     } else {
-                        // Still blocked
                         $remaining_minutes = ceil(($blocked_until_time - time()) / 60);
                         $error = "⛔ Account is temporarily locked. Please wait $remaining_minutes minute(s) before trying again.";
                         $is_blocked = true;
@@ -334,9 +324,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         $remaining_attempts = 0;
                     }
                 } else {
-                    // Update attempts - CHANGED: max attempts is now 3
-                    if ($new_attempts >= 3) { // CHANGED: 3 attempts max
-                        // Block for 10 minutes
+                    if ($new_attempts >= 3) {
                         $block_until_time = date('Y-m-d H:i:s', strtotime('+10 minutes'));
                         $stmt = $conn->prepare("UPDATE $table SET login_attempts = ?, login_blocked_until = ? WHERE $id_field = ?");
                         $stmt->bind_param("isi", $new_attempts, $block_until_time, $found_user_id);
@@ -353,13 +341,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         $stmt->execute();
                         $stmt->close();
                         
-                        $remaining_attempts = 3 - $new_attempts; // CHANGED: 3 - attempts
+                        $remaining_attempts = 3 - $new_attempts;
                         $error = "Invalid credentials. You have $remaining_attempts attempt(s) remaining before account lock.";
                     }
                 }
             } else {
                 $error = 'Invalid credentials. Please try again.';
             }
+            $conn->close();
         }
     }
 }
@@ -450,6 +439,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_math'])) {
                         $_SESSION['full_name'] = $userData['full_name'];
                         $_SESSION['course'] = $userData['course'] ?? 'N/A';
                         $_SESSION['year_level'] = $userData['year_level'] ?? 'N/A';
+                        $_SESSION['email'] = $email; // FIX: Add this line
                         $_SESSION['role'] = 'student';
                         $_SESSION['login_time'] = time();
                         session_regenerate_id(true);
@@ -488,7 +478,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_math'])) {
 // RESET MATH PUZZLE (Get new question)
 // ============================================================
 if (isset($_POST['reset_math']) && isset($_SESSION['puzzle_user_id'])) {
-    // Generate simple addition puzzle
     $num1 = rand(1, 20);
     $num2 = rand(1, 20);
     $answer = $num1 + $num2;
@@ -521,7 +510,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     $show_puzzle = true;
     $puzzle_user_id = $_SESSION['puzzle_user_id'] ?? 0;
     $puzzle_user_type = $_SESSION['puzzle_user_type'] ?? '';
-    // FIX: Explicitly set email and name from session to prevent "undefined array key"
     $puzzle_email = $_SESSION['puzzle_email'] ?? '';
     $puzzle_name = $_SESSION['puzzle_name'] ?? '';
 }
@@ -536,6 +524,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* [CSS remains the same - unchanged] */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', sans-serif;
