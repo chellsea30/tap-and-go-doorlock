@@ -4,7 +4,8 @@
  * PERMANENT STORAGE - NO DELETE OPTION
  * WITH DAY, WEEK, MONTH, YEAR FILTERS
  * WITH SHOW ENTRIES PAGINATION
- * PURE DARK MODE - WITH PROFILE PHOTO
+ * WITH PROFILE PHOTO DISPLAY
+ * PURE DARK MODE
  * FIXED: ALL timestamp CHANGED TO created_at
  */
 
@@ -310,12 +311,15 @@ if (isset($_SESSION['admin_id'])) {
     }
 }
 
-// Helper function for profile photo
+// ============================================================
+// HELPER FUNCTION: GET PROFILE PHOTO PATH
+// ============================================================
 function getProfilePhotoPath($photoPath) {
     if (empty($photoPath)) {
         return null;
     }
     
+    // Check if path already has 'uploads/'
     if (strpos($photoPath, 'uploads/') === 0) {
         $fullPath = '../../' . $photoPath;
     } else {
@@ -326,6 +330,21 @@ function getProfilePhotoPath($photoPath) {
         return $fullPath;
     }
     return null;
+}
+
+// ============================================================
+// HELPER FUNCTION: GET INITIALS
+// ============================================================
+function getInitials($name) {
+    if (empty($name)) return '?';
+    $parts = explode(' ', $name);
+    $initials = '';
+    foreach ($parts as $part) {
+        if (!empty($part)) {
+            $initials .= strtoupper($part[0]);
+        }
+    }
+    return substr($initials, 0, 2) ?: '?';
 }
 ?>
 <!DOCTYPE html>
@@ -1068,28 +1087,34 @@ function getProfilePhotoPath($photoPath) {
                                                 $roomDisplay = 'Visit: ' . $log['resident_visited_name'];
                                             }
                                             
-                                            // Get profile photo
+                                            // Get profile photo - FIXED
                                             $photoPath = $log['profile_photo'] ?? null;
                                             $hasPhoto = false;
                                             $photoUrl = '';
                                             
                                             if (!empty($photoPath)) {
-                                                $fullPath = '../../' . $photoPath;
-                                                if (strpos($photoPath, 'uploads/') !== 0) {
+                                                // Try different path formats
+                                                if (strpos($photoPath, 'uploads/') === 0) {
+                                                    $fullPath = '../../' . $photoPath;
+                                                } else {
                                                     $fullPath = '../../uploads/resident_photos/' . $photoPath;
                                                 }
+                                                
+                                                // Also try without '../../' prefix
+                                                if (!file_exists($fullPath)) {
+                                                    $fullPath = '../' . $photoPath;
+                                                }
+                                                if (!file_exists($fullPath)) {
+                                                    $fullPath = $photoPath;
+                                                }
+                                                
                                                 if (file_exists($fullPath)) {
                                                     $hasPhoto = true;
                                                     $photoUrl = $fullPath;
                                                 }
                                             }
                                             
-                                            $initials = '';
-                                            $nameParts = explode(' ', $displayName);
-                                            foreach ($nameParts as $p) {
-                                                if (!empty($p)) $initials .= strtoupper($p[0]);
-                                            }
-                                            $initials = substr($initials, 0, 2) ?: '?';
+                                            $initials = getInitials($displayName);
                                             
                                             $cardTypeBadge = $isVisitor ? 'badge-visitor' : ($cardType == 'staff' ? 'badge-staff' : 'badge-resident');
                                         ?>
