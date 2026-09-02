@@ -84,7 +84,6 @@ $query = "
         rp.course,
         rp.year_level,
         rp.gender,
-        rp.contact_number as profile_contact,
         rf.card_uid,
         rf.status as card_status,
         rf.issued_date,
@@ -274,24 +273,6 @@ if (isset($_SESSION['admin_id'])) {
     } catch (Exception $e) {
         // Silently fail
     }
-}
-
-// Helper function for profile photo
-function getProfilePhotoPath($photoPath) {
-    if (empty($photoPath)) {
-        return null;
-    }
-    
-    if (strpos($photoPath, 'uploads/') === 0) {
-        $fullPath = '../../' . $photoPath;
-    } else {
-        $fullPath = '../../uploads/resident_photos/' . $photoPath;
-    }
-    
-    if (file_exists($fullPath)) {
-        return $fullPath;
-    }
-    return null;
 }
 ?>
 <!DOCTYPE html>
