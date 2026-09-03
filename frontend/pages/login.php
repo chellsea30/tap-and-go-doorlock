@@ -1379,7 +1379,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <i class="fas fa-door-open"></i>
                 </div>
                 <div class="logo-text">
-                    <h1>ISU-E<span>Ladies Dormitory</span></h1>
+                    <h1>ISU-E <span>Ladies Dormitory</span></h1>
                     <p>Isabela State University · Echague Isabela</p>
                 </div>
             </div>
