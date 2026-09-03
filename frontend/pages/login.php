@@ -1375,9 +1375,9 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         <div class="brand-section">
             <div class="logo">
                 <!-- Logo Image -->
-            <img src="../assets/images/isu-logo.png" alt="ISU Logo" style="width: 65px; height: 65px; 
-                border-radius: 50%; object-fit: cover; box-shadow: 0 0 20px rgba(255, 215, 0, 0.4); 
-                border: 2px solid #ffd700; background: white; padding: 2px;">                
+            <img src="../assets/images/isu-logo.png" alt="ISU Logo" style="width: 100px; height: 100px; 
+                border-radius: 50%; object-fit: cover; box-shadow: 0 0 25px rgba(255, 215, 0, 0.4); 
+                border: 3px solid #ffd700; background: white; padding: 3px;">                
                 
                 <div class="logo-text">
                     <h1>ISU-E <span>Ladies Dormitory</span></h1>
