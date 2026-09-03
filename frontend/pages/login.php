@@ -1,8 +1,10 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Main Login with Math Puzzle
+ * ISABELA STATE UNIVERSITY - LADIES DORMITORY
  * SIMPLE ADDITION ONLY
  * WITH 10-MINUTE BAN AFTER 3 INCORRECT ATTEMPTS
+ * DESIGN: Modern Login Page
  */
 
 session_start();
@@ -197,7 +199,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 if ($result['success']) {
                     $user_id = $result['student_id'];
                     $full_name = $result['full_name'];
-                    // FIX: Get email from result or use the input email
                     $email = $result['email'] ?? $email;
                 }
                 break;
@@ -439,7 +440,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_math'])) {
                         $_SESSION['full_name'] = $userData['full_name'];
                         $_SESSION['course'] = $userData['course'] ?? 'N/A';
                         $_SESSION['year_level'] = $userData['year_level'] ?? 'N/A';
-                        $_SESSION['email'] = $email; // FIX: Add this line
+                        $_SESSION['email'] = $email;
                         $_SESSION['role'] = 'student';
                         $_SESSION['login_time'] = time();
                         session_regenerate_id(true);
@@ -519,13 +520,16 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tap-and-Go Doorlock - Login</title>
+    <title>ISU Ladies Dormitory - Login</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        /* [CSS remains the same - unchanged] */
+        /* ============================================================
+           GLOBAL RESET & BASE
+           ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
             font-family: 'Inter', sans-serif;
             min-height: 100vh;
@@ -533,10 +537,12 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             align-items: center;
             justify-content: center;
             padding: 20px;
-            background: linear-gradient(135deg, #0a1628 0%, #1a2a4a 50%, #0d1f3c 100%);
+            background: linear-gradient(135deg, #0a1628 0%, #0d1f3c 50%, #1a2a4a 100%);
             position: relative;
             overflow: hidden;
         }
+        
+        /* Background Animation */
         body::before {
             content: '';
             position: absolute;
@@ -544,288 +550,576 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             left: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(ellipse at 30% 50%, rgba(26,86,168,0.15) 0%, transparent 60%),
-                        radial-gradient(ellipse at 70% 50%, rgba(26,86,168,0.10) 0%, transparent 60%);
+            background: 
+                radial-gradient(ellipse at 20% 50%, rgba(26, 86, 168, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(26, 86, 168, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 100%, rgba(26, 58, 106, 0.04) 0%, transparent 40%);
             animation: rotateBg 60s linear infinite;
             z-index: 0;
         }
+        
         @keyframes rotateBg {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(180deg) scale(1.1); }
+            100% { transform: rotate(360deg) scale(1); }
         }
-        .login-container {
+        
+        /* Floating Particles */
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 215, 0, 0.03);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .particle:nth-child(1) { width: 300px; height: 300px; top: -100px; right: -100px; animation: float 20s ease-in-out infinite; }
+        .particle:nth-child(2) { width: 200px; height: 200px; bottom: -50px; left: -50px; animation: float 25s ease-in-out infinite reverse; }
+        .particle:nth-child(3) { width: 150px; height: 150px; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: float 30s ease-in-out infinite; }
+        
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.05); }
+            66% { transform: translate(-20px, 20px) scale(0.95); }
+        }
+        
+        /* ============================================================
+           LOGIN CONTAINER
+           ============================================================ */
+        .login-wrapper {
             width: 100%;
-            max-width: 480px;
+            max-width: 1200px;
             margin: 0 auto;
             position: relative;
             z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 60px;
         }
+        
+        /* ============================================================
+           LEFT SIDE - BRANDING
+           ============================================================ */
+        .brand-section {
+            flex: 1;
+            color: white;
+            padding: 20px 0;
+        }
+        
+        .brand-section .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .brand-section .logo-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #ffd700, #f59e0b);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: #0a1628;
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.2);
+        }
+        
+        .brand-section .logo-text h1 {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin: 0;
+            line-height: 1.1;
+        }
+        
+        .brand-section .logo-text h1 span {
+            background: linear-gradient(135deg, #ffd700, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .brand-section .logo-text p {
+            font-size: 14px;
+            color: rgba(255,255,255,0.5);
+            margin: 0;
+            font-weight: 400;
+        }
+        
+        .brand-section .hero-text {
+            margin: 40px 0;
+        }
+        
+        .brand-section .hero-text h2 {
+            font-size: 42px;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 15px;
+        }
+        
+        .brand-section .hero-text h2 span {
+            background: linear-gradient(135deg, #ffd700, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .brand-section .hero-text p {
+            font-size: 16px;
+            color: rgba(255,255,255,0.6);
+            max-width: 450px;
+            line-height: 1.7;
+        }
+        
+        .brand-section .features {
+            display: flex;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .brand-section .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .brand-section .feature-item i {
+            color: #ffd700;
+            font-size: 16px;
+        }
+        
+        .brand-section .footer-text {
+            margin-top: 50px;
+            font-size: 13px;
+            color: rgba(255,255,255,0.2);
+        }
+        
+        .brand-section .footer-text span {
+            color: rgba(255, 215, 0, 0.3);
+        }
+        
+        /* ============================================================
+           RIGHT SIDE - LOGIN CARD
+           ============================================================ */
         .login-card {
-            background: rgba(255,255,255,0.06);
-            backdrop-filter: blur(30px);
+            width: 100%;
+            max-width: 440px;
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(20px);
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 32px;
-            padding: 50px 40px;
-            box-shadow: 0 40px 80px rgba(0,0,0,0.6);
-            transition: all 0.3s ease;
+            padding: 45px 40px;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.4);
             position: relative;
+            flex-shrink: 0;
         }
-        .brand-logo { text-align: center; margin-bottom: 35px; }
-        .logo-circle {
-            width: 100px; height: 100px; border-radius: 50%;
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
-            display: flex; align-items: center; justify-content: center;
-            margin: 0 auto 15px; box-shadow: 0 15px 40px rgba(26,86,168,0.4);
-            font-size: 40px; color: #ffd700; position: relative;
-        }
-        .logo-circle::before {
+        
+        .login-card::before {
             content: '';
             position: absolute;
-            inset: -4px;
-            border-radius: 50%;
-            padding: 2px;
-            background: conic-gradient(from 0deg, transparent, rgba(255,215,0,0.3), transparent, rgba(255,215,0,0.3), transparent);
+            inset: -1px;
+            border-radius: 32px;
+            padding: 1px;
+            background: linear-gradient(135deg, rgba(255,215,0,0.1), transparent, rgba(255,215,0,0.05));
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor; mask-composite: exclude;
-            animation: spinGlow 8s linear infinite;
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
         }
-        @keyframes spinGlow { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .brand-logo h2 { color: #ffffff; font-weight: 700; font-size: 24px; }
-        .brand-logo h2 span { background: linear-gradient(135deg, #ffd700, #f0e6b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-        .brand-logo .subtitle { color: rgba(255,255,255,0.5); font-size: 13px; margin-top: 5px; letter-spacing: 1px; }
         
+        .login-card .card-header {
+            text-align: center;
+            margin-bottom: 35px;
+        }
+        
+        .login-card .card-header h3 {
+            color: white;
+            font-weight: 700;
+            font-size: 22px;
+            margin-bottom: 6px;
+        }
+        
+        .login-card .card-header p {
+            color: rgba(255,255,255,0.4);
+            font-size: 14px;
+            margin: 0;
+        }
+        
+        /* ============================================================
+           ROLE SELECTOR
+           ============================================================ */
         .role-selector {
-            display: flex; gap: 10px; margin-bottom: 30px;
-            background: rgba(255,255,255,0.05); border-radius: 16px;
-            padding: 6px; border: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            gap: 8px;
+            margin-bottom: 30px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 14px;
+            padding: 5px;
+            border: 1px solid rgba(255,255,255,0.06);
         }
+        
         .role-btn {
-            flex: 1; padding: 12px; border: none; border-radius: 12px;
-            background: transparent; color: rgba(255,255,255,0.5);
-            font-weight: 600; font-size: 14px; transition: all 0.3s ease; cursor: pointer;
+            flex: 1;
+            padding: 10px 12px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: rgba(255,255,255,0.5);
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
-        .role-btn:hover { color: rgba(255,255,255,0.8); }
+        
+        .role-btn:hover {
+            color: rgba(255,255,255,0.8);
+        }
+        
         .role-btn.active {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
-            color: white; box-shadow: 0 4px 15px rgba(26,58,106,0.3);
-        }
-        .role-btn i { margin-right: 8px; }
-        
-        .form-control {
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 14px;
-            padding: 14px 18px;
-            color: #ffffff;
-            font-size: 14px;
-            height: 54px;
-            transition: all 0.3s ease;
-        }
-        .form-control:focus {
-            background: rgba(255,255,255,0.08);
-            border-color: rgba(255,215,0,0.3);
-            box-shadow: 0 0 0 4px rgba(255,215,0,0.06);
-            color: #ffffff;
-        }
-        .form-control::placeholder { color: rgba(255,255,255,0.3); }
-        .form-control.is-invalid { border-color: #ef4444; }
-        .form-control:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
+            color: white;
+            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
         
-        .input-group-text {
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-right: none;
-            border-radius: 14px 0 0 14px;
-            color: rgba(255,255,255,0.4);
-            padding: 0 18px;
+        .role-btn i {
+            margin-right: 6px;
+            font-size: 13px;
         }
-        .input-group .form-control {
-            border-radius: 0 14px 14px 0;
-            border-left: none;
+        
+        /* ============================================================
+           FORM ELEMENTS
+           ============================================================ */
+        .form-group {
+            margin-bottom: 18px;
         }
-        .form-label {
+        
+        .form-group label {
+            display: block;
             color: rgba(255,255,255,0.6);
             font-size: 13px;
             font-weight: 500;
             margin-bottom: 6px;
         }
         
-        .btn-login {
-            width: 100%; padding: 16px; font-size: 16px; font-weight: 600;
-            border-radius: 14px; background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
-            border: none; color: white; height: 54px; margin-top: 10px;
+        .form-group .input-group {
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
             transition: all 0.3s ease;
+            overflow: hidden;
         }
-        .btn-login:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 15px 35px rgba(26,58,106,0.4);
-        }
-        .btn-login:disabled { opacity: 0.7; cursor: not-allowed; background: #4a4a5a; }
-        .btn-login i { margin-right: 10px; }
         
-        /* ===== LOCKED INDICATOR ===== */
+        .form-group .input-group:focus-within {
+            border-color: rgba(255,215,0,0.3);
+            box-shadow: 0 0 0 4px rgba(255,215,0,0.05);
+        }
+        
+        .form-group .input-group .input-icon {
+            padding: 0 16px;
+            color: rgba(255,255,255,0.3);
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+        
+        .form-group .input-group input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 14px 16px 14px 0;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            width: 100%;
+        }
+        
+        .form-group .input-group input::placeholder {
+            color: rgba(255,255,255,0.25);
+        }
+        
+        .form-group .input-group input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .form-group .input-group .toggle-password {
+            padding: 0 16px;
+            color: rgba(255,255,255,0.3);
+            cursor: pointer;
+            transition: color 0.3s ease;
+            background: none;
+            border: none;
+        }
+        
+        .form-group .input-group .toggle-password:hover {
+            color: rgba(255,255,255,0.6);
+        }
+        
+        /* ============================================================
+           LOCK INDICATOR
+           ============================================================ */
         .lock-indicator {
             display: <?php echo $is_blocked ? 'flex' : 'none'; ?>;
             align-items: center;
             justify-content: center;
             gap: 10px;
-            padding: 10px 15px;
-            background: rgba(239,68,68,0.15);
-            border: 1px solid rgba(239,68,68,0.2);
+            padding: 10px 16px;
+            background: rgba(239,68,68,0.12);
+            border: 1px solid rgba(239,68,68,0.15);
             border-radius: 12px;
-            margin-bottom: 15px;
+            margin-bottom: 18px;
             color: #f87171;
-        }
-        .lock-indicator i {
-            font-size: 20px;
-        }
-        .lock-indicator .lock-timer {
-            font-weight: 700;
-            color: #ffd700;
+            font-size: 13px;
         }
         
+        .lock-indicator i {
+            font-size: 18px;
+        }
+        
+        .lock-indicator .lock-timer {
+            color: #ffd700;
+            font-weight: 700;
+        }
+        
+        /* ============================================================
+           ATTEMPTS WARNING
+           ============================================================ */
         .attempts-warning {
             color: #fbbf24;
             font-size: 13px;
             text-align: center;
+            padding: 8px;
+            border-radius: 10px;
+            background: rgba(251, 191, 36, 0.05);
+            border: 1px solid rgba(251, 191, 36, 0.1);
+            margin-bottom: 10px;
+        }
+        
+        .pulse-warning {
+            animation: pulseWarning 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulseWarning {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* ============================================================
+           ALERTS
+           ============================================================ */
+        .alert-custom {
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 13px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .alert-custom i {
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        
+        .alert-custom.alert-danger {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+        }
+        
+        .alert-custom.alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.15);
+            color: #6ee7b7;
+        }
+        
+        /* ============================================================
+           BUTTONS
+           ============================================================ */
+        .btn-login {
+            width: 100%;
+            padding: 16px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #ffd700, #f59e0b);
+            border: none;
+            color: #0a1628;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            height: 54px;
             margin-top: 8px;
         }
         
-        .alert-danger {
-            background: rgba(239,68,68,0.12);
-            border: 1px solid rgba(239,68,68,0.15);
-            border-radius: 14px;
-            color: #fca5a5;
-            font-size: 14px;
-            padding: 14px 18px;
-        }
-        .alert-success {
-            background: rgba(16,185,129,0.12);
-            border: 1px solid rgba(16,185,129,0.15);
-            border-radius: 14px;
-            color: #6ee7b7;
-            font-size: 14px;
-            padding: 14px 18px;
-        }
-        .email-hint { color: rgba(255,255,255,0.25); font-size: 11px; margin-top: 4px; }
-        .footer-text {
-            color: rgba(255,255,255,0.15);
-            font-size: 11px; text-align: center; margin-top: 25px; letter-spacing: 1px;
-        }
-        .footer-text span { color: rgba(255,215,0,0.15); }
-        
-        /* ===== LOADING SPINNER ===== */
-        .spinner-container {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 10px 0;
-        }
-        .spinner-container.active {
-            display: flex;
-        }
-        .spinner {
-            width: 30px;
-            height: 30px;
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top: 3px solid #ffd700;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .spinner-text {
-            color: rgba(255,255,255,0.7);
-            font-size: 14px;
-            font-weight: 500;
+        .btn-login:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.25);
         }
         
-        /* ===== MATH PUZZLE ===== */
+        .btn-login:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-login i {
+            margin-right: 8px;
+        }
+        
+        .btn-login-puzzle {
+            width: 100%;
+            padding: 16px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #ffd700, #f59e0b);
+            border: none;
+            color: #0a1628;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            height: 54px;
+            margin-top: 8px;
+        }
+        
+        .btn-login-puzzle:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.25);
+        }
+        
+        .btn-login-puzzle:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* ============================================================
+           MATH PUZZLE
+           ============================================================ */
         .puzzle-section {
             display: <?php echo $show_puzzle ? 'block' : 'none'; ?>;
             animation: fadeIn 0.5s ease;
         }
+        
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        
         .puzzle-header {
-            text-align: center; margin-bottom: 20px;
+            text-align: center;
+            margin-bottom: 20px;
         }
+        
         .puzzle-header h4 {
-            color: #ffffff; font-weight: 600;
+            color: white;
+            font-weight: 600;
+            font-size: 18px;
         }
+        
         .puzzle-header p {
-            color: rgba(255,255,255,0.5); font-size: 13px;
+            color: rgba(255,255,255,0.4);
+            font-size: 13px;
+            margin: 0;
         }
+        
         .puzzle-header .user-email {
-            color: #ffd700; font-weight: 500;
+            color: #ffd700;
+            font-weight: 500;
+            font-size: 14px;
+            margin-top: 4px;
         }
+        
         .puzzle-box {
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.04);
             border-radius: 16px;
             padding: 25px;
             text-align: center;
-            border: 1px solid rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.06);
             margin: 20px 0;
         }
+        
         .puzzle-question {
-            font-size: 32px;
+            font-size: 36px;
             font-weight: 700;
             color: #ffd700;
             letter-spacing: 2px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
+        
         .puzzle-hint {
             color: rgba(255,255,255,0.3);
             font-size: 12px;
         }
+        
         .puzzle-input {
             width: 120px;
             height: 60px;
             background: rgba(255,255,255,0.06);
-            border: 2px solid rgba(255,215,0,0.2);
+            border: 2px solid rgba(255,215,0,0.15);
             border-radius: 12px;
-            color: #ffffff;
+            color: white;
             font-size: 28px;
             font-weight: 700;
             text-align: center;
             transition: all 0.3s ease;
             margin: 15px auto;
             display: block;
-        }
-        .puzzle-input:focus {
-            border-color: #ffd700;
-            box-shadow: 0 0 0 3px rgba(255,215,0,0.1);
             outline: none;
         }
-        .puzzle-attempts {
-            text-align: center; color: rgba(255,255,255,0.4); font-size: 13px; margin: 10px 0;
+        
+        .puzzle-input:focus {
+            border-color: #ffd700;
+            box-shadow: 0 0 0 4px rgba(255,215,0,0.05);
         }
-        .reset-puzzle-btn {
-            background: transparent; border: none;
-            color: rgba(255,215,0,0.4); font-size: 13px;
-            cursor: pointer; transition: all 0.3s ease;
+        
+        .puzzle-attempts {
+            text-align: center;
+            color: rgba(255,255,255,0.3);
+            font-size: 13px;
+            margin: 10px 0;
+        }
+        
+        .puzzle-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .puzzle-actions .reset-puzzle-btn {
+            background: transparent;
+            border: none;
+            color: rgba(255,215,0,0.4);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
             text-decoration: underline;
         }
-        .reset-puzzle-btn:hover {
+        
+        .puzzle-actions .reset-puzzle-btn:hover {
             color: #ffd700;
         }
-        .back-login-btn {
+        
+        .puzzle-actions .back-login-btn {
             color: rgba(255,255,255,0.3);
             font-size: 13px;
             text-decoration: none;
             transition: all 0.3s ease;
+            background: none;
+            border: none;
         }
-        .back-login-btn:hover {
+        
+        .puzzle-actions .back-login-btn:hover {
             color: rgba(255,255,255,0.6);
+        }
+        
+        .puzzle-actions .divider {
+            color: rgba(255,255,255,0.1);
         }
         
         /* ============================================================
@@ -835,95 +1129,309 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             display: <?php echo isset($_POST['show_reset']) ? 'block' : 'none'; ?>;
             animation: fadeIn 0.5s ease;
         }
+        
+        .reset-section .reset-header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        
+        .reset-section .reset-header h4 {
+            color: white;
+            font-weight: 600;
+            font-size: 18px;
+        }
+        
+        .reset-section .reset-header p {
+            color: rgba(255,255,255,0.4);
+            font-size: 13px;
+            margin: 0;
+        }
+        
         .reset-section .reset-link {
             color: rgba(255,215,0,0.6);
             font-size: 13px;
             cursor: pointer;
             transition: all 0.3s ease;
             text-decoration: none;
+            background: none;
+            border: none;
         }
+        
         .reset-section .reset-link:hover {
             color: #ffd700;
         }
-        .back-to-login-link {
+        
+        .reset-section .back-to-login-link {
             color: rgba(255,255,255,0.3);
             font-size: 13px;
             cursor: pointer;
             transition: all 0.3s ease;
             text-decoration: none;
+            background: none;
+            border: none;
         }
-        .back-to-login-link:hover {
+        
+        .reset-section .back-to-login-link:hover {
             color: rgba(255,255,255,0.6);
         }
-        .reset-section .form-control {
+        
+        .btn-reset {
+            width: 100%;
+            padding: 16px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border: none;
+            color: white;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            height: 54px;
+            margin-top: 8px;
+        }
+        
+        .btn-reset:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(245, 158, 11, 0.25);
+        }
+        
+        .btn-reset:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-reset i {
+            margin-right: 8px;
+        }
+        
+        textarea.form-control-custom {
+            width: 100%;
+            padding: 12px 16px;
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 14px;
-            padding: 14px 18px;
-            color: #ffffff;
+            color: white;
             font-size: 14px;
-            height: 54px;
             transition: all 0.3s ease;
+            outline: none;
+            resize: none;
+            font-family: 'Inter', sans-serif;
         }
-        .reset-section .form-control:focus {
-            background: rgba(255,255,255,0.08);
+        
+        textarea.form-control-custom:focus {
             border-color: rgba(255,215,0,0.3);
-            box-shadow: 0 0 0 4px rgba(255,215,0,0.06);
-            color: #ffffff;
+            box-shadow: 0 0 0 4px rgba(255,215,0,0.05);
         }
-        .reset-section .form-control::placeholder {
+        
+        textarea.form-control-custom::placeholder {
+            color: rgba(255,255,255,0.25);
+        }
+        
+        /* ============================================================
+           FORGOT PASSWORD LINK
+           ============================================================ */
+        .forgot-password-link {
             color: rgba(255,255,255,0.3);
-        }
-        .reset-section .btn-reset {
-            width: 100%; padding: 16px; font-size: 16px; font-weight: 600;
-            border-radius: 14px; background: linear-gradient(135deg, #f59e0b, #d97706);
-            border: none; color: white; height: 54px; margin-top: 10px;
+            font-size: 13px;
+            text-decoration: none;
             transition: all 0.3s ease;
-        }
-        .reset-section .btn-reset:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 15px 35px rgba(245,158,11,0.4);
-        }
-        .reset-section .btn-reset:disabled { opacity: 0.7; cursor: not-allowed; }
-        
-        /* ===== COUNTDOWN TIMER ANIMATION ===== */
-        @keyframes pulseWarning {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .pulse-warning {
-            animation: pulseWarning 1.5s ease-in-out infinite;
+            display: inline-block;
+            margin-top: 4px;
         }
         
-        @media (max-width: 480px) {
-            .login-card { padding: 30px 20px; border-radius: 24px; }
-            .logo-circle { width: 80px; height: 80px; font-size: 32px; }
-            .role-btn { font-size: 12px; padding: 10px; }
-            .puzzle-question { font-size: 24px; }
-            .puzzle-input { width: 100px; height: 50px; font-size: 24px; }
+        .forgot-password-link:hover {
+            color: rgba(255,215,0,0.6);
+        }
+        
+        /* ============================================================
+           FOOTER TEXT (Login Card)
+           ============================================================ */
+        .login-footer-text {
+            text-align: center;
+            margin-top: 25px;
+            color: rgba(255,255,255,0.12);
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }
+        
+        .login-footer-text span {
+            color: rgba(255,215,0,0.15);
+        }
+        
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 992px) {
+            .login-wrapper {
+                flex-direction: column;
+                gap: 30px;
+            }
+            
+            .brand-section {
+                text-align: center;
+                padding: 0;
+            }
+            
+            .brand-section .logo {
+                justify-content: center;
+            }
+            
+            .brand-section .hero-text p {
+                max-width: 100%;
+            }
+            
+            .brand-section .features {
+                justify-content: center;
+            }
+            
+            .brand-section .footer-text {
+                margin-top: 20px;
+            }
+            
+            .login-card {
+                max-width: 100%;
+                padding: 35px 30px;
+            }
+            
+            .brand-section .hero-text h2 {
+                font-size: 32px;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            body {
+                padding: 10px;
+            }
+            
+            .login-card {
+                padding: 25px 20px;
+                border-radius: 24px;
+            }
+            
+            .brand-section .hero-text h2 {
+                font-size: 26px;
+            }
+            
+            .brand-section .features {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            
+            .brand-section .feature-item {
+                font-size: 12px;
+            }
+            
+            .role-btn {
+                font-size: 11px;
+                padding: 8px 6px;
+            }
+            
+            .role-btn i {
+                margin-right: 3px;
+            }
+            
+            .puzzle-question {
+                font-size: 28px;
+            }
+            
+            .puzzle-input {
+                width: 90px;
+                height: 50px;
+                font-size: 22px;
+            }
+            
+            .login-card .card-header h3 {
+                font-size: 18px;
+            }
+        }
+        
+        /* ============================================================
+           SCROLLBAR
+           ============================================================ */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a1628;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1a2a4a;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ffd700;
         }
     </style>
 </head>
 <body>
-    <div class="login-container">
+    
+    <!-- Floating Particles -->
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    
+    <div class="login-wrapper">
+        
+        <!-- ===== LEFT SIDE - BRANDING ===== -->
+        <div class="brand-section">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-door-open"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>ISU <span>Ladies</span></h1>
+                    <p>Isabela State University · Echague</p>
+                </div>
+            </div>
+            
+            <div class="hero-text">
+                <h2>Welcome to <span>Dormitory</span> Portal</h2>
+                <p>
+                    Secure access to the Isabela State University Ladies Dormitory 
+                    management system. Track attendance, manage residents, and 
+                    monitor access in real-time.
+                </p>
+            </div>
+            
+            <div class="features">
+                <div class="feature-item">
+                    <i class="fas fa-shield-alt"></i>
+                    Secure Access
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-sync-alt"></i>
+                    Real-time Sync
+                </div>
+                <div class="feature-item">
+                    <i class="fas fa-lock"></i>
+                    Tamper-proof
+                </div>
+            </div>
+            
+            <div class="footer-text">
+                &copy; <?php echo date('Y'); ?> <span>Isabela State University</span> · Ladies Dormitory
+            </div>
+        </div>
+        
+        <!-- ===== RIGHT SIDE - LOGIN CARD ===== -->
         <div class="login-card" id="loginCard">
             
-            <div class="brand-logo">
-                <div class="logo-circle"><i class="fas fa-door-open"></i></div>
-                <h2><span>Tap &amp; Go</span> Doorlock</h2>
-                <p class="subtitle">ISU-Echague Ladies Dormitory</p>
+            <div class="card-header">
+                <h3>Sign in to your account</h3>
+                <p>Access your dashboard and manage attendance records securely.</p>
             </div>
 
             <?php if (!empty($error)): ?>
-                <div class="alert alert-<?php echo strpos($error, '✅') !== false || strpos($error, 'solved') !== false ? 'success' : 'danger'; ?>">
-                    <i class="fas <?php echo strpos($error, '✅') !== false || strpos($error, 'solved') !== false ? 'fa-check-circle' : 'fa-exclamation-circle'; ?> me-2"></i>
+                <div class="alert-custom alert-<?php echo strpos($error, '✅') !== false || strpos($error, 'solved') !== false ? 'success' : 'danger'; ?>">
+                    <i class="fas <?php echo strpos($error, '✅') !== false || strpos($error, 'solved') !== false ? 'fa-check-circle' : 'fa-exclamation-circle'; ?>"></i>
                     <?php echo htmlspecialchars($error); ?>
                 </div>
             <?php endif; ?>
 
             <?php if (!empty($reset_success)): ?>
-                <div class="alert alert-success">
-                    <i class="fas fa-check-circle me-2"></i> <?php echo $reset_success; ?>
+                <div class="alert-custom alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <?php echo $reset_success; ?>
                 </div>
             <?php endif; ?>
 
@@ -944,9 +1452,15 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             <!-- ===== MATH PUZZLE SECTION ===== -->
             <div class="puzzle-section" id="puzzleSection">
                 <div class="puzzle-header">
-                    <h4><i class="fas fa-calculator me-2" style="color: #ffd700;"></i>Solve the Math Puzzle</h4>
+                    <h4><i class="fas fa-calculator" style="color: #ffd700; margin-right: 8px;"></i>Solve the Math Puzzle</h4>
                     <p>Please solve this simple addition problem to continue</p>
-                    <p class="user-email"><i class="fas fa-user me-1"></i> <?php echo htmlspecialchars($puzzle_name ?? ''); ?> (<?php echo htmlspecialchars($puzzle_email ?? ''); ?>)</p>
+                    <div class="user-email">
+                        <i class="fas fa-user me-1"></i> 
+                        <?php echo htmlspecialchars($puzzle_name ?? ''); ?> 
+                        <span style="color: rgba(255,255,255,0.4); font-weight: 400;">
+                            (<?php echo htmlspecialchars($puzzle_email ?? ''); ?>)
+                        </span>
+                    </div>
                 </div>
 
                 <form method="POST" action="" id="puzzleForm">
@@ -966,21 +1480,21 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     
                     <div class="puzzle-attempts">
                         <span>Attempts left: </span>
-                        <span class="attempts-left" id="attemptsLeft">3</span>
+                        <span id="attemptsLeft">3</span>
                     </div>
                     
-                    <button type="submit" name="verify_math" class="btn-login" id="verifyMathBtn">
+                    <button type="submit" name="verify_math" class="btn-login-puzzle" id="verifyMathBtn">
                         <i class="fas fa-check-circle"></i> Verify Answer
                     </button>
                 </form>
 
-                <div class="text-center mt-3">
+                <div class="puzzle-actions">
                     <form method="POST" action="" style="display:inline;">
                         <button type="submit" name="reset_math" class="reset-puzzle-btn">
                             <i class="fas fa-redo me-1"></i> New Question
                         </button>
                     </form>
-                    <span class="mx-2 text-muted" style="opacity:0.2;">|</span>
+                    <span class="divider">|</span>
                     <a href="?reset=1" class="back-login-btn">
                         <i class="fas fa-arrow-left me-1"></i> Back to Login
                     </a>
@@ -989,6 +1503,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
             <!-- ===== LOGIN FORM ===== -->
             <div id="loginFormSection" style="<?php echo $show_puzzle ? 'display:none;' : 'display:block;'; ?>">
+                
                 <div class="role-selector" id="roleSelector">
                     <button type="button" class="role-btn active" data-role="admin">
                         <i class="fas fa-user-shield"></i> Admin
@@ -1003,18 +1518,23 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
                 <form method="POST" action="" id="adminForm" class="login-form">
                     <input type="hidden" name="role" value="admin">
-                    <div class="mb-4">
-                        <label class="form-label"><i class="fas fa-envelope me-1"></i> Email Address</label>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-envelope me-1"></i> Email Address</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                            <input type="email" class="form-control" name="email" id="loginEmail" placeholder="Enter your email" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
+                            <span class="input-icon"><i class="fas fa-envelope"></i></span>
+                            <input type="email" name="email" id="loginEmail" placeholder="Enter your email" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><i class="fas fa-lock me-1"></i> Password</label>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-lock me-1"></i> Password</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                            <input type="password" class="form-control" name="password" id="loginPassword" placeholder="Enter password" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
+                            <span class="input-icon"><i class="fas fa-lock"></i></span>
+                            <input type="password" name="password" id="loginPassword" placeholder="Enter password" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
+                            <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">
+                                <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                            </button>
                         </div>
                     </div>
                     
@@ -1026,24 +1546,29 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <?php endif; ?>
                     
                     <button type="submit" name="login" class="btn-login" id="loginBtn" <?php echo $is_blocked ? 'disabled' : ''; ?>>
-                        <i class="fas fa-sign-in-alt"></i> Sign In as Admin
+                        <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
                 </form>
 
                 <form method="POST" action="" id="staffForm" class="login-form" style="display:none;">
                     <input type="hidden" name="role" value="staff">
-                    <div class="mb-4">
-                        <label class="form-label"><i class="fas fa-envelope me-1"></i> Email Address</label>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-envelope me-1"></i> Email Address</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                            <input type="email" class="form-control" name="email" placeholder="Enter your registered email" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
+                            <span class="input-icon"><i class="fas fa-envelope"></i></span>
+                            <input type="email" name="email" placeholder="Enter your registered email" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><i class="fas fa-lock me-1"></i> Password</label>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-lock me-1"></i> Password</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                            <input type="password" class="form-control" name="password" placeholder="Enter password" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
+                            <span class="input-icon"><i class="fas fa-lock"></i></span>
+                            <input type="password" name="password" placeholder="Enter password" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
+                            <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">
+                                <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                            </button>
                         </div>
                     </div>
                     
@@ -1055,24 +1580,29 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <?php endif; ?>
                     
                     <button type="submit" name="login" class="btn-login" <?php echo $is_blocked ? 'disabled' : ''; ?>>
-                        <i class="fas fa-sign-in-alt"></i> Sign In as Staff
+                        <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
                 </form>
 
                 <form method="POST" action="" id="studentForm" class="login-form" style="display:none;">
                     <input type="hidden" name="role" value="student">
-                    <div class="mb-4">
-                        <label class="form-label"><i class="fas fa-envelope me-1"></i> Email Address</label>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-envelope me-1"></i> Email Address</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                            <input type="email" class="form-control" name="email" placeholder="Enter your student email" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
+                            <span class="input-icon"><i class="fas fa-envelope"></i></span>
+                            <input type="email" name="email" placeholder="Enter your student email" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label"><i class="fas fa-lock me-1"></i> Password</label>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-lock me-1"></i> Password</label>
                         <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                            <input type="password" class="form-control" name="password" placeholder="Enter password" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
+                            <span class="input-icon"><i class="fas fa-lock"></i></span>
+                            <input type="password" name="password" placeholder="Enter password" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
+                            <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">
+                                <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                            </button>
                         </div>
                     </div>
                     
@@ -1085,13 +1615,13 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     
                     <!-- Forgot Password Link -->
                     <div class="text-center mt-2 mb-3">
-                        <a href="#" class="reset-link" onclick="showResetForm()">
+                        <a href="#" class="forgot-password-link" onclick="showResetForm()">
                             <i class="fas fa-key me-1"></i> Forgot Password? Request Reset
                         </a>
                     </div>
                     
                     <button type="submit" name="login" class="btn-login" <?php echo $is_blocked ? 'disabled' : ''; ?>>
-                        <i class="fas fa-sign-in-alt"></i> Sign In as Student
+                        <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
                 </form>
 
@@ -1099,43 +1629,43 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 PASSWORD RESET REQUEST FORM
                 ============================================================ -->
                 <div class="reset-section" id="resetSection">
-                    <div class="text-center mb-4">
-                        <h4 style="color: #ffffff; font-weight: 600;">
-                            <i class="fas fa-key me-2" style="color: #ffd700;"></i>Request Password Reset
-                        </h4>
-                        <p style="color: rgba(255,255,255,0.5); font-size: 13px;">
-                            Enter your email address to request a password reset
-                        </p>
+                    <div class="reset-header">
+                        <h4><i class="fas fa-key" style="color: #ffd700; margin-right: 8px;"></i>Request Password Reset</h4>
+                        <p>Enter your email address to request a password reset</p>
                     </div>
 
                     <form method="POST" action="">
-                        <div class="mb-4">
-                            <label class="form-label"><i class="fas fa-envelope me-1"></i> Email Address</label>
+                        <div class="form-group">
+                            <label><i class="fas fa-envelope me-1"></i> Email Address</label>
                             <div class="input-group">
-                                <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                                <input type="email" class="form-control" name="reset_email" placeholder="Enter your registered email" required>
+                                <span class="input-icon"><i class="fas fa-envelope"></i></span>
+                                <input type="email" class="form-control-custom" name="reset_email" placeholder="Enter your registered email" required>
                             </div>
                         </div>
-                        <div class="mb-4">
-                            <label class="form-label"><i class="fas fa-info-circle me-1"></i> Reason for Reset</label>
-                            <textarea class="form-control" name="reset_reason" rows="2" placeholder="e.g., I forgot my password" style="height:60px; resize:none;"></textarea>
+                        
+                        <div class="form-group">
+                            <label><i class="fas fa-info-circle me-1"></i> Reason for Reset</label>
+                            <textarea class="form-control-custom" name="reset_reason" rows="2" placeholder="e.g., I forgot my password" style="height:60px;"></textarea>
                         </div>
+                        
                         <button type="submit" name="request_reset" class="btn-reset">
                             <i class="fas fa-paper-plane me-1"></i> Request Reset
                         </button>
                     </form>
 
                     <div class="text-center mt-3">
-                        <a href="#" class="back-to-login-link" onclick="hideResetForm()">
+                        <button type="button" class="back-to-login-link" onclick="hideResetForm()">
                             <i class="fas fa-arrow-left me-1"></i> Back to Login
-                        </a>
+                        </button>
                     </div>
+                </div>
+                
+                <!-- ===== LOGIN FOOTER ===== -->
+                <div class="login-footer-text">
+                    &copy; <?php echo date('Y'); ?> <span>Isabela State University</span> · Ladies Dormitory
                 </div>
             </div>
 
-            <div class="footer-text">
-                &copy; <?php echo date('Y'); ?> <span>ISU-Echague Dormitory</span> — All Rights Reserved
-            </div>
         </div>
     </div>
 
@@ -1157,6 +1687,24 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 document.getElementById('resetSection').style.display = 'none';
             });
         });
+
+        // ============================================================
+        // TOGGLE PASSWORD VISIBILITY
+        // ============================================================
+        function togglePasswordVisibility() {
+            const passwordInputs = document.querySelectorAll('input[type="password"]');
+            const icon = document.getElementById('passwordToggleIcon');
+            
+            passwordInputs.forEach(input => {
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    if (icon) icon.className = 'fas fa-eye-slash';
+                } else {
+                    input.type = 'password';
+                    if (icon) icon.className = 'fas fa-eye';
+                }
+            });
+        }
 
         // ============================================================
         // AUTO-FOCUS
@@ -1221,7 +1769,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     timerElement.textContent = minutes + 'm ' + seconds + 's';
                 }
             } else {
-                // Reload page to unlock
                 location.reload();
             }
         }
