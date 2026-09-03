@@ -522,10 +522,8 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISU Ladies Dormitory - Login</title>
     
-    <!-- FAVICON (Browser Tab Logo) - Root .ico -->
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <!-- Fallback kung hindi ma-load ang .ico, gagamit tayo ng PNG sa assets -->
-    <link rel="icon" type="image/png" href="../../assets/images/isu-logo.png">
+    <!-- FAVICON (Browser Tab Logo) -->
+    <link rel="icon" type="image/png" href="../assets/images/isu-logo.png">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1386,9 +1384,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         <div class="brand-section">
             <div class="logo">
                 <!-- Logo Image (Malaki at Buo) -->
-                <img src="../assets/images/isu-logo.png" alt="ISU Logo" style="width: 100px; 
-                    height: 100px; border-radius: 50%; object-fit: contain; box-shadow: 0 0 25px rgba(255, 215, 0, 0.5); 
-                    border: 3px solid #ffd700; background: white; padding: 3px;">
+                <img src="../assets/images/isu-logo.png" alt="ISU Logo">
                 
                 <div class="logo-text">
                     <h1>ISU-E <span>Ladies Dormitory</span></h1>
@@ -1560,6 +1556,15 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <button type="submit" name="login" class="btn-login" id="loginBtn" <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
+                    
+                    <!-- ===== HOW IT WORKS NOTE ===== -->
+                    <div style="margin-top: 15px; padding: 12px 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; text-align: center;">
+                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; line-height: 1.6;">
+                            <i class="fas fa-info-circle" style="color: #ffd700; margin-right: 5px;"></i>
+                            <strong style="color: rgba(255,255,255,0.7);">How it works:</strong> 
+                            Enter your email, then solve a simple addition problem to verify your identity.
+                        </p>
+                    </div>
                 </form>
 
                 <form method="POST" action="" id="staffForm" class="login-form" style="display:none;">
@@ -1594,6 +1599,15 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <button type="submit" name="login" class="btn-login" <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
+                    
+                    <!-- ===== HOW IT WORKS NOTE ===== -->
+                    <div style="margin-top: 15px; padding: 12px 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; text-align: center;">
+                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; line-height: 1.6;">
+                            <i class="fas fa-info-circle" style="color: #ffd700; margin-right: 5px;"></i>
+                            <strong style="color: rgba(255,255,255,0.7);">How it works:</strong> 
+                            Enter your email, then solve a simple addition problem to verify your identity.
+                        </p>
+                    </div>
                 </form>
 
                 <form method="POST" action="" id="studentForm" class="login-form" style="display:none;">
@@ -1635,6 +1649,15 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <button type="submit" name="login" class="btn-login" <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
+                    
+                    <!-- ===== HOW IT WORKS NOTE ===== -->
+                    <div style="margin-top: 15px; padding: 12px 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; text-align: center;">
+                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; line-height: 1.6;">
+                            <i class="fas fa-info-circle" style="color: #ffd700; margin-right: 5px;"></i>
+                            <strong style="color: rgba(255,255,255,0.7);">How it works:</strong> 
+                            Enter your email, then solve a simple addition problem to verify your identity.
+                        </p>
+                    </div>
                 </form>
 
                 <!-- ============================================================
