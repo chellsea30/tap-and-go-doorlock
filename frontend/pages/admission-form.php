@@ -1,9 +1,8 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Residents Admission Form
- * WITH AUTO-FILL FROM RESIDENT DATA - DARK MODE - WITH PRINT FORMAT (ISU Paper Form)
- * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
- * WITH PDF DOWNLOAD FUNCTION
+ * WITH AUTO-FILL FROM RESIDENT DATA - DARK MODE
+ * WITH HALF BOND PAPER (A5) DOWNLOAD & PRINT FORMAT
  */
 
 // Start session
@@ -36,7 +35,6 @@ if ($user_id > 0) {
     try {
         $conn = getDBConnection();
         
-        // Get user data
         $stmt = $conn->prepare("
             SELECT u.*, rp.course, rp.year_level, rp.gender, rp.birth_date, rp.age, 
                    rp.home_address, rp.cp_no, rp.religion, rp.dialect,
@@ -52,7 +50,6 @@ if ($user_id > 0) {
         $stmt->close();
         
         if ($resident) {
-            // Auto-fill form data from resident
             $formData = [
                 'name' => $resident['full_name'] ?? '',
                 'course' => $resident['course'] ?? '',
@@ -74,7 +71,6 @@ if ($user_id > 0) {
 // HANDLE FORM SUBMISSION
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
-    // Get form data
     $data = [
         'semester_sy' => trim($_POST['semester_sy'] ?? ''),
         'name' => trim($_POST['name'] ?? ''),
@@ -97,23 +93,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         'status' => $_POST['status'] ?? 'pending'
     ];
     
-    // Validate required fields
     if (empty($data['name']) || empty($data['course']) || empty($data['year_level'])) {
         $error = 'Please fill in all required fields (Name, Course, Year Level).';
     } else {
         try {
             $conn = getDBConnection();
             
-            // Check if user already exists or create new
             if ($user_id > 0) {
-                // Check if admission record already exists
                 $check = $conn->prepare("SELECT admission_id FROM admission_records WHERE user_id = ?");
                 $check->bind_param("i", $user_id);
                 $check->execute();
                 $checkResult = $check->get_result();
                 
                 if ($checkResult->num_rows > 0) {
-                    // Update existing admission
                     $stmt = $conn->prepare("
                         UPDATE admission_records SET
                             semester_sy = ?, age = ?, birth_date = ?, home_address = ?,
@@ -125,25 +117,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     ");
                     $stmt->bind_param(
                         "sisssssssssssssi",
-                        $data['semester_sy'],
-                        $data['age'],
-                        $data['birth_date'],
-                        $data['home_address'],
-                        $data['school_last'],
-                        $data['school_address'],
-                        $data['strand_track'],
-                        $data['course_taken'],
-                        $data['year_level_old'],
-                        $data['former_bh'],
-                        $data['former_address'],
-                        $data['guardian_name'],
-                        $data['guardian_contact'],
-                        $data['student_signature'],
-                        $data['status'],
-                        $user_id
+                        $data['semester_sy'], $data['age'], $data['birth_date'], $data['home_address'],
+                        $data['school_last'], $data['school_address'], $data['strand_track'],
+                        $data['course_taken'], $data['year_level_old'], $data['former_bh'],
+                        $data['former_address'], $data['guardian_name'], $data['guardian_contact'],
+                        $data['student_signature'], $data['status'], $user_id
                     );
                 } else {
-                    // Insert new admission
                     $stmt = $conn->prepare("
                         INSERT INTO admission_records (
                             user_id, semester_sy, age, birth_date, home_address,
@@ -152,36 +132,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                             guardian_name, guardian_contact,
                             student_signature, status, room_assignment, created_at
                         ) VALUES (
-                            ?, ?, ?, ?, ?,
-                            ?, ?, ?, ?,
-                            ?, ?, ?,
-                            ?, ?,
-                            ?, ?, ?, NOW()
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()
                         )
                     ");
                     $stmt->bind_param(
                         "isississsssssssss",
-                        $user_id,
-                        $data['semester_sy'],
-                        $data['age'],
-                        $data['birth_date'],
-                        $data['home_address'],
-                        $data['school_last'],
-                        $data['school_address'],
-                        $data['strand_track'],
-                        $data['course_taken'],
-                        $data['year_level_old'],
-                        $data['former_bh'],
-                        $data['former_address'],
-                        $data['guardian_name'],
-                        $data['guardian_contact'],
-                        $data['student_signature'],
-                        $data['status'],
-                        $room_assignment
+                        $user_id, $data['semester_sy'], $data['age'], $data['birth_date'], $data['home_address'],
+                        $data['school_last'], $data['school_address'], $data['strand_track'],
+                        $data['course_taken'], $data['year_level_old'], $data['former_bh'],
+                        $data['former_address'], $data['guardian_name'], $data['guardian_contact'],
+                        $data['student_signature'], $data['status'], $room_assignment
                     );
                 }
             } else {
-                // Create new user and admission
                 $student_id = 'ADM-' . date('Y') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
                 $email = strtolower(str_replace(' ', '.', $data['name'])) . '@isu.edu.ph';
                 
@@ -194,7 +157,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 $user_id = $conn->insert_id;
                 $stmt->close();
                 
-                // Insert admission
                 $room_assignment = 'Not Assigned';
                 $stmt = $conn->prepare("
                     INSERT INTO admission_records (
@@ -204,32 +166,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                         guardian_name, guardian_contact,
                         student_signature, status, room_assignment, created_at
                     ) VALUES (
-                        ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?,
-                        ?, ?, ?,
-                        ?, ?,
-                        ?, ?, ?, NOW()
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()
                     )
                 ");
                 $stmt->bind_param(
                     "isississsssssssss",
-                    $user_id,
-                    $data['semester_sy'],
-                    $data['age'],
-                    $data['birth_date'],
-                    $data['home_address'],
-                    $data['school_last'],
-                    $data['school_address'],
-                    $data['strand_track'],
-                    $data['course_taken'],
-                    $data['year_level_old'],
-                    $data['former_bh'],
-                    $data['former_address'],
-                    $data['guardian_name'],
-                    $data['guardian_contact'],
-                    $data['student_signature'],
-                    $data['status'],
-                    $room_assignment
+                    $user_id, $data['semester_sy'], $data['age'], $data['birth_date'], $data['home_address'],
+                    $data['school_last'], $data['school_address'], $data['strand_track'],
+                    $data['course_taken'], $data['year_level_old'], $data['former_bh'],
+                    $data['former_address'], $data['guardian_name'], $data['guardian_contact'],
+                    $data['student_signature'], $data['status'], $room_assignment
                 );
             }
             
@@ -252,7 +198,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admission Form - Tap-and-Go Doorlock</title>
@@ -662,11 +607,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         }
         
         /* ============================================================
-           PRINT FORMAT (EXACT COPY OF PHYSICAL FORM)
+           PRINT & PDF FORMAT (HALF BOND PAPER - A5 LANDSCAPE)
            ============================================================ */
         @media print {
             /* Hidden Elements */
-            .no-print, .navbar, .sidebar, .footer, .page-header, .alert, .btn-submit, .btn-outline-secondary, .btn-outline-primary { 
+            .no-print, .navbar, .sidebar, .footer, .page-header, .alert, .btn-submit, .btn-outline-secondary, .btn-outline-primary, .btn-success { 
                 display: none !important; 
             }
             
@@ -677,6 +622,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 font-family: 'Times New Roman', Times, serif !important; 
                 margin: 0; 
                 padding: 0; 
+                width: 100% !important;
             }
             .main-content { 
                 margin: 0 !important; 
@@ -708,10 +654,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 background: none !important;
                 font-weight: bold;
             }
-            .header-title h4 { font-size: 14pt; }
-            .header-title p { font-size: 12pt; }
+            .header-title h4 { font-size: 12pt; }
+            .header-title p { font-size: 10pt; }
             .header-title hr { display: none !important; }
-            .header-title h5 { font-size: 14pt; margin-top: 5px; }
+            .header-title h5 { font-size: 12pt; margin-top: 5px; }
             
             /* Paper Logo & Text Columns */
             .print-header-row {
@@ -721,22 +667,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 margin-bottom: 10px;
             }
             .print-logo {
-                width: 90px;
-                height: 90px;
+                width: 70px;
+                height: 70px;
                 object-fit: contain;
                 margin-right: 20px;
                 display: block !important;
             }
             .print-header-text {
                 text-align: center;
-                line-height: 1.4;
+                line-height: 1.2;
             }
             .print-id-box {
                 position: absolute;
                 top: 10px;
                 right: 10px;
-                width: 100px;
-                height: 120px;
+                width: 80px;
+                height: 100px;
                 border: 1px solid #000;
                 display: block !important;
             }
@@ -745,7 +691,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             .form-label { 
                 color: #000 !important; 
                 font-weight: normal; 
-                font-size: 12pt; 
+                font-size: 10pt; 
                 margin-bottom: 0 !important;
                 display: inline-block;
             }
@@ -757,11 +703,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 border-radius: 0 !important;
                 box-shadow: none !important;
                 height: auto !important;
-                font-size: 12pt !important;
+                font-size: 10pt !important;
                 padding: 2px 5px !important;
                 font-family: 'Times New Roman', Times, serif !important;
                 display: inline-block;
-                width: 70% !important;
+                width: 65% !important;
             }
             .form-select {
                 -webkit-appearance: none !important;
@@ -774,18 +720,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             /* Layout */
             .row { display: block !important; }
             .col-md-2, .col-md-4, .col-md-6, .col-md-8, .col-md-12 { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
-            .row.g-2 > [class*="col-"] { padding: 3px 0 !important; }
+            .row.g-2 > [class*="col-"] { padding: 2px 0 !important; }
             
             /* Special formatting for specific fields based on picture */
             .print-section-title {
                 font-weight: bold;
                 text-transform: uppercase;
-                margin-top: 15px;
-                font-size: 12pt;
+                margin-top: 10px;
+                font-size: 10pt;
             }
             .print-note {
-                font-size: 9pt;
-                margin-top: 30px;
+                font-size: 8pt;
+                margin-top: 20px;
             }
         }
         
@@ -896,10 +842,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                             
                             <div class="col-md-12">
                                 <label class="form-label">Course : </label>
-                                <input type="text" class="form-control" name="course" style="width:25% !important;" value="<?php echo htmlspecialchars($formData['course'] ?? ''); ?>" required <?php echo $resident ? 'readonly' : ''; ?>>
+                                <input type="text" class="form-control" name="course" style="width:20% !important;" value="<?php echo htmlspecialchars($formData['course'] ?? ''); ?>" required <?php echo $resident ? 'readonly' : ''; ?>>
                                 
                                 <label class="form-label">Yr. level: </label>
-                                <select class="form-select" name="year_level" style="width:25% !important;" <?php echo $resident ? 'disabled' : ''; ?>>
+                                <select class="form-select" name="year_level" style="width:20% !important;" <?php echo $resident ? 'disabled' : ''; ?>>
                                     <option value="">Select</option>
                                     <option value="1st Year" <?php echo (isset($formData['year_level']) && $formData['year_level'] == '1st Year') ? 'selected' : ''; ?>>1st Year</option>
                                     <option value="2nd Year" <?php echo (isset($formData['year_level']) && $formData['year_level'] == '2nd Year') ? 'selected' : ''; ?>>2nd Year</option>
@@ -911,10 +857,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                                 <?php endif; ?>
 
                                 <label class="form-label">Age: </label>
-                                <input type="number" class="form-control" name="age" style="width:15% !important;" value="<?php echo htmlspecialchars($formData['age'] ?? ''); ?>" <?php echo $resident ? 'readonly' : ''; ?>>
+                                <input type="number" class="form-control" name="age" style="width:10% !important;" value="<?php echo htmlspecialchars($formData['age'] ?? ''); ?>" <?php echo $resident ? 'readonly' : ''; ?>>
                                 
                                 <label class="form-label">Birth Day: </label>
-                                <input type="date" class="form-control" name="birth_date" style="width:30% !important;" value="<?php echo htmlspecialchars($formData['birth_date'] ?? ''); ?>" <?php echo $resident ? 'readonly' : ''; ?>>
+                                <input type="date" class="form-control" name="birth_date" style="width:25% !important;" value="<?php echo htmlspecialchars($formData['birth_date'] ?? ''); ?>" <?php echo $resident ? 'readonly' : ''; ?>>
                             </div>
 
                             <div class="col-md-12">
@@ -924,21 +870,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                             
                             <div class="col-md-12">
                                 <label class="form-label">School Last Attended: </label>
-                                <input type="text" class="form-control" name="school_last" style="width:50% !important;" value="<?php echo htmlspecialchars($formData['school_last'] ?? ''); ?>">
+                                <input type="text" class="form-control" name="school_last" style="width:45% !important;" value="<?php echo htmlspecialchars($formData['school_last'] ?? ''); ?>">
                                 <label class="form-label">Sch. Address: </label>
                                 <input type="text" class="form-control" name="school_address" style="width:40% !important;" value="<?php echo htmlspecialchars($formData['school_address'] ?? ''); ?>">
                             </div>
 
                             <div class="col-md-12">
                                 <label class="form-label print-section-title">(For first-year students) Strand/tract taken: </label>
-                                <input type="text" class="form-control" name="strand_track" style="width:60% !important;" value="<?php echo htmlspecialchars($formData['strand_track'] ?? ''); ?>">
+                                <input type="text" class="form-control" name="strand_track" style="width:55% !important;" value="<?php echo htmlspecialchars($formData['strand_track'] ?? ''); ?>">
                             </div>
 
                             <div class="col-md-12">
                                 <label class="form-label print-section-title">(For Higher year) Course taken: </label>
-                                <input type="text" class="form-control" name="course_taken" style="width:50% !important;" value="<?php echo htmlspecialchars($formData['course_taken'] ?? ''); ?>">
+                                <input type="text" class="form-control" name="course_taken" style="width:40% !important;" value="<?php echo htmlspecialchars($formData['course_taken'] ?? ''); ?>">
                                 <label class="form-label">Yr. level: </label>
-                                <select class="form-select" name="year_level_old" style="width:25% !important;">
+                                <select class="form-select" name="year_level_old" style="width:20% !important;">
                                     <option value="">Select</option>
                                     <option value="1st Year" <?php echo (isset($formData['year_level_old']) && $formData['year_level_old'] == '1st Year') ? 'selected' : ''; ?>>1st Year</option>
                                     <option value="2nd Year" <?php echo (isset($formData['year_level_old']) && $formData['year_level_old'] == '2nd Year') ? 'selected' : ''; ?>>2nd Year</option>
@@ -949,7 +895,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
 
                             <div class="col-md-12">
                                 <label class="form-label print-section-title">For Old Students: Name of BH/Dorm. you came from if any: </label>
-                                <input type="text" class="form-control" name="former_bh" style="width:50% !important;" value="<?php echo htmlspecialchars($formData['former_bh'] ?? ''); ?>">
+                                <input type="text" class="form-control" name="former_bh" style="width:45% !important;" value="<?php echo htmlspecialchars($formData['former_bh'] ?? ''); ?>">
                             </div>
 
                             <div class="col-md-12">
@@ -976,7 +922,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                                 <label class="form-label print-section-title">ROOM ASSIGNMENT: </label>
                                 <input type="text" class="form-control" name="room_assignment" style="width:70% !important;" value="<?php echo htmlspecialchars($room_assignment); ?>" readonly>
                             </div>
-                            <div class="col-md-6" style="padding-top: 30px;">
+                            <div class="col-md-6" style="padding-top: 20px;">
                                 <label class="form-label">Student's name and signature</label>
                                 <input type="text" class="form-control" name="student_signature" style="width:100% !important; border-bottom: 1px solid #000 !important;" value="<?php echo htmlspecialchars($formData['student_signature'] ?? $formData['name'] ?? ''); ?>" required>
                             </div>
@@ -1038,19 +984,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         });
 
         // ============================================================
-        // DOWNLOAD PDF FUNCTION
+        // DOWNLOAD PDF FUNCTION (HALF BOND PAPER / A5 LANDSCAPE)
         // ============================================================
         function downloadPDF() {
             const element = document.getElementById('admissionForm');
             const opt = {
-                margin:       10,
-                filename:     'Admission_Form.pdf',
+                margin:       5,   // Maliit na margin para kasya sa kalahati
+                filename:     'Admission_Form_Half_Bond.pdf',
                 image:        { type: 'jpeg', quality: 0.98 },
                 html2canvas:  { scale: 2 },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                jsPDF:        { unit: 'mm', format: 'a5', orientation: 'landscape' } // A5 Landscape = Half Bond Paper
             };
             
-            // I-print ang form as PDF
+            // I-save bilang PDF
             html2pdf().set(opt).from(element).save();
         }
 
