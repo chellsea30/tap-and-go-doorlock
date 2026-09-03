@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Residents Admission Form
  * WITH AUTO-FILL FROM RESIDENT DATA - DARK MODE - WITH PRINT FORMAT (ISU Paper Form)
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
+ * WITH PDF DOWNLOAD FUNCTION
  */
 
 // Start session
@@ -143,7 +144,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     );
                 } else {
                     // Insert new admission
-                    // FIX: Added 'room_assignment' with default 'Not Assigned'
                     $stmt = $conn->prepare("
                         INSERT INTO admission_records (
                             user_id, semester_sy, age, birth_date, home_address,
@@ -177,11 +177,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                         $data['guardian_contact'],
                         $data['student_signature'],
                         $data['status'],
-                        $room_assignment // FIX: Passed a default value
+                        $room_assignment
                     );
-                    
-                    // Since room_assignment is not in the form, we set it here
-                    $room_assignment = 'Not Assigned';
                 }
             } else {
                 // Create new user and admission
@@ -198,7 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 $stmt->close();
                 
                 // Insert admission
-                // FIX: Added 'room_assignment' with default 'Not Assigned'
+                $room_assignment = 'Not Assigned';
                 $stmt = $conn->prepare("
                     INSERT INTO admission_records (
                         user_id, semester_sy, age, birth_date, home_address,
@@ -214,7 +211,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                         ?, ?, ?, NOW()
                     )
                 ");
-                $room_assignment = 'Not Assigned'; // FIX: Default value
                 $stmt->bind_param(
                     "isississsssssssss",
                     $user_id,
@@ -239,7 +235,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             
             if ($stmt->execute()) {
                 $success = 'Admission form submitted successfully!';
-                // Clear form data if not editing
                 if ($user_id == 0) {
                     $formData = [];
                 }
@@ -265,6 +260,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
+    
+    <!-- Para sa PDF Download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
     <style>
         /* ============================================================
            RESET & BASE
@@ -525,6 +524,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         .btn-outline-primary:hover {
             background: #ffd700 !important;
             color: #0a0e1a !important;
+        }
+        
+        .btn-success {
+            background: #10b981 !important;
+            border: none !important;
+            font-size: 13px;
+            padding: 8px 18px;
+            border-radius: 10px;
+        }
+        
+        .btn-success:hover {
+            background: #059669 !important;
         }
         
         .alert-success {
@@ -798,8 +809,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                         <a href="residents.php" class="btn btn-outline-secondary btn-sm me-2">
                             <i class="fas fa-arrow-left me-1"></i> Back
                         </a>
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.print()">
+                        <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="window.print()">
                             <i class="fas fa-print me-1"></i> Print
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm" onclick="downloadPDF()">
+                            <i class="fas fa-download me-1"></i> Download Form
                         </button>
                     </div>
                 </div>
@@ -855,7 +869,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                         </div>
                     </div>
 
-                    <!-- ===== PRINT HEADER (ONLY WHEN PRINTING) ===== -->
+                    <!-- ===== PRINT HEADER (ONLY WHEN PRINTING OR DOWNLOADING) ===== -->
                     <div class="print-header-row">
                         <img src="../assets/images/isu-logo.png" alt="ISU Logo" class="print-logo">
                         <div class="print-header-text">
@@ -1022,6 +1036,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 }
             }
         });
+
+        // ============================================================
+        // DOWNLOAD PDF FUNCTION
+        // ============================================================
+        function downloadPDF() {
+            const element = document.getElementById('admissionForm');
+            const opt = {
+                margin:       10,
+                filename:     'Admission_Form.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            
+            // I-print ang form as PDF
+            html2pdf().set(opt).from(element).save();
+        }
 
         // ============================================================
         // SIDEBAR TOGGLE (mobile)
