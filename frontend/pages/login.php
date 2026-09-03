@@ -612,17 +612,16 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             margin-bottom: 30px;
         }
         
-        .brand-section .logo-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 14px;
-            background: linear-gradient(135deg, #ffd700, #f59e0b);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            color: #0a1628;
-            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.2);
+        /* Logo Image Styling */
+        .brand-section .logo img {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            object-fit: cover;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+            border: 2px solid #ffd700;
+            background: white;
+            padding: 2px;
         }
         
         .brand-section .logo-text h1 {
@@ -1375,9 +1374,9 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         <!-- ===== LEFT SIDE - BRANDING ===== -->
         <div class="brand-section">
             <div class="logo">
-                <div class="logo-icon">
-                    <i class="fas fa-door-open"></i>
-                </div>
+                <!-- Logo Image -->
+                <img src="assets/images/isu-logo.png" alt="ISU Logo">
+                
                 <div class="logo-text">
                     <h1>ISU-E <span>Ladies Dormitory</span></h1>
                     <p>Isabela State University · Echague Isabela</p>
