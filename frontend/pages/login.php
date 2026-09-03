@@ -1379,13 +1379,13 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <i class="fas fa-door-open"></i>
                 </div>
                 <div class="logo-text">
-                    <h1>ISU <span>Ladies</span></h1>
-                    <p>Isabela State University · Echague</p>
+                    <h1>ISU-E<span>Ladies Dormitory</span></h1>
+                    <p>Isabela State University · Echague Isabela</p>
                 </div>
             </div>
             
             <div class="hero-text">
-                <h2>Welcome to <span>Dormitory</span> Portal</h2>
+                <h2>Welcome to <span>Ladies Dormitory</span> Portal</h2>
                 <p>
                     Secure access to the Isabela State University Ladies Dormitory 
                     management system. Track attendance, manage residents, and 
