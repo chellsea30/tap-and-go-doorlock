@@ -1,50 +1,40 @@
-\# Tap-and-Go Doorlock System
+ Tap-and-Go Doorlock System
 
 
 
 A smart door lock system using RFID cards for dormitory/residential access control.
 
 
+Features
+- RFID card-based access control
 
-\## Features
+- Resident and visitor management
 
+- Real-time access logs
 
+- Security alerts for unauthorized access
 
-\- RFID card-based access control
+- Room occupancy tracking
 
-\- Resident and visitor management
+- Announcement system
 
-\- Real-time access logs
-
-\- Security alerts for unauthorized access
-
-\- Room occupancy tracking
-
-\- Announcement system
-
-\- Dark mode interface
+- Dark mode interface
 
 
+Technology Stack
 
-\## Technology Stack
+- Backend: PHP 8.2+
 
+- Database: MySQL
 
+- Frontend: HTML, CSS, JavaScript, Bootstrap 5
 
-\- \*\*Backend:\*\* PHP 8.2+
+- Server: Apache (XAMPP)
 
-\- \*\*Database:\*\* MySQL
-
-\- \*\*Frontend:\*\* HTML, CSS, JavaScript, Bootstrap 5
-
-\- \*\*Server:\*\* Apache (XAMPP)
-
-\- \*\*RFID Integration:\*\* PHP serial communication
+- RFID Integration: PHP serial communication
 
 
-
-\## Installation
-
-
+Installation
 
 1\. Clone the repository:
 
