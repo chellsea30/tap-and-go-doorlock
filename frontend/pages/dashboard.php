@@ -20,7 +20,7 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     exit();
 }
 // Include header
-include '../includes/header.php'; 
+include '../includes/header.php';
 
 $conn = getDBConnection();
 
