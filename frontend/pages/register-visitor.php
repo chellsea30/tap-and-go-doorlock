@@ -4,6 +4,7 @@
  * WITH AES-256-CBC ENCRYPTION
  * COMPLETE ENCRYPTED VERSION
  * PURE DARK MODE
+ * WITH DURATION OPTIONS: 1 Week, 1 Month, 5 Months (1 Semester)
  */
 
 session_start();
@@ -105,19 +106,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
     $resident_visited = (int)($_POST['resident_visited'] ?? 0);
     $purpose = trim($_POST['purpose'] ?? '');
     $validity_start = $_POST['validity_start'] ?? date('Y-m-d');
-    $validity_end = $_POST['validity_end'] ?? date('Y-m-d', strtotime('+1 week'));
+    $duration_option = $_POST['duration_option'] ?? '1week';
     $card_uid = isset($_POST['card_uid']) ? strtoupper(trim($_POST['card_uid'])) : '';
-    $duration_days = (int)($_POST['duration_days'] ?? 7);
+    
+    // ============================================================
+    // CALCULATE DURATION BASED ON SELECTED OPTION
+    // ============================================================
+    $duration_days = 7; // Default: 1 week
+    
+    switch ($duration_option) {
+        case '1week':
+            $duration_days = 7;
+            $duration_label = '1 Week';
+            break;
+        case '1month':
+            $duration_days = 30;
+            $duration_label = '1 Month';
+            break;
+        case '5months':
+            $duration_days = 150; // 5 months = ~150 days (1 semester)
+            $duration_label = '5 Months (1 Semester)';
+            break;
+        default:
+            $duration_days = 7;
+            $duration_label = '1 Week';
+    }
+    
+    // Calculate validity end
+    if (!empty($validity_start) && $duration_days > 0) {
+        $validity_end = date('Y-m-d', strtotime($validity_start . " + $duration_days days"));
+    } else {
+        $validity_end = date('Y-m-d', strtotime('+7 days'));
+    }
     
     if (empty($visitor_name) || empty($resident_visited) || empty($purpose)) {
         $error = 'Please fill in all required fields.';
     } else {
         try {
             $conn->begin_transaction();
-            
-            if (!empty($validity_start) && $duration_days > 0) {
-                $validity_end = date('Y-m-d', strtotime($validity_start . " + $duration_days days"));
-            }
             
             // ============================================================
             // ENCRYPT SENSITIVE DATA
@@ -176,7 +202,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
                     $card_expiry = $result->fetch_assoc()['expiry_date'] ?? null;
                     $check->close();
                     
+                    // Use the earlier of card expiry or visitor validity end
                     $expiry_date = $card_expiry ?? $validity_end;
+                    if ($card_expiry && $validity_end) {
+                        $expiry_date = min($card_expiry, $validity_end);
+                    }
                     
                     // ============================================================
                     // UPDATE RFID CARD WITH ENCRYPTED DATA
@@ -256,8 +286,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
                         validity_start, 
                         validity_end, 
                         access_status, 
+                        is_encrypted,
                         created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 1, NOW())
                 ");
                 $stmt->bind_param("sssissss", 
                     $encrypted_name, 
@@ -273,7 +304,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_visitor'])) 
                 if ($stmt->execute()) {
                     $conn->commit();
                     $success = "✅ Visitor registered successfully with AES-256 encryption!";
-                    logAudit($_SESSION['admin_id'], 'Register Visitor', "Registered encrypted visitor: $visitor_name");
+                    $success .= " Duration: $duration_label ($duration_days days)";
+                    $success .= " Expires: " . date('M d, Y', strtotime($validity_end));
+                    logAudit($_SESSION['admin_id'], 'Register Visitor', "Registered encrypted visitor: $visitor_name (Duration: $duration_label, $duration_days days)");
                     
                     // Refresh available cards
                     $availableCards = [];
@@ -441,9 +474,9 @@ if ($result) {
         // DECRYPT SENSITIVE DATA FOR DISPLAY
         // ============================================================
         if ($row['is_encrypted'] == 1) {
-            $row['visitor_name'] = decryptData($row['visitor_name'] ?? '');
-            $row['visitor_phone'] = decryptData($row['visitor_phone'] ?? '');
-            $row['purpose_of_visit'] = decryptData($row['purpose_of_visit'] ?? '');
+            $row['visitor_name'] = safeDecryptData($row['visitor_name'] ?? '');
+            $row['visitor_phone'] = safeDecryptData($row['visitor_phone'] ?? '');
+            $row['purpose_of_visit'] = safeDecryptData($row['purpose_of_visit'] ?? '');
         }
         $visitorCards[] = $row;
     }
@@ -638,6 +671,43 @@ if ($result && $row = $result->fetch_assoc()) {
         .text-warning { color: #fbbf24 !important; }
         .text-danger { color: #f87171 !important; }
         .text-success { color: #34d399 !important; }
+        .text-info { color: #60a5fa !important; }
+        
+        .duration-option {
+            background: #1a1a2e !important;
+            border: 2px solid #2a2a4a !important;
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #e0e0e0;
+        }
+        .duration-option:hover {
+            border-color: #2a5a9a !important;
+            background: #1a2a3e !important;
+            transform: translateY(-2px);
+        }
+        .duration-option.selected {
+            border-color: #2a5a9a !important;
+            background: #1a2a4a !important;
+            box-shadow: 0 0 20px rgba(26,58,106,0.3);
+        }
+        .duration-option .duration-icon {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .duration-option .duration-label {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .duration-option .duration-days {
+            font-size: 11px;
+            color: #808090;
+        }
+        .duration-option input[type="radio"] {
+            display: none;
+        }
         
         .btn-submit {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
@@ -858,6 +928,8 @@ if ($result && $row = $result->fetch_assoc()) {
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
             .stat-icon { width: 40px; height: 40px; font-size: 16px; }
+            .duration-option { padding: 10px; }
+            .duration-option .duration-label { font-size: 12px; }
         }
     </style>
 </head>
@@ -1033,19 +1105,67 @@ if ($result && $row = $result->fetch_assoc()) {
                                 <label class="form-label">Purpose of Visit <span class="required">*</span></label>
                                 <input type="text" class="form-control" name="purpose" placeholder="e.g., Visit friend, Meeting" required>
                             </div>
+                            
+                            <!-- ============================================================
+                            DURATION OPTIONS - 1 Week, 1 Month, 5 Months (1 Semester)
+                            ============================================================ -->
+                            <div class="col-md-12">
+                                <label class="form-label">Validity Duration <span class="required">*</span></label>
+                                <div class="row g-2">
+                                    <!-- 1 Week -->
+                                    <div class="col-4 col-md-4">
+                                        <label class="duration-option" id="duration_1week">
+                                            <input type="radio" name="duration_option" value="1week" checked>
+                                            <div class="duration-icon">📅</div>
+                                            <div class="duration-label">1 Week</div>
+                                            <div class="duration-days">7 days</div>
+                                        </label>
+                                    </div>
+                                    <!-- 1 Month -->
+                                    <div class="col-4 col-md-4">
+                                        <label class="duration-option" id="duration_1month">
+                                            <input type="radio" name="duration_option" value="1month">
+                                            <div class="duration-icon">📆</div>
+                                            <div class="duration-label">1 Month</div>
+                                            <div class="duration-days">30 days</div>
+                                        </label>
+                                    </div>
+                                    <!-- 5 Months (1 Semester) -->
+                                    <div class="col-4 col-md-4">
+                                        <label class="duration-option" id="duration_5months">
+                                            <input type="radio" name="duration_option" value="5months">
+                                            <div class="duration-icon">🎓</div>
+                                            <div class="duration-label">5 Months</div>
+                                            <div class="duration-days">150 days (1 Semester)</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <small class="text-muted mt-2 d-block">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Card will automatically expire after the selected duration
+                                </small>
+                            </div>
+                            
                             <div class="col-md-4">
                                 <label class="form-label">Validity Start <span class="required">*</span></label>
                                 <input type="date" class="form-control" name="validity_start" value="<?php echo date('Y-m-d'); ?>" required>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Duration (Days) <span class="required">*</span></label>
-                                <input type="number" class="form-control" name="duration_days" value="7" min="1" max="30" required>
+                                <label class="form-label">Validity End <span class="required">*</span></label>
+                                <input type="date" class="form-control" name="validity_end" id="validity_end" value="<?php echo date('Y-m-d', strtotime('+7 days')); ?>" readonly style="background: #0d1220 !important; cursor: not-allowed;">
+                                <small class="text-muted">Auto-calculated from duration</small>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Validity End</label>
-                                <input type="date" class="form-control" name="validity_end" value="<?php echo date('Y-m-d', strtotime('+1 week')); ?>" readonly style="background: #0d1220 !important; cursor: not-allowed;">
-                                <small class="text-muted">Auto-calculated from start + duration</small>
+                                <label class="form-label">&nbsp;</label>
+                                <div class="p-2 text-center" style="background: #0d1528; border-radius: 10px; border: 1px solid #1a2a4a;">
+                                    <span id="duration_display" class="text-info">
+                                        <i class="fas fa-clock me-1"></i>
+                                        <span id="duration_label_display">1 Week</span>
+                                        (<span id="duration_days_display">7</span> days)
+                                    </span>
+                                </div>
                             </div>
+                            
                             <div class="col-md-12">
                                 <label class="form-label">Assign RFID Card</label>
                                 <select class="form-select" name="card_uid">
@@ -1346,6 +1466,86 @@ if ($result && $row = $result->fetch_assoc()) {
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // ============================================================
+        // DURATION SELECTOR - Update display when selected
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const durationOptions = document.querySelectorAll('input[name="duration_option"]');
+            const startDateInput = document.querySelector('input[name="validity_start"]');
+            const endDateInput = document.getElementById('validity_end');
+            const durationLabelDisplay = document.getElementById('duration_label_display');
+            const durationDaysDisplay = document.getElementById('duration_days_display');
+            
+            // Duration mapping
+            const durationMap = {
+                '1week': { label: '1 Week', days: 7 },
+                '1month': { label: '1 Month', days: 30 },
+                '5months': { label: '5 Months (1 Semester)', days: 150 }
+            };
+            
+            // Update end date based on start date and duration
+            function updateEndDate() {
+                const selectedOption = document.querySelector('input[name="duration_option"]:checked');
+                if (!selectedOption) return;
+                
+                const duration = durationMap[selectedOption.value];
+                if (!duration) return;
+                
+                const startDate = new Date(startDateInput.value);
+                if (isNaN(startDate.getTime())) return;
+                
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + duration.days);
+                
+                // Format as YYYY-MM-DD
+                const year = endDate.getFullYear();
+                const month = String(endDate.getMonth() + 1).padStart(2, '0');
+                const day = String(endDate.getDate()).padStart(2, '0');
+                endDateInput.value = `${year}-${month}-${day}`;
+                
+                // Update display
+                durationLabelDisplay.textContent = duration.label;
+                durationDaysDisplay.textContent = duration.days;
+            }
+            
+            // Add click event to duration options
+            durationOptions.forEach(function(radio) {
+                radio.addEventListener('change', function() {
+                    // Update visual selection
+                    document.querySelectorAll('.duration-option').forEach(function(el) {
+                        el.classList.remove('selected');
+                    });
+                    const parentLabel = this.closest('.duration-option');
+                    if (parentLabel) {
+                        parentLabel.classList.add('selected');
+                    }
+                    updateEndDate();
+                });
+            });
+            
+            // Update on start date change
+            if (startDateInput) {
+                startDateInput.addEventListener('change', updateEndDate);
+            }
+            
+            // Initial update
+            updateEndDate();
+            
+            // Select default (1 Week)
+            const defaultOption = document.querySelector('input[name="duration_option"][value="1week"]');
+            if (defaultOption) {
+                defaultOption.checked = true;
+                const parentLabel = defaultOption.closest('.duration-option');
+                if (parentLabel) {
+                    parentLabel.classList.add('selected');
+                }
+                updateEndDate();
+            }
+        });
+        
+        // ============================================================
+        // PAGINATION
+        // ============================================================
         function changePerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
@@ -1353,34 +1553,9 @@ if ($result && $row = $result->fetch_assoc()) {
             window.location.href = '?' + urlParams.toString();
         }
         
-        document.addEventListener('DOMContentLoaded', function() {
-            const startDateInput = document.querySelector('input[name="validity_start"]');
-            const durationInput = document.querySelector('input[name="duration_days"]');
-            const endDateInput = document.querySelector('input[name="validity_end"]');
-            
-            function updateEndDate() {
-                if (startDateInput && durationInput && endDateInput) {
-                    const startDate = new Date(startDateInput.value);
-                    const duration = parseInt(durationInput.value) || 0;
-                    
-                    if (!isNaN(startDate.getTime()) && duration > 0) {
-                        const endDate = new Date(startDate);
-                        endDate.setDate(endDate.getDate() + duration);
-                        endDateInput.value = endDate.toISOString().split('T')[0];
-                    }
-                }
-            }
-            
-            if (startDateInput) {
-                startDateInput.addEventListener('change', updateEndDate);
-            }
-            if (durationInput) {
-                durationInput.addEventListener('input', updateEndDate);
-            }
-            
-            updateEndDate();
-        });
-        
+        // ============================================================
+        // TIME UPDATE
+        // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
             const timeString = now.toLocaleTimeString('en-US', { 
