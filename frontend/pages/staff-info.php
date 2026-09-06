@@ -1,7 +1,8 @@
 <?php
 /**
- * Tap-and-Go Doorlock - Staff Information
- * DARK MODE - AUTO STAFF ID - FIXED LAYOUT SAME AS DASHBOARD
+ * Tap-and-Go Doorlock - Staff Management
+ * DARK MODE - WITH CARD UID - WITH PROFILE PHOTO - WITH PRINT ID
+ * COMBINED: Staff Info + Staff Card Management
  */
 
 session_start();
@@ -35,106 +36,147 @@ function getNextStaffId($conn) {
 }
 
 // ============================================================
-// HANDLE PROFILE PHOTO UPLOAD
+// HANDLE ADD STAFF WITH CARD UID
 // ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && isset($_POST['staff_id'])) {
-    $staff_id = (int)$_POST['staff_id'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
+    $full_name = trim($_POST['full_name'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $department = trim($_POST['department'] ?? 'Staff');
+    $card_uid = strtoupper(trim($_POST['card_uid'] ?? ''));
     
-    if (isset($_FILES['profile_photo']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = '../../uploads/staff_photos/';
-        
-        if (!is_dir($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
-        }
-        
-        $file_extension = pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION);
-        $file_name = 'staff_' . $staff_id . '_' . time() . '.' . $file_extension;
-        $target_file = $upload_dir . $file_name;
-        
-        $image_info = getimagesize($_FILES['profile_photo']['tmp_name']);
-        if ($image_info !== false) {
-            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            if (in_array($image_info['mime'], $allowed_types)) {
-                if (move_uploaded_file($_FILES['profile_photo']['tmp_name'], $target_file)) {
-                    $photo_path = 'uploads/staff_photos/' . $file_name;
-                    
-                    $tableCheck = $conn->query("SHOW COLUMNS FROM staff_users LIKE 'avatar'");
-                    if ($tableCheck && $tableCheck->num_rows > 0) {
-                        $stmt = $conn->prepare("UPDATE staff_users SET avatar = ? WHERE staff_id = ?");
-                        $stmt->bind_param("si", $photo_path, $staff_id);
-                    } else {
-                        $conn->query("ALTER TABLE staff_users ADD COLUMN avatar VARCHAR(255) NULL AFTER email");
-                        $stmt = $conn->prepare("UPDATE staff_users SET avatar = ? WHERE staff_id = ?");
-                        $stmt->bind_param("si", $photo_path, $staff_id);
-                    }
-                    
-                    if ($stmt->execute()) {
-                        $success = "Profile photo uploaded successfully!";
-                    } else {
-                        $error = "Failed to update database: " . $stmt->error;
-                    }
-                    $stmt->close();
-                } else {
-                    $error = "Failed to upload photo. Please check folder permissions.";
+    if (empty($full_name) || empty($email)) {
+        $error = 'Please fill in all required fields (Name and Email).';
+    } else {
+        $check = $conn->prepare("SELECT staff_id FROM staff_users WHERE email = ?");
+        $check->bind_param("s", $email);
+        $check->execute();
+        if ($check->get_result()->num_rows > 0) {
+            $error = 'Email already exists in the system.';
+        } else {
+            if (!empty($card_uid)) {
+                $cardCheck = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE card_uid = ? AND status = 'active'");
+                $cardCheck->bind_param("s", $card_uid);
+                $cardCheck->execute();
+                if ($cardCheck->get_result()->num_rows > 0) {
+                    $error = 'Card UID is already assigned to someone else.';
                 }
-            } else {
-                $error = "Invalid file type. Please upload JPEG, PNG, GIF, or WEBP.";
+                $cardCheck->close();
             }
-        } else {
-            $error = "Uploaded file is not a valid image.";
+            
+            if (empty($error)) {
+                $staff_id_number = getNextStaffId($conn);
+                
+                $stmt = $conn->prepare("
+                    INSERT INTO staff_users (staff_id_number, full_name, email, department, card_uid, created_at)
+                    VALUES (?, ?, ?, ?, ?, NOW())
+                ");
+                $stmt->bind_param("sssss", $staff_id_number, $full_name, $email, $department, $card_uid);
+                
+                if ($stmt->execute()) {
+                    $new_id = $stmt->insert_id;
+                    
+                    if (!empty($card_uid)) {
+                        $rfidStmt = $conn->prepare("
+                            INSERT INTO rfid_cards (card_uid, user_id, card_type, issued_date, expiry_date, status)
+                            VALUES (?, ?, 'staff', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'active')
+                        ");
+                        $rfidStmt->bind_param("si", $card_uid, $new_id);
+                        $rfidStmt->execute();
+                        $rfidStmt->close();
+                    }
+                    
+                    $success = "✅ Staff added successfully!";
+                    logAudit($_SESSION['admin_id'], 'Add Staff', "Added staff: $full_name ($staff_id_number)");
+                    header('Location: staff.php?success=1');
+                    exit();
+                } else {
+                    $error = "Failed to add staff: " . $stmt->error;
+                }
+                $stmt->close();
+            }
         }
-    } else {
-        $error = "Please select a photo to upload.";
+        $check->close();
     }
 }
 
 // ============================================================
-// HANDLE PHOTO REMOVE
+// HANDLE UPDATE STAFF CARD UID
 // ============================================================
-if (isset($_GET['remove_photo']) && is_numeric($_GET['remove_photo'])) {
-    $staff_id = (int)$_GET['remove_photo'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_card'])) {
+    $staff_id = (int)$_POST['staff_id'];
+    $card_uid = strtoupper(trim($_POST['card_uid'] ?? ''));
     
-    try {
-        $stmt = $conn->prepare("SELECT avatar FROM staff_users WHERE staff_id = ?");
-        $stmt->bind_param("i", $staff_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
-        $stmt->close();
-        
-        if (!empty($row['avatar'])) {
-            $file_path = '../../' . $row['avatar'];
-            if (file_exists($file_path)) {
-                unlink($file_path);
-            }
-        }
-        
-        $stmt = $conn->prepare("UPDATE staff_users SET avatar = NULL WHERE staff_id = ?");
-        $stmt->bind_param("i", $staff_id);
-        
-        if ($stmt->execute()) {
-            $success = "Profile photo removed successfully!";
+    if (empty($card_uid)) {
+        $error = 'Please enter a Card UID.';
+    } else {
+        $check = $conn->prepare("
+            SELECT user_id FROM rfid_cards 
+            WHERE card_uid = ? AND user_id != ? AND status = 'active'
+        ");
+        $check->bind_param("si", $card_uid, $staff_id);
+        $check->execute();
+        if ($check->get_result()->num_rows > 0) {
+            $error = 'Card UID is already assigned to someone else.';
         } else {
-            $error = "Failed to remove photo: " . $stmt->error;
+            $stmt = $conn->prepare("UPDATE staff_users SET card_uid = ? WHERE staff_id = ?");
+            $stmt->bind_param("si", $card_uid, $staff_id);
+            
+            if ($stmt->execute()) {
+                $cardCheck = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE user_id = ? AND card_type = 'staff'");
+                $cardCheck->bind_param("i", $staff_id);
+                $cardCheck->execute();
+                $exists = $cardCheck->get_result()->num_rows > 0;
+                $cardCheck->close();
+                
+                if ($exists) {
+                    $rfidStmt = $conn->prepare("
+                        UPDATE rfid_cards SET card_uid = ?, status = 'active' 
+                        WHERE user_id = ? AND card_type = 'staff'
+                    ");
+                    $rfidStmt->bind_param("si", $card_uid, $staff_id);
+                } else {
+                    $rfidStmt = $conn->prepare("
+                        INSERT INTO rfid_cards (card_uid, user_id, card_type, issued_date, expiry_date, status)
+                        VALUES (?, ?, 'staff', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'active')
+                    ");
+                    $rfidStmt->bind_param("si", $card_uid, $staff_id);
+                }
+                $rfidStmt->execute();
+                $rfidStmt->close();
+                
+                $success = "✅ Card UID updated successfully!";
+                logAudit($_SESSION['admin_id'], 'Update Staff Card', "Updated card for staff ID: $staff_id to $card_uid");
+                header('Location: staff.php?card_updated=1');
+                exit();
+            } else {
+                $error = "Failed to update card: " . $stmt->error;
+            }
+            $stmt->close();
         }
-        $stmt->close();
-    } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
+        $check->close();
     }
 }
 
 // ============================================================
-// HANDLE DELETE STAFF
+// HANDLE REMOVE CARD UID
 // ============================================================
-if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
-    $delete_id = (int)$_GET['delete'];
-    $stmt = $conn->prepare("DELETE FROM staff_users WHERE staff_id = ?");
-    $stmt->bind_param("i", $delete_id);
+if (isset($_GET['remove_card']) && is_numeric($_GET['remove_card'])) {
+    $staff_id = (int)$_GET['remove_card'];
+    
+    $stmt = $conn->prepare("UPDATE staff_users SET card_uid = NULL WHERE staff_id = ?");
+    $stmt->bind_param("i", $staff_id);
     if ($stmt->execute()) {
-        $success = "Staff deleted successfully!";
-        logAudit($_SESSION['admin_id'], 'Delete Staff', "Deleted staff ID: $delete_id");
+        $rfidStmt = $conn->prepare("UPDATE rfid_cards SET status = 'deactivated' WHERE user_id = ? AND card_type = 'staff'");
+        $rfidStmt->bind_param("i", $staff_id);
+        $rfidStmt->execute();
+        $rfidStmt->close();
+        
+        $success = "✅ Card UID removed successfully!";
+        logAudit($_SESSION['admin_id'], 'Remove Staff Card', "Removed card for staff ID: $staff_id");
+        header('Location: staff.php?card_removed=1');
+        exit();
     } else {
-        $error = "Failed to delete staff.";
+        $error = "Failed to remove card: " . $stmt->error;
     }
     $stmt->close();
 }
@@ -186,16 +228,73 @@ if (isset($_GET['set_password']) && is_numeric($_GET['set_password'])) {
 }
 
 // ============================================================
-// GET STAFF LIST
+// HANDLE DELETE STAFF
+// ============================================================
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $delete_id = (int)$_GET['delete'];
+    
+    $getCard = $conn->prepare("SELECT card_uid FROM staff_users WHERE staff_id = ?");
+    $getCard->bind_param("i", $delete_id);
+    $getCard->execute();
+    $cardResult = $getCard->get_result();
+    $staffData = $cardResult->fetch_assoc();
+    $getCard->close();
+    
+    $stmt = $conn->prepare("DELETE FROM staff_users WHERE staff_id = ?");
+    $stmt->bind_param("i", $delete_id);
+    if ($stmt->execute()) {
+        if (!empty($staffData['card_uid'])) {
+            $rfidStmt = $conn->prepare("UPDATE rfid_cards SET status = 'deactivated' WHERE card_uid = ?");
+            $rfidStmt->bind_param("s", $staffData['card_uid']);
+            $rfidStmt->execute();
+            $rfidStmt->close();
+        }
+        $success = "Staff deleted successfully!";
+        logAudit($_SESSION['admin_id'], 'Delete Staff', "Deleted staff ID: $delete_id");
+        header('Location: staff.php?deleted=1');
+        exit();
+    } else {
+        $error = "Failed to delete staff.";
+    }
+    $stmt->close();
+}
+
+// ============================================================
+// GET AVAILABLE CARDS FOR DROPDOWN
+// ============================================================
+$availableCards = [];
+$result = $conn->query("
+    SELECT card_id, card_uid, card_type 
+    FROM available_rfid_cards 
+    WHERE status = 'available'
+    ORDER BY card_uid
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $availableCards[] = $row;
+    }
+}
+
+// ============================================================
+// GET STAFF LIST WITH CARD UID AND PROFILE PHOTO
 // ============================================================
 $staffList = [];
+
 $tableCheck = $conn->query("SHOW COLUMNS FROM staff_users LIKE 'avatar'");
 $hasAvatar = $tableCheck && $tableCheck->num_rows > 0;
 
 if ($hasAvatar) {
-    $result = $conn->query("SELECT * FROM staff_users ORDER BY full_name");
+    $result = $conn->query("
+        SELECT staff_id, staff_id_number, full_name, email, department, card_uid, avatar, password_hash, created_at
+        FROM staff_users
+        ORDER BY full_name
+    ");
 } else {
-    $result = $conn->query("SELECT *, NULL as avatar FROM staff_users ORDER BY full_name");
+    $result = $conn->query("
+        SELECT staff_id, staff_id_number, full_name, email, department, card_uid, NULL as avatar, password_hash, created_at
+        FROM staff_users
+        ORDER BY full_name
+    ");
 }
 
 if ($result) {
@@ -205,10 +304,17 @@ if ($result) {
 }
 
 $totalStaff = count($staffList);
+$hasCardCount = 0;
+$noCardCount = 0;
 $managementCount = 0;
 $staffCount = 0;
 
 foreach ($staffList as $staff) {
+    if (!empty($staff['card_uid'])) {
+        $hasCardCount++;
+    } else {
+        $noCardCount++;
+    }
     if (strpos($staff['department'] ?? '', 'Management') !== false) {
         $managementCount++;
     } else {
@@ -223,14 +329,14 @@ $nextStaffId = getNextStaffId($conn);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Staff Info - Tap-and-Go Doorlock</title>
+    <title>Staff Management - Tap-and-Go Doorlock</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
         /* ============================================================
-           GLOBAL DARK THEME - SAME AS DASHBOARD
+           GLOBAL DARK THEME
            ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -242,21 +348,10 @@ $nextStaffId = getNextStaffId($conn);
             padding-top: 70px !important;
         }
         
-        /* ============================================================
-           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
-           ============================================================ */
-        .container-fluid {
-            padding-top: 10px !important;
-        }
+        .container-fluid { padding-top: 10px !important; }
+        main { padding-top: 10px !important; margin-top: 0 !important; }
         
-        main {
-            padding-top: 10px !important;
-            margin-top: 0 !important;
-        }
-        
-        /* ============================================================
-           DARK NAVBAR OVERRIDE - SAME AS DASHBOARD
-           ============================================================ */
+        /* NAVBAR */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -272,9 +367,7 @@ $nextStaffId = getNextStaffId($conn);
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           DARK SIDEBAR - SAME AS DASHBOARD
-           ============================================================ */
+        /* SIDEBAR */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
@@ -295,9 +388,7 @@ $nextStaffId = getNextStaffId($conn);
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           STAFF CARD - DARK
-           ============================================================ */
+        /* STAFF CARD */
         .staff-card {
             background: #111827 !important;
             border-radius: 16px;
@@ -335,9 +426,7 @@ $nextStaffId = getNextStaffId($conn);
         }
         .staff-card .text-muted { color: #6b7280 !important; }
         
-        /* ============================================================
-           STAFF AVATAR
-           ============================================================ */
+        /* STAFF AVATAR */
         .staff-avatar {
             width: 80px;
             height: 80px;
@@ -351,8 +440,6 @@ $nextStaffId = getNextStaffId($conn);
             font-weight: 700;
             overflow: hidden;
             border: 3px solid #1a2a4a;
-            position: relative;
-            cursor: pointer;
             background: linear-gradient(135deg, #667eea, #764ba2);
         }
         .staff-avatar img {
@@ -370,22 +457,6 @@ $nextStaffId = getNextStaffId($conn);
             font-weight: 700;
             color: white;
         }
-        .staff-avatar .upload-overlay {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            text-align: center;
-            font-size: 9px;
-            padding: 2px 0;
-            opacity: 0;
-            transition: all 0.3s ease;
-        }
-        .staff-avatar:hover .upload-overlay {
-            opacity: 1;
-        }
         .staff-avatar .has-photo-badge {
             position: absolute;
             top: -5px;
@@ -401,10 +472,32 @@ $nextStaffId = getNextStaffId($conn);
             justify-content: center;
             border: 2px solid #111827;
         }
+        .staff-avatar-wrapper {
+            position: relative;
+            display: inline-block;
+        }
         
-        /* ============================================================
-           STAT CARDS - SAME AS DASHBOARD
-           ============================================================ */
+        /* CARD UID BADGE */
+        .card-uid-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+        .card-uid-badge.has-card {
+            background: rgba(16, 185, 129, 0.2) !important;
+            color: #34d399 !important;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .card-uid-badge.no-card {
+            background: rgba(239, 68, 68, 0.15) !important;
+            color: #f87171 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        /* STAT CARDS */
         .staff-stat {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -425,9 +518,7 @@ $nextStaffId = getNextStaffId($conn);
             color: #6b7280 !important;
         }
         
-        /* ============================================================
-           BUTTONS
-           ============================================================ */
+        /* BUTTONS */
         .btn-add {
             background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
             border: none !important;
@@ -445,6 +536,54 @@ $nextStaffId = getNextStaffId($conn);
             color: #0a0e1a !important;
         }
         .btn-add i { margin-right: 8px; }
+        
+        .btn-card {
+            background: rgba(139, 92, 246, 0.2) !important;
+            color: #a78bfa !important;
+            border: 1px solid rgba(139, 92, 246, 0.3) !important;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-card:hover {
+            background: rgba(139, 92, 246, 0.3) !important;
+            color: #a78bfa !important;
+        }
+        
+        .btn-card-remove {
+            background: rgba(239, 68, 68, 0.2) !important;
+            color: #fca5a5 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3) !important;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-card-remove:hover {
+            background: rgba(239, 68, 68, 0.3) !important;
+            color: #fca5a5 !important;
+        }
+        
+        .btn-print-id {
+            background: rgba(59, 130, 246, 0.2) !important;
+            color: #93c5fd !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-print-id:hover {
+            background: rgba(59, 130, 246, 0.3) !important;
+            color: #93c5fd !important;
+        }
         
         .btn-password {
             background: rgba(245, 158, 11, 0.2) !important;
@@ -475,34 +614,6 @@ $nextStaffId = getNextStaffId($conn);
         .btn-password-success:hover {
             background: rgba(16, 185, 129, 0.3) !important;
             color: #6ee7b7 !important;
-        }
-        
-        .btn-upload-photo {
-            background: rgba(139, 92, 246, 0.2) !important;
-            color: #a78bfa !important;
-            border: 1px solid rgba(139, 92, 246, 0.3) !important;
-            padding: 4px 12px;
-            border-radius: 6px;
-            font-size: 11px;
-            transition: all 0.3s ease;
-        }
-        .btn-upload-photo:hover {
-            background: rgba(139, 92, 246, 0.3) !important;
-            color: #a78bfa !important;
-        }
-        
-        .btn-remove-photo {
-            background: rgba(239, 68, 68, 0.2) !important;
-            color: #fca5a5 !important;
-            border: 1px solid rgba(239, 68, 68, 0.3) !important;
-            padding: 4px 12px;
-            border-radius: 6px;
-            font-size: 11px;
-            transition: all 0.3s ease;
-        }
-        .btn-remove-photo:hover {
-            background: rgba(239, 68, 68, 0.3) !important;
-            color: #fca5a5 !important;
         }
         
         .btn-outline-primary {
@@ -551,9 +662,6 @@ $nextStaffId = getNextStaffId($conn);
             margin-top: 8px;
         }
         
-        .has-password { color: #6ee7b7 !important; }
-        .no-password { color: #fca5a5 !important; }
-        
         .staff-id-badge {
             background: rgba(255, 215, 0, 0.1);
             color: #ffd700;
@@ -563,9 +671,10 @@ $nextStaffId = getNextStaffId($conn);
             border: 1px solid rgba(255, 215, 0, 0.15);
         }
         
-        /* ============================================================
-           MODAL - DARK
-           ============================================================ */
+        .has-password { color: #6ee7b7 !important; }
+        .no-password { color: #fca5a5 !important; }
+        
+        /* MODAL */
         .modal-content {
             background: #131926 !important;
             border-radius: 16px;
@@ -584,10 +693,8 @@ $nextStaffId = getNextStaffId($conn);
             border: 3px solid #1a2a4a;
         }
         
-        /* ============================================================
-           FORM ELEMENTS
-           ============================================================ */
-        .form-control {
+        /* FORM */
+        .form-control, .form-select {
             background: #0d1220 !important;
             border: 1px solid #1a2a4a !important;
             color: #e5e7eb !important;
@@ -595,7 +702,7 @@ $nextStaffId = getNextStaffId($conn);
             padding: 10px 14px;
             font-size: 14px;
         }
-        .form-control:focus {
+        .form-control:focus, .form-select:focus {
             border-color: #ffd700 !important;
             box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15) !important;
             background: #0d1220 !important;
@@ -609,9 +716,43 @@ $nextStaffId = getNextStaffId($conn);
         }
         .form-text { color: #6b7280 !important; }
         
-        /* ============================================================
-           ALERTS
-           ============================================================ */
+        /* AVAILABLE CARDS LIST */
+        .available-card-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 8px 10px;
+            background: #0d1220 !important;
+            border-radius: 8px;
+            border: 1px solid #1a2a4a !important;
+            min-height: 36px;
+        }
+        .available-card-list .card-item-mini {
+            display: inline-block;
+            padding: 2px 10px;
+            background: #0d1220 !important;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 11px;
+            font-weight: 600;
+            border: 2px solid #1a2a4a !important;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #e0e0e0 !important;
+        }
+        .available-card-list .card-item-mini:hover {
+            border-color: #ffd700 !important;
+            background: #1a2a4a !important;
+            transform: scale(1.05);
+        }
+        .available-card-list .card-item-mini.selected {
+            border-color: #ffd700 !important;
+            background: #1a2a4a !important;
+            color: #ffd700 !important;
+            box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15);
+        }
+        
+        /* ALERTS */
         .alert-success {
             background: rgba(16, 185, 129, 0.15) !important;
             border-color: #10b981 !important;
@@ -624,9 +765,7 @@ $nextStaffId = getNextStaffId($conn);
         }
         .btn-close { filter: invert(1) !important; }
         
-        /* ============================================================
-           BORDER & MISC
-           ============================================================ */
+        /* BORDER & MISC */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
         .text-muted { color: #6b7280 !important; }
@@ -639,7 +778,6 @@ $nextStaffId = getNextStaffId($conn);
             margin-bottom: 20px;
         }
         .card .card-body { background: transparent !important; }
-        .card .text-muted { color: #6b7280 !important; }
         .card h5 { color: #9ca3af !important; }
         
         .section-header h5 {
@@ -663,26 +801,16 @@ $nextStaffId = getNextStaffId($conn);
             100% { opacity: 1; transform: scale(1); }
         }
         
-        /* ============================================================
-           SCROLLBAR
-           ============================================================ */
+        /* SCROLLBAR */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a0e1a; }
         ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
-        /* ============================================================
-           RESPONSIVE - SAME AS DASHBOARD
-           ============================================================ */
+        /* RESPONSIVE */
         @media (max-width: 768px) {
-            body {
-                padding-top: 60px !important;
-            }
-            
-            .navbar {
-                height: 60px !important;
-            }
-            
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
@@ -695,7 +823,6 @@ $nextStaffId = getNextStaffId($conn);
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            
             .staff-card { padding: 15px; }
             .staff-card .name { font-size: 16px; }
             .staff-avatar { width: 60px; height: 60px; font-size: 24px; }
@@ -723,13 +850,11 @@ $nextStaffId = getNextStaffId($conn);
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 
-                <!-- ============================================================
-                HEADER - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- HEADER -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-user-tie me-2" style="color: #ffd700;"></i>
-                        Staff Information
+                        Staff Management
                         <span class="badge bg-secondary ms-2"><?php echo $totalStaff; ?> total</span>
                     </h1>
                     <div>
@@ -740,9 +865,9 @@ $nextStaffId = getNextStaffId($conn);
                         <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()">
                             <i class="fas fa-sync-alt"></i>
                         </button>
-                        <a href="add-staff.php" class="btn btn-primary btn-sm ms-1">
+                        <button class="btn btn-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#addStaffModal">
                             <i class="fas fa-user-plus me-1"></i> Add Staff
-                        </a>
+                        </button>
                     </div>
                 </div>
 
@@ -761,9 +886,7 @@ $nextStaffId = getNextStaffId($conn);
                     </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                STATISTICS - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- STATISTICS -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="staff-stat">
@@ -773,8 +896,14 @@ $nextStaffId = getNextStaffId($conn);
                     </div>
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="staff-stat">
-                            <div class="number"><?php echo $totalStaff; ?></div>
-                            <div class="label">Active Staff</div>
+                            <div class="number"><?php echo $hasCardCount; ?></div>
+                            <div class="label">With Card</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="staff-stat">
+                            <div class="number"><?php echo $noCardCount; ?></div>
+                            <div class="label">No Card</div>
                         </div>
                     </div>
                     <div class="col-6 col-sm-6 col-xl-3">
@@ -783,17 +912,9 @@ $nextStaffId = getNextStaffId($conn);
                             <div class="label">Management</div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-3">
-                        <div class="staff-stat">
-                            <div class="number"><?php echo $staffCount; ?></div>
-                            <div class="label">Staff</div>
-                        </div>
-                    </div>
                 </div>
 
-                <!-- ============================================================
-                STAFF LIST
-                ============================================================ -->
+                <!-- STAFF LIST -->
                 <div class="section-header mb-3">
                     <h5><i class="fas fa-list me-2"></i>Staff List</h5>
                     <small class="text-muted ms-2">
@@ -807,45 +928,52 @@ $nextStaffId = getNextStaffId($conn);
                             <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
                             <h5 class="text-muted">No staff members found</h5>
                             <p class="text-muted">Click "Add Staff" to add a staff member</p>
-                            <a href="add-staff.php" class="btn btn-primary btn-sm">
+                            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addStaffModal">
                                 <i class="fas fa-user-plus me-1"></i> Add Staff
-                            </a>
+                            </button>
                         </div>
                     </div>
                 <?php else: ?>
                     <div class="row g-4">
-                        <?php foreach ($staffList as $staff): ?>
+                        <?php foreach ($staffList as $staff): 
+                            $name = $staff['full_name'] ?? 'Staff';
+                            $initials = '';
+                            $parts = explode(' ', $name);
+                            foreach ($parts as $p) {
+                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                            }
+                            $initials = substr($initials, 0, 2) ?: 'ST';
+                            
+                            $photoPath = $staff['avatar'] ?? '';
+                            $hasPhoto = false;
+                            $fullPhotoPath = '';
+                            
+                            if (!empty($photoPath)) {
+                                if (strpos($photoPath, 'uploads/') === 0) {
+                                    $fullPhotoPath = '../../' . $photoPath;
+                                } else {
+                                    $fullPhotoPath = '../../uploads/staff_photos/' . $photoPath;
+                                }
+                                if (file_exists($fullPhotoPath)) {
+                                    $hasPhoto = true;
+                                }
+                            }
+                        ?>
                             <div class="col-md-4 col-lg-3">
                                 <div class="staff-card">
                                     <!-- Staff Avatar -->
-                                    <div class="staff-avatar" 
-                                         data-bs-toggle="modal" 
-                                         data-bs-target="#photoModal<?php echo $staff['staff_id']; ?>"
-                                         title="Click to upload/change photo">
-                                        <?php 
-                                            $photoPath = $staff['avatar'] ?? '';
-                                            $fullPath = '../../' . $photoPath;
-                                            
-                                            if (!empty($photoPath) && file_exists($fullPath)):
-                                        ?>
-                                            <img src="<?php echo $fullPath; ?>" 
-                                                 alt="Staff Photo"
-                                                 onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
-                                            <span class="has-photo-badge">
-                                                <i class="fas fa-check-circle"></i>
-                                            </span>
-                                        <?php else: 
-                                            $name = $staff['full_name'] ?? 'Staff';
-                                            $initials = '';
-                                            $parts = explode(' ', $name);
-                                            foreach ($parts as $p) {
-                                                if (!empty($p)) $initials .= strtoupper($p[0]);
-                                            }
-                                            echo '<div class="no-photo">' . substr($initials, 0, 2) . '</div>';
-                                        endif; 
-                                        ?>
-                                        <div class="upload-overlay">
-                                            <i class="fas fa-camera me-1"></i> Upload
+                                    <div class="staff-avatar-wrapper">
+                                        <div class="staff-avatar">
+                                            <?php if ($hasPhoto): ?>
+                                                <img src="<?php echo $fullPhotoPath; ?>" 
+                                                     alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
+                                                     onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
+                                                <span class="has-photo-badge">
+                                                    <i class="fas fa-check-circle"></i>
+                                                </span>
+                                            <?php else: ?>
+                                                <div class="no-photo"><?php echo $initials; ?></div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                     
@@ -856,14 +984,20 @@ $nextStaffId = getNextStaffId($conn);
                                             <?php echo htmlspecialchars($staff['staff_id_number']); ?>
                                         </span>
                                     </div>
+                                    
+                                    <!-- Card UID -->
                                     <div class="mt-2">
-                                        <span class="badge-active"><i class="fas fa-check-circle me-1"></i> Active</span>
-                                    </div>
-                                    <div class="mt-2">
-                                        <span class="text-muted small">
-                                            <i class="fas fa-envelope me-1"></i>
-                                            <?php echo htmlspecialchars($staff['email']); ?>
-                                        </span>
+                                        <?php if (!empty($staff['card_uid'])): ?>
+                                            <span class="card-uid-badge has-card">
+                                                <i class="fas fa-id-card me-1"></i>
+                                                <?php echo htmlspecialchars($staff['card_uid']); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="card-uid-badge no-card">
+                                                <i class="fas fa-times-circle me-1"></i>
+                                                No Card
+                                            </span>
+                                        <?php endif; ?>
                                     </div>
                                     
                                     <!-- Password Status -->
@@ -879,24 +1013,47 @@ $nextStaffId = getNextStaffId($conn);
                                         <?php endif; ?>
                                     </div>
                                     
+                                    <div class="mt-1">
+                                        <span class="text-muted small">
+                                            <i class="fas fa-envelope me-1"></i>
+                                            <?php echo htmlspecialchars($staff['email']); ?>
+                                        </span>
+                                    </div>
+                                    
                                     <!-- Staff Actions -->
                                     <div class="staff-actions">
+                                        <?php if (!empty($staff['card_uid'])): ?>
+                                            <a href="print-staff-id.php?uid=<?php echo $staff['card_uid']; ?>" 
+                                               target="_blank" 
+                                               class="btn-print-id">
+                                                <i class="fas fa-print me-1"></i> Print ID
+                                            </a>
+                                        <?php endif; ?>
+                                        
                                         <button type="button" 
-                                                class="btn btn-sm btn-upload-photo"
+                                                class="btn btn-card"
                                                 data-bs-toggle="modal" 
-                                                data-bs-target="#photoModal<?php echo $staff['staff_id']; ?>">
-                                            <i class="fas fa-camera"></i>
+                                                data-bs-target="#cardModal<?php echo $staff['staff_id']; ?>">
+                                            <i class="fas fa-id-card me-1"></i> Card
                                         </button>
+                                        
+                                        <?php if (!empty($staff['card_uid'])): ?>
+                                            <a href="?remove_card=<?php echo $staff['staff_id']; ?>" 
+                                               class="btn btn-card-remove"
+                                               onclick="return confirm('Remove card from <?php echo $staff['full_name']; ?>?')">
+                                                <i class="fas fa-times me-1"></i> Remove
+                                            </a>
+                                        <?php endif; ?>
                                         
                                         <?php if (empty($staff['password_hash']) || $staff['password_hash'] == ''): ?>
                                             <a href="?set_password=<?php echo $staff['staff_id']; ?>" 
-                                               class="btn btn-sm btn-password"
+                                               class="btn btn-password"
                                                onclick="return confirm('Set password for <?php echo $staff['full_name']; ?>?')">
-                                                <i class="fas fa-key me-1"></i> Set Password
+                                                <i class="fas fa-key me-1"></i> Set PW
                                             </a>
                                         <?php else: ?>
                                             <a href="?set_password=<?php echo $staff['staff_id']; ?>" 
-                                               class="btn btn-sm btn-password-success"
+                                               class="btn btn-password-success"
                                                onclick="return confirm('Reset password for <?php echo $staff['full_name']; ?>?')">
                                                 <i class="fas fa-sync-alt me-1"></i> Reset
                                             </a>
@@ -912,71 +1069,84 @@ $nextStaffId = getNextStaffId($conn);
                                 </div>
                             </div>
 
-                            <!-- PHOTO UPLOAD MODAL -->
-                            <div class="modal fade" id="photoModal<?php echo $staff['staff_id']; ?>" tabindex="-1">
+                            <!-- CARD UID MODAL -->
+                            <div class="modal fade" id="cardModal<?php echo $staff['staff_id']; ?>" tabindex="-1">
                                 <div class="modal-dialog modal-dialog-centered">
                                     <div class="modal-content">
                                         <div class="modal-header">
                                             <h5 class="modal-title">
-                                                <i class="fas fa-camera me-2"></i>
-                                                Profile Photo - <?php echo htmlspecialchars($staff['full_name']); ?>
+                                                <i class="fas fa-id-card me-2"></i>
+                                                Staff Card - <?php echo htmlspecialchars($staff['full_name']); ?>
                                             </h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                         </div>
-                                        <div class="modal-body text-center">
-                                            <div class="mb-3">
-                                                <?php 
-                                                    $photoPath = $staff['avatar'] ?? '';
-                                                    $fullPath = '../../' . $photoPath;
-                                                    if (!empty($photoPath) && file_exists($fullPath)):
-                                                ?>
-                                                    <img src="<?php echo $fullPath; ?>" 
-                                                         alt="Current Photo"
-                                                         class="photo-preview">
-                                                    <div class="mt-2">
-                                                        <a href="?remove_photo=<?php echo $staff['staff_id']; ?>" 
-                                                           class="btn btn-sm btn-remove-photo"
-                                                           onclick="return confirm('Remove this photo?')">
-                                                            <i class="fas fa-trash me-1"></i> Remove Photo
-                                                        </a>
-                                                    </div>
-                                                <?php else: ?>
-                                                    <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:48px;font-weight:700;color:white;">
-                                                        <?php 
-                                                            $name = $staff['full_name'] ?? 'Staff';
-                                                            $initials = '';
-                                                            $parts = explode(' ', $name);
-                                                            foreach ($parts as $p) {
-                                                                if (!empty($p)) $initials .= strtoupper($p[0]);
-                                                            }
-                                                            echo substr($initials, 0, 2);
-                                                        ?>
-                                                    </div>
-                                                    <div class="mt-2 text-muted small">
-                                                        <i class="fas fa-info-circle me-1"></i>
-                                                        No photo uploaded yet
-                                                    </div>
-                                                <?php endif; ?>
+                                        <div class="modal-body">
+                                            <div class="mb-3 text-center">
+                                                <div style="width:80px;height:80px;border-radius:50%;margin:0 auto;overflow:hidden;border:3px solid #1a2a4a;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:white;">
+                                                    <?php if ($hasPhoto): ?>
+                                                        <img src="<?php echo $fullPhotoPath; ?>" 
+                                                             alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
+                                                             style="width:100%;height:100%;object-fit:cover;"
+                                                             onerror="this.style.display='none'; this.parentElement.textContent='<?php echo $initials; ?>';">
+                                                    <?php else: ?>
+                                                        <?php echo $initials; ?>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div class="mt-2">
+                                                    <strong><?php echo htmlspecialchars($staff['full_name']); ?></strong>
+                                                </div>
+                                                <div class="text-muted small">
+                                                    <?php echo htmlspecialchars($staff['staff_id_number']); ?>
+                                                </div>
                                             </div>
                                             
                                             <hr>
                                             
-                                            <form method="POST" enctype="multipart/form-data">
+                                            <form method="POST" action="">
                                                 <input type="hidden" name="staff_id" value="<?php echo $staff['staff_id']; ?>">
-                                                <div class="mb-3">
-                                                    <label class="form-label">Upload New Photo</label>
-                                                    <input type="file" 
-                                                           class="form-control" 
-                                                           name="profile_photo" 
-                                                           accept="image/*"
-                                                           required>
-                                                    <div class="form-text text-muted small">
-                                                        <i class="fas fa-info-circle me-1"></i>
-                                                        Max size: 2MB. Allowed: JPG, PNG, GIF, WEBP
+                                                <input type="hidden" name="update_card" value="1">
+                                                
+                                                <div class="mb-2">
+                                                    <label class="form-label">Current Card UID</label>
+                                                    <div class="form-control" style="background:#0d1220 !important;border:1px solid #1a2a4a !important;border-radius:10px;padding:10px 14px;color:#e5e7eb !important;">
+                                                        <?php if (!empty($staff['card_uid'])): ?>
+                                                            <span class="text-success"><i class="fas fa-check-circle me-1"></i> <?php echo htmlspecialchars($staff['card_uid']); ?></span>
+                                                        <?php else: ?>
+                                                            <span class="text-danger"><i class="fas fa-times-circle me-1"></i> No card assigned</span>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </div>
-                                                <button type="submit" name="upload_photo" class="btn btn-primary">
-                                                    <i class="fas fa-upload me-1"></i> Upload Photo
+                                                
+                                                <?php if (!empty($availableCards)): ?>
+                                                    <div class="mb-2">
+                                                        <label class="form-label">Available Cards (Click to auto-fill)</label>
+                                                        <div class="available-card-list" id="availableCardList<?php echo $staff['staff_id']; ?>">
+                                                            <?php foreach ($availableCards as $card): ?>
+                                                                <span class="card-item-mini" data-uid="<?php echo $card['card_uid']; ?>" onclick="selectCard(this, 'cardUid<?php echo $staff['staff_id']; ?>')">
+                                                                    <?php echo $card['card_uid']; ?>
+                                                                </span>
+                                                            <?php endforeach; ?>
+                                                        </div>
+                                                        <small class="text-muted">Click a card above to auto-fill the UID</small>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <div class="alert alert-warning">
+                                                        <i class="fas fa-info-circle me-1"></i>
+                                                        No available cards in inventory.
+                                                    </div>
+                                                <?php endif; ?>
+                                                
+                                                <div class="mb-2">
+                                                    <label class="form-label">New Card UID</label>
+                                                    <input type="text" class="form-control" name="card_uid" id="cardUid<?php echo $staff['staff_id']; ?>" placeholder="Enter new card UID">
+                                                    <div class="form-text text-muted small">
+                                                        <i class="fas fa-info-circle me-1"></i>
+                                                        Enter UID or click an available card above
+                                                    </div>
+                                                </div>
+                                                
+                                                <button type="submit" class="btn btn-primary w-100">
+                                                    <i class="fas fa-save me-1"></i> Update Card
                                                 </button>
                                             </form>
                                         </div>
@@ -987,19 +1157,76 @@ $nextStaffId = getNextStaffId($conn);
                     </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                FOOTER - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- FOOTER -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
                     <span id="serverTime">Server Time: <?php echo date('F d, Y h:i A'); ?></span>
                     <span class="mx-2">|</span>
-                    <span>Total: <?php echo $totalStaff; ?> staff members</span>
-                    <span class="mx-2">|</span>
-                    <span class="text-warning"><i class="fas fa-id-card me-1"></i>Next ID: <?php echo $nextStaffId; ?></span>
+                    <span><?php echo $hasCardCount; ?> with card, <?php echo $noCardCount; ?> without card</span>
                 </footer>
             </main>
+        </div>
+    </div>
+
+    <!-- ADD STAFF MODAL -->
+    <div class="modal fade" id="addStaffModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-user-plus me-2"></i>
+                        Add New Staff
+                        <span class="badge bg-secondary ms-2"><?php echo $nextStaffId; ?></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" action="">
+                        <input type="hidden" name="add_staff" value="1">
+                        
+                        <div class="mb-2">
+                            <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="full_name" placeholder="Enter full name" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" name="email" placeholder="staff@example.com" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Department</label>
+                            <input type="text" class="form-control" name="department" placeholder="e.g., Security, Admin, Maintenance">
+                        </div>
+                        
+                        <?php if (!empty($availableCards)): ?>
+                            <div class="mb-2">
+                                <label class="form-label">Available Cards (Click to auto-fill)</label>
+                                <div class="available-card-list" id="availableCardListAdd">
+                                    <?php foreach ($availableCards as $card): ?>
+                                        <span class="card-item-mini" data-uid="<?php echo $card['card_uid']; ?>" onclick="selectCard(this, 'cardUidAdd')">
+                                            <?php echo $card['card_uid']; ?>
+                                        </span>
+                                    <?php endforeach; ?>
+                                </div>
+                                <small class="text-muted">Click a card above to auto-fill the UID</small>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <div class="mb-2">
+                            <label class="form-label">Card UID</label>
+                            <input type="text" class="form-control" name="card_uid" id="cardUidAdd" placeholder="Enter card UID (optional)">
+                            <div class="form-text text-muted small">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Leave empty to add staff without card, or assign a card above
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-save me-1"></i> Add Staff
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1008,7 +1235,21 @@ $nextStaffId = getNextStaffId($conn);
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
-        // UPDATE TIME - SAME AS DASHBOARD
+        // SELECT CARD FROM AVAILABLE LIST
+        // ============================================================
+        function selectCard(element, inputId) {
+            const uid = element.dataset.uid;
+            document.getElementById(inputId).value = uid;
+            
+            const parentList = element.closest('.available-card-list');
+            parentList.querySelectorAll('.card-item-mini').forEach(el => {
+                el.classList.remove('selected');
+            });
+            element.classList.add('selected');
+        }
+
+        // ============================================================
+        // UPDATE TIME
         // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
