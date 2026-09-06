@@ -478,7 +478,7 @@ if ($user_id) {
     <!-- ===== SIDEBAR ===== -->
     <?php include 'includes/sidebar.php'; ?>
 
-    <!-- ===== NAVBAR ===== -->
+<!-- ===== NAVBAR (Separate file) ===== -->
     <?php include 'includes/navbar.php'; ?>
 
     <!-- ===== MAIN CONTENT ===== -->
