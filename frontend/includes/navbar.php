@@ -3,11 +3,11 @@
         <a class="navbar-brand" href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? 'student-dashboard.php' : 'dashboard.php'; ?>">
             <i class="fas fa-door-open me-2"></i> Tap-and-Go
             <?php if (isset($_SESSION['role']) && $_SESSION['role'] == 'student'): ?>
-                <span class="badge bg-success ms-2" style="font-size:10px;">Student</span>
+                <span class="badge bg-success ms-2" style="font-size: 14px; padding: 6px 12px; border-radius: 8px;">Student</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'administrator'): ?>
-                <span class="badge bg-danger ms-2" style="font-size:10px;">Admin</span>
+                <span class="badge bg-danger ms-2" style="font-size: 14px; padding: 6px 12px; border-radius: 8px;">Admin</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'staff'): ?>
-                <span class="badge bg-primary ms-2" style="font-size:10px;">Staff</span>
+                <span class="badge bg-primary ms-2" style="font-size: 14px; padding: 6px 12px; border-radius: 8px;">Staff</span>
             <?php endif; ?>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
