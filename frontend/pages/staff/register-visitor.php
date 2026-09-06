@@ -6,6 +6,7 @@
  * PURE DARK MODE
  * WITH DURATION OPTIONS: 1 Week, 1 Month, 5 Months (1 Semester)
  * STAFF VERSION - SAME AS ADMIN
+ * FIXED: Sidebar position
  */
 
 session_start();
@@ -600,8 +601,17 @@ if (isset($_SESSION['staff_id'])) {
             padding-top: 70px !important;
         }
         
-        .container-fluid { padding-top: 10px !important; }
-        main { padding-top: 10px !important; margin-top: 0 !important; }
+        /* ============================================================
+           FIX: MAIN CONTENT OFFSET
+           ============================================================ */
+        .container-fluid {
+            padding-top: 10px !important;
+        }
+        
+        main {
+            padding-top: 10px !important;
+            margin-top: 0 !important;
+        }
         
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
@@ -618,11 +628,21 @@ if (isset($_SESSION['staff_id'])) {
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
+        /* ============================================================
+           SIDEBAR - FIXED POSITION (SAME AS DASHBOARD)
+           ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
             padding-top: 80px !important;
             min-height: calc(100vh - 70px) !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            width: 260px !important;
+            z-index: 100 !important;
+            overflow-y: auto !important;
         }
         .sidebar .nav-link {
             color: #9090a0 !important;
@@ -637,6 +657,15 @@ if (isset($_SESSION['staff_id'])) {
         }
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
+        
+        /* ============================================================
+           MAIN CONTENT - OFFSET FOR SIDEBAR
+           ============================================================ */
+        .main-content {
+            margin-left: 260px !important;
+            padding: 20px 30px !important;
+            min-height: calc(100vh - 70px) !important;
+        }
         
         .stat-card {
             background: #111827 !important;
@@ -959,21 +988,28 @@ if (isset($_SESSION['staff_id'])) {
             100% { opacity: 1; transform: scale(1); }
         }
         
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
         @media (max-width: 768px) {
             body { padding-top: 60px !important; }
             .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
-                position: fixed;
-                top: 60px;
-                bottom: 0;
-                left: -280px;
-                width: 280px;
-                transition: left 0.3s ease;
-                z-index: 999;
+                position: fixed !important;
+                top: 60px !important;
+                bottom: 0 !important;
+                left: -280px !important;
+                width: 280px !important;
+                transition: left 0.3s ease !important;
+                z-index: 999 !important;
                 min-height: calc(100vh - 60px) !important;
             }
-            .sidebar.show { left: 0; }
+            .sidebar.show { left: 0 !important; }
+            .main-content {
+                margin-left: 0 !important;
+                padding: 15px !important;
+            }
             .form-section { padding: 20px; }
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
@@ -985,14 +1021,13 @@ if (isset($_SESSION['staff_id'])) {
 </head>
 <body class="<?php echo $darkModeClass; ?>">
     
- <!-- ===== NAVBAR ===== -->
-    <?php include __DIR__ . '/includes/navbar_staff.php'; ?>    
+    <?php include __DIR__ . '/includes/navbar_staff.php'; ?>
     
     <div class="container-fluid">
         <div class="row">
             <?php include __DIR__ . '/includes/sidebar_staff.php'; ?>
             
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+            <main class="main-content">
                 
                 <!-- HEADER -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
@@ -1163,13 +1198,10 @@ if (isset($_SESSION['staff_id'])) {
                                 <input type="text" class="form-control" name="purpose" placeholder="e.g., Visit friend, Meeting" required>
                             </div>
                             
-                            <!-- ============================================================
-                            DURATION OPTIONS - 1 Week, 1 Month, 5 Months (1 Semester)
-                            ============================================================ -->
+                            <!-- DURATION OPTIONS -->
                             <div class="col-md-12">
                                 <label class="form-label">Validity Duration <span class="required">*</span></label>
                                 <div class="row g-2">
-                                    <!-- 1 Week -->
                                     <div class="col-4 col-md-4">
                                         <label class="duration-option" id="duration_1week">
                                             <input type="radio" name="duration_option" value="1week" checked>
@@ -1178,7 +1210,6 @@ if (isset($_SESSION['staff_id'])) {
                                             <div class="duration-days">7 days</div>
                                         </label>
                                     </div>
-                                    <!-- 1 Month -->
                                     <div class="col-4 col-md-4">
                                         <label class="duration-option" id="duration_1month">
                                             <input type="radio" name="duration_option" value="1month">
@@ -1187,7 +1218,6 @@ if (isset($_SESSION['staff_id'])) {
                                             <div class="duration-days">30 days</div>
                                         </label>
                                     </div>
-                                    <!-- 5 Months (1 Semester) -->
                                     <div class="col-4 col-md-4">
                                         <label class="duration-option" id="duration_5months">
                                             <input type="radio" name="duration_option" value="5months">
