@@ -785,9 +785,8 @@ if (isset($_SESSION['staff_id'])) {
 </head>
 <body class="<?php echo $darkModeClass; ?>">
     
-    <!-- ===== NAVBAR ===== -->
-    <?php include __DIR__ . '/../../includes/navbar_staff.php'; ?>
-    
+ <!-- ===== NAVBAR ===== -->
+    <?php include __DIR__ . '/includes/navbar_staff.php'; ?>
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toastContainer"></div>
     
