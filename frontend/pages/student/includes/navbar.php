@@ -2,15 +2,15 @@
     <div class="container-fluid">
         <a class="navbar-brand" href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? 'student-dashboard.php' : 'dashboard.php'; ?>">
             
-            <!-- ===== LOGO ===== -->
-            <img src="../assets/images/isu-logo.png" alt="ISU Logo" style="width: 55px; height: 55px; border-radius: 50%; object-fit: contain; border: 2px solid #ffd700; background: white; padding: 2px; margin-right: 15px;">
+            <!-- ===== LOGO (TAMANG PATH: ../../assets) ===== -->
+            <img src="../../assets/images/isu-logo.png" alt="ISU Logo" style="width: 55px; height: 55px; border-radius: 50%; object-fit: contain; border: 2px solid #ffd700; background: white; padding: 2px; margin-right: 15px;">
             
             <!-- ===== ISU-E LADIES DORMITORY (MAS MALAKI NA TEXT) ===== -->
             <span style="font-size: 24px; font-weight: 900; color: #ffffff; letter-spacing: 1px; line-height: 1;">
                 ISU-E <span style="color: #ffd700;">LADIES DORMITORY</span>
             </span>
             
-            <!-- ===== WELCOME BACK MESSAGE PER ROLE (MAS MALAKI AT MAY KULAY) ===== -->
+            <!-- ===== WELCOME BACK MESSAGE PER ROLE ===== -->
             <?php if (isset($_SESSION['role']) && $_SESSION['role'] == 'student'): ?>
                 <span class="ms-4 fw-bold" style="font-size: 20px; color: #34d399;">Welcome back, STUDENT! 👋</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'administrator'): ?>
@@ -24,19 +24,16 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         
-        <!-- ===== TINANGGAL NA ANG MGA NAV LINKS (Dashboard, Residents, etc.) PARA MALINIS ===== -->
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto">
-                <!-- User Dropdown -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-user-circle me-1" style="font-size: 20px;"></i>
                         <?php echo htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['student_name'] ?? 'User'); ?>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <!-- ===== LOGOUT LANG ===== -->
                         <li>
-                            <a class="dropdown-item text-danger" href="../../logout.php" data-bs-toggle="modal" data-bs-target="#logoutModal">
+                            <a class="dropdown-item text-danger" href="../login.php" data-bs-toggle="modal" data-bs-target="#logoutModal">
                                 <i class="fas fa-sign-out-alt me-2"></i> Logout
                             </a>
                         </li>
@@ -76,7 +73,7 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times me-1"></i> Cancel
                 </button>
-                <a href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? '../student-logout.php' : '../logout.php'; ?>" class="btn btn-danger">
+                <a href="../login.php" class="btn btn-danger">
                     <i class="fas fa-sign-out-alt me-1"></i> Yes, Logout
                 </a>
             </div>
