@@ -1,4 +1,4 @@
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+<nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: linear-gradient(135deg, #0d1528, #1a2a4a) !important; border-bottom: 1px solid #1a2a4a !important;">
     <div class="container-fluid">
         <a class="navbar-brand" href="staff_dashboard.php">
             
@@ -10,7 +10,7 @@
                 ISU-E <span style="color: #ffd700;">LADIES DORMITORY</span>
             </span>
             
-            <!-- ===== WELCOME BACK STAFF ===== -->
+            <!-- ===== WELCOME BACK STAFF (PINALAKI AT MAY KULAY) ===== -->
             <span class="ms-4 fw-bold" style="font-size: 20px; color: #3b82f6;">Welcome back, STAFF! 👋</span>
             
         </a>
