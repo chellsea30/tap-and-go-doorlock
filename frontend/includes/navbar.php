@@ -1,16 +1,23 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
     <div class="container-fluid">
         <a class="navbar-brand" href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? 'student-dashboard.php' : 'dashboard.php'; ?>">
-            <!-- Bagong Text para sa Roles na may kulay -->
+            
+            <!-- ===== LOGO AT PANGALAN NG DORMITORY ===== -->
+            <img src="../assets/images/isu-logo.png" alt="ISU Logo" style="width: 45px; height: 45px; border-radius: 50%; object-fit: contain; border: 2px solid #ffd700; background: white; padding: 2px; margin-right: 10px; vertical-align: middle;">
+            
+            <span style="font-size: 18px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px; vertical-align: middle;">
+                ISU-E <span style="color: #ffd700;">LADIES DORMITORY</span>
+            </span>
+            
+            <!-- ===== WELCOME BACK MESSAGE PER ROLE (MAS MALAKI AT MAY KULAY) ===== -->
             <?php if (isset($_SESSION['role']) && $_SESSION['role'] == 'student'): ?>
-                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold" style="font-size: 20px; color: #34d399;">STUDENT</span>
+                <span class="ms-3 fw-bold" style="font-size: 16px; color: #34d399;">Welcome back, STUDENT! 👋</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'administrator'): ?>
-                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold" style="font-size: 20px; color: #ffd700;">ADMIN</span>
+                <span class="ms-3 fw-bold" style="font-size: 16px; color: #ffd700;">Welcome back, ADMIN! 👋</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'staff'): ?>
-                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold" style="font-size: 20px; color: #3b82f6;">STAFF</span>
-            <?php else: ?>
-                <i class="fas fa-door-open me-2"></i> Tap-and-Go
+                <span class="ms-3 fw-bold" style="font-size: 16px; color: #3b82f6;">Welcome back, STAFF! 👋</span>
             <?php endif; ?>
+            
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
@@ -128,6 +135,14 @@
 </div>
 
 <style>
+    /* ===== NAVBAR CUSTOM STYLES ===== */
+    .navbar-brand {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
     /* ===== LOGOUT MODAL DARK MODE COMPATIBILITY ===== */
     .modal-content {
         border-radius: 16px;
@@ -223,6 +238,16 @@
     
     /* ===== RESPONSIVE ===== */
     @media (max-width: 768px) {
+        .navbar-brand {
+            gap: 2px;
+        }
+        .navbar-brand img {
+            width: 35px !important;
+            height: 35px !important;
+        }
+        .navbar-brand span {
+            font-size: 14px !important;
+        }
         .modal-dialog {
             margin: 10px;
         }
