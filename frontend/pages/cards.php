@@ -7,6 +7,7 @@
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
  * WITH PROFILE PHOTO SUPPORT
  * WITH PRINT ID BUTTON
+ * WITH DECRYPTION FOR VISITOR DATA
  */
 
 session_start();
@@ -130,7 +131,7 @@ if ($page < 1) $page = 1;
 $offset = ($page - 1) * $perPage;
 
 // ============================================================
-// GET CARDS WITH USER INFO
+// GET CARDS WITH USER INFO - WITH DECRYPTION
 // ============================================================
 $cards = [];
 $query = "
@@ -164,6 +165,14 @@ $query .= " ORDER BY c.status = 'active' DESC, c.created_at DESC LIMIT $perPage 
 $result = $conn->query($query);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
+        // ============================================================
+        // ✅ DECRYPT VISITOR DATA FOR DISPLAY
+        // ============================================================
+        if ($row['card_type'] == 'visitor' && $row['is_encrypted'] == 1) {
+            $row['visitor_name'] = safeDecryptData($row['visitor_name'] ?? '');
+            $row['visitor_phone'] = safeDecryptData($row['visitor_phone'] ?? '');
+            $row['purpose_of_visit'] = safeDecryptData($row['purpose_of_visit'] ?? '');
+        }
         $cards[] = $row;
     }
 }
@@ -714,6 +723,21 @@ if (isset($_SESSION['admin_id'])) {
         }
         
         /* ============================================================
+           ENCRYPTION BADGE
+           ============================================================ */
+        .encryption-badge {
+            background: #1a3a6a !important;
+            color: #93c5fd !important;
+            border: 1px solid #2a5a9a !important;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 8px;
+        }
+        .encryption-badge i {
+            margin-right: 2px;
+        }
+        
+        /* ============================================================
            BORDER & MISC
            ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
@@ -809,7 +833,12 @@ if (isset($_SESSION['admin_id'])) {
             <main class="main-content">
                 <!-- Page Header -->
                 <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
-                    <h1><i class="fas fa-id-card me-2"></i>RFID Cards</h1>
+                    <h1>
+                        <i class="fas fa-id-card me-2"></i>RFID Cards
+                        <span class="encryption-badge ms-2">
+                            <i class="fas fa-lock"></i> AES-256
+                        </span>
+                    </h1>
                     <div class="btn-toolbar">
                         <a href="register-rfid.php" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus me-1"></i> Register New Card
@@ -1043,6 +1072,11 @@ if (isset($_SESSION['admin_id'])) {
                                                     <div>
                                                         <div class="name">
                                                             <?php echo htmlspecialchars($display_name); ?>
+                                                            <?php if ($card['card_type'] == 'visitor' && $card['is_encrypted'] == 1): ?>
+                                                                <span class="encryption-badge ms-1">
+                                                                    <i class="fas fa-lock"></i>
+                                                                </span>
+                                                            <?php endif; ?>
                                                             <span class="status-badge status-<?php echo $card['status']; ?> ms-1">
                                                                 <?php echo ucfirst($card['status']); ?>
                                                             </span>
@@ -1058,11 +1092,11 @@ if (isset($_SESSION['admin_id'])) {
                                                             <?php if ($card['card_type'] == 'visitor' && $tenant_name): ?>
                                                                 <span class="mx-1">•</span>
                                                                 <i class="fas fa-user me-1"></i>
-                                                                <strong>Tenant:</strong> <?php echo htmlspecialchars($tenant_name); ?>
+                                                                <strong>Visiting:</strong> <?php echo htmlspecialchars($tenant_name); ?>
                                                             <?php endif; ?>
                                                         </div>
                                                         <div class="detail">
-                                                            <i class="fas fa-user me-1"></i>
+                                                            <i class="fas fa-phone me-1"></i>
                                                             <?php 
                                                                 if ($card['card_type'] == 'visitor') {
                                                                     echo htmlspecialchars($card['visitor_phone'] ?? 'N/A');
@@ -1078,8 +1112,16 @@ if (isset($_SESSION['admin_id'])) {
                                                                 <span class="mx-1">•</span>
                                                                 Year <?php echo htmlspecialchars($card['year_level']); ?>
                                                             <?php endif; ?>
+                                                            <?php if ($card['card_type'] == 'visitor' && !empty($card['purpose_of_visit'])): ?>
+                                                                <span class="mx-1">•</span>
+                                                                <i class="fas fa-info-circle me-1"></i>
+                                                                <?php echo htmlspecialchars($card['purpose_of_visit']); ?>
+                                                            <?php endif; ?>
                                                         </div>
                                                         <div class="detail">
+                                                            <i class="fas fa-id-card me-1"></i>
+                                                            <span class="uid"><?php echo htmlspecialchars($card['card_uid']); ?></span>
+                                                            <span class="mx-1">|</span>
                                                             <i class="far fa-calendar-alt me-1"></i>
                                                             Issued: <?php echo date('M d, Y', strtotime($card['issued_date'])); ?>
                                                             <?php if ($card['expiry_date']): ?>
@@ -1237,9 +1279,13 @@ if (isset($_SESSION['admin_id'])) {
                         <i class="fas fa-clock me-1 text-warning"></i>
                         <span class="text-warning"><?php echo $stats['expiring_soon']; ?> expiring soon</span>
                     <?php endif; ?>
+                    <span class="mx-1">|</span>
+                    <i class="fas fa-lock me-1 text-info"></i>
+                    <span class="text-info">AES-256 Encrypted</span>
                 </div>
             </main>
         </div>
+    </div>
 
     <?php include '../includes/footer.php'; ?>
     
