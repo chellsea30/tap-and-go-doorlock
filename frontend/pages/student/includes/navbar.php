@@ -1,31 +1,42 @@
-<nav class="navbar navbar-expand-lg fixed-top">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
     <div class="container-fluid">
-        <button class="navbar-toggler me-2" type="button" onclick="toggleSidebar()">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand" href="dashboard.php">
-            <!-- Logo -->
-            <img src="../../assets/images/isu-logo.png" alt="ISU Logo" style="width: 45px; height: 45px; border-radius: 50%; object-fit: contain; border: 2px solid #ffd700; background: white; padding: 2px; margin-right: 10px; vertical-align: middle;">
+        <a class="navbar-brand" href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? 'student-dashboard.php' : 'dashboard.php'; ?>">
             
-            <!-- Pangalan ng Dormitory -->
-            <span style="font-size: 20px; font-weight: 900; color: #ffffff; letter-spacing: 1px; vertical-align: middle;">
+            <!-- ===== LOGO ===== -->
+            <img src="../assets/images/isu-logo.png" alt="ISU Logo" style="width: 55px; height: 55px; border-radius: 50%; object-fit: contain; border: 2px solid #ffd700; background: white; padding: 2px; margin-right: 15px;">
+            
+            <!-- ===== ISU-E LADIES DORMITORY (MAS MALAKI NA TEXT) ===== -->
+            <span style="font-size: 24px; font-weight: 900; color: #ffffff; letter-spacing: 1px; line-height: 1;">
                 ISU-E <span style="color: #ffd700;">LADIES DORMITORY</span>
             </span>
             
-            <!-- Welcome Back Student -->
-            <span class="ms-3 fw-bold" style="font-size: 18px; color: #34d399; vertical-align: middle;">Welcome back, STUDENT! 👋</span>
+            <!-- ===== WELCOME BACK MESSAGE PER ROLE (MAS MALAKI AT MAY KULAY) ===== -->
+            <?php if (isset($_SESSION['role']) && $_SESSION['role'] == 'student'): ?>
+                <span class="ms-4 fw-bold" style="font-size: 20px; color: #34d399;">Welcome back, STUDENT! 👋</span>
+            <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'administrator'): ?>
+                <span class="ms-4 fw-bold" style="font-size: 20px; color: #ffd700;">Welcome back, ADMIN! 👋</span>
+            <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'staff'): ?>
+                <span class="ms-4 fw-bold" style="font-size: 20px; color: #3b82f6;">Welcome back, STAFF! 👋</span>
+            <?php endif; ?>
+            
         </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <!-- ===== TINANGGAL NA ANG MGA NAV LINKS (Dashboard, Residents, etc.) PARA MALINIS ===== -->
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto">
+                <!-- User Dropdown -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-user-circle me-1" style="font-size: 20px;"></i>
-                        <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?>
+                        <?php echo htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['student_name'] ?? 'User'); ?>
                     </a>
-                    <!-- Dito: Logout Lang -->
                     <ul class="dropdown-menu dropdown-menu-end">
+                        <!-- ===== LOGOUT LANG ===== -->
                         <li>
-                            <a class="dropdown-item text-danger" href="../../login.php">
+                            <a class="dropdown-item text-danger" href="../../logout.php" data-bs-toggle="modal" data-bs-target="#logoutModal">
                                 <i class="fas fa-sign-out-alt me-2"></i> Logout
                             </a>
                         </li>
@@ -36,64 +47,98 @@
     </div>
 </nav>
 
+<!-- ===== LOGOUT CONFIRMATION MODAL ===== -->
+<div class="modal fade" id="logoutModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sign-out-alt me-2" style="color: #ef4444;"></i>
+                    Confirm Logout
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <i class="fas fa-question-circle fa-4x mb-3" style="color: #f59e0b;"></i>
+                <h5 class="mb-2">Are you sure you want to logout?</h5>
+                <p class="text-muted mb-0">You will be redirected to the login page.</p>
+                <div class="mt-3">
+                    <span class="badge bg-secondary">
+                        <i class="fas fa-user me-1"></i>
+                        <?php echo htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['student_name'] ?? 'User'); ?>
+                    </span>
+                    <span class="badge <?php echo isset($_SESSION['role']) && $_SESSION['role'] == 'student' ? 'bg-success' : (isset($_SESSION['role']) && $_SESSION['role'] == 'administrator' ? 'bg-danger' : 'bg-primary'); ?> ms-1">
+                        <?php echo ucfirst($_SESSION['role'] ?? 'User'); ?>
+                    </span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Cancel
+                </button>
+                <a href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? '../student-logout.php' : '../logout.php'; ?>" class="btn btn-danger">
+                    <i class="fas fa-sign-out-alt me-1"></i> Yes, Logout
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
-    /* ===== NAVBAR STYLES ===== */
-    .navbar {
-        background: linear-gradient(135deg, #0a1628, #1a2a4a) !important;
-        border-bottom: 1px solid #1e2a3a !important;
-        height: 56px;
-        padding: 0 20px;
-        z-index: 1050;
-    }
+    /* ===== NAVBAR CUSTOM STYLES ===== */
     .navbar-brand {
         display: flex;
         align-items: center;
-        gap: 5px;
-    }
-    .logout-btn {
-        color: rgba(255,255,255,0.7) !important;
-        padding: 6px 16px;
-        border-radius: 8px;
-        border: 1px solid rgba(255,255,255,0.15);
-        text-decoration: none;
-        font-size: 14px;
-        transition: all 0.3s ease;
-    }
-    .logout-btn:hover {
-        background: rgba(255,255,255,0.1) !important;
-        color: white !important;
-    }
-    .navbar-text {
-        color: rgba(255,255,255,0.8) !important;
-        font-size: 14px;
+        flex-wrap: wrap;
+        gap: 10px;
     }
     
-    /* ===== DARK MODE DROPDOWN MENU ===== */
-    .dropdown-menu {
-        background: #131926 !important;
-        border: 1px solid #1e2a3a !important;
-        border-radius: 12px !important;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+    /* ===== LOGOUT MODAL DARK MODE COMPATIBILITY ===== */
+    .modal-content {
+        border-radius: 16px;
+        border: none;
     }
-    .dropdown-item {
-        color: #e5e7eb !important;
-        font-size: 14px;
-        padding: 10px 15px;
-        border-radius: 8px;
+    .modal-header {
+        border-bottom: 1px solid #e5e7eb;
+        padding: 20px 25px;
+    }
+    .modal-footer {
+        border-top: 1px solid #e5e7eb;
+        padding: 15px 25px;
+    }
+    .modal-body h5 {
+        color: #1a1a2e;
+    }
+    .modal-body .text-muted {
+        color: #6b7280;
+    }
+    .btn-secondary {
+        background: #e5e7eb;
+        border: none;
+        color: #4b5563;
+        padding: 8px 25px;
+        border-radius: 10px;
+        font-weight: 500;
         transition: all 0.3s ease;
     }
-    .dropdown-item.text-danger {
-        color: #f87171 !important;
+    .btn-secondary:hover {
+        background: #d1d5db;
+        color: #1a1a2e;
     }
-    .dropdown-item.text-danger:hover {
-        background: rgba(239, 68, 68, 0.1) !important;
-        color: #fca5a5 !important;
+    .btn-danger {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        border: none;
+        padding: 8px 25px;
+        border-radius: 10px;
+        font-weight: 500;
+        transition: all 0.3s ease;
     }
-    .dropdown-divider {
-        border-color: #1e2a3a !important;
+    .btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
     }
     
-    /* ===== DARK MODE MODAL ===== */
+    /* ===== DARK MODE STYLES ===== */
     body.dark-mode .modal-content {
         background: #131926 !important;
         border: 1px solid #1e2a3a;
@@ -117,34 +162,90 @@
         background: rgba(107, 114, 128, 0.3) !important;
         color: #9ca3af !important;
     }
+    body.dark-mode .modal-body .badge.bg-success {
+        background: rgba(16, 185, 129, 0.2) !important;
+        color: #6ee7b7 !important;
+    }
+    body.dark-mode .modal-body .badge.bg-danger {
+        background: rgba(239, 68, 68, 0.2) !important;
+        color: #fca5a5 !important;
+    }
+    body.dark-mode .modal-body .badge.bg-primary {
+        background: rgba(59, 130, 246, 0.2) !important;
+        color: #93c5fd !important;
+    }
     body.dark-mode .btn-secondary {
         background: #1e2a3a !important;
-        border: none !important;
         color: #e5e7eb !important;
     }
     body.dark-mode .btn-secondary:hover {
         background: #2d3548 !important;
-        color: #e5e7eb !important;
+        color: #ffd700 !important;
     }
     body.dark-mode .btn-close {
         filter: invert(1) !important;
     }
     
     /* ===== RESPONSIVE ===== */
+    @media (max-width: 992px) {
+        .navbar-brand {
+            flex-wrap: wrap;
+        }
+        .navbar-brand img {
+            width: 40px !important;
+            height: 40px !important;
+        }
+        .navbar-brand span {
+            font-size: 18px !important;
+        }
+        .ms-4 {
+            margin-left: 0 !important;
+            margin-top: 5px;
+            display: block;
+            width: 100%;
+        }
+    }
+    
     @media (max-width: 768px) {
+        .navbar-brand {
+            gap: 2px;
+        }
         .navbar-brand img {
             width: 35px !important;
             height: 35px !important;
         }
         .navbar-brand span {
-            font-size: 14px !important;
+            font-size: 15px !important;
         }
-        .navbar-text {
-            margin-bottom: 5px;
+        .modal-dialog {
+            margin: 10px;
         }
-        .logout-btn {
-            margin-top: 10px;
-            display: inline-block;
+        .modal-body {
+            padding: 20px;
+        }
+        .modal-body i.fa-4x {
+            font-size: 3rem !important;
         }
     }
 </style>
+
+<script>
+    // ===== KEYBOARD SHORTCUT: Ctrl + Shift + L =====
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.shiftKey && (e.key === 'l' || e.key === 'L')) {
+            e.preventDefault();
+            const modal = new bootstrap.Modal(document.getElementById('logoutModal'));
+            modal.show();
+        }
+    });
+
+    // ===== AUTO-CLOSE DROPDOWN WHEN CLICKING OUTSIDE =====
+    document.addEventListener('click', function(event) {
+        const dropdowns = document.querySelectorAll('.dropdown-menu');
+        dropdowns.forEach(function(dropdown) {
+            if (!dropdown.parentElement.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+    });
+</script>
