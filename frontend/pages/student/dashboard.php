@@ -1,7 +1,7 @@
 <?php
 /**
- * Tap-and-Go Doorlock - Student Dashboard
- * DARK MODE - NO WHITE BACKGROUNDS
+ * Tap-and-Go Doorlock - Student Dashboard (dashboard.php)
+ * DARK MODE - NO WHITE BACKGROUNDS - SEPARATE NAVBAR
  */
 
 session_start();
@@ -200,6 +200,7 @@ $initials = substr($initials, 0, 2) ?: 'S';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
+    
     <style>
         /* ================================================================
            DARK MODE STYLES - NO WHITE BACKGROUNDS
@@ -216,7 +217,7 @@ $initials = substr($initials, 0, 2) ?: 'S';
             min-height: 100vh;
         }
         
-        /* ===== NAVBAR ===== */
+        /* ===== NAVBAR (Purely from includes/navbar.php) ===== */
         .navbar {
             background: linear-gradient(135deg, #0a1628, #1a2a4a) !important;
             border-bottom: 1px solid #1e2a3a;
@@ -629,147 +630,8 @@ $initials = substr($initials, 0, 2) ?: 'S';
     <!-- ===== SIDEBAR OVERLAY (mobile) ===== -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-   <!-- ===== NAVBAR ===== -->
-<nav class="navbar navbar-expand-lg fixed-top">
-    <div class="container-fluid">
-        <button class="navbar-toggler me-2" type="button" onclick="toggleSidebar()">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand" href="dashboard.php">
-            <i class="fas fa-door-open me-2"></i> Tap-and-Go
-        </a>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link active" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="access-history.php"><i class="fas fa-clock"></i> Access History</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="my-rfid.php"><i class="fas fa-id-card"></i> My RFID Card</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="announcements.php"><i class="fas fa-bullhorn"></i> Announcements</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="concerns.php"><i class="fas fa-exclamation-circle"></i> Concerns</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="request-reset.php"><i class="fas fa-key"></i> Reset Password</a>
-                </li>
-            </ul>
-            <div class="d-flex align-items-center">
-                <span class="navbar-text me-2">
-                    <i class="fas fa-user-graduate me-1"></i>
-                    <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?>
-                    <span class="student-badge ms-1">Student</span>
-                </span>
-                <a href="#" class="logout-btn" data-bs-toggle="modal" data-bs-target="#logoutModal">
-                    <i class="fas fa-sign-out-alt me-1"></i> Logout
-                </a>
-            </div>
-        </div>
-    </div>
-</nav>
-
-<!-- ===== LOGOUT CONFIRMATION MODAL ===== -->
-<div class="modal fade" id="logoutModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-sign-out-alt me-2" style="color: #ef4444;"></i>
-                    Confirm Logout
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center py-4">
-                <i class="fas fa-question-circle fa-4x mb-3" style="color: #f59e0b;"></i>
-                <h5 class="mb-2">Are you sure you want to logout?</h5>
-                <p class="text-muted mb-0">You will be redirected to the login page.</p>
-                <div class="mt-3">
-                    <span class="badge bg-secondary">
-                        <i class="fas fa-user me-1"></i>
-                        <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?>
-                    </span>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-1"></i> Cancel
-                </button>
-                <a href="../../logout.php" class="btn btn-danger">
-                    <i class="fas fa-sign-out-alt me-1"></i> Yes, Logout
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<style>
-    /* ===== LOGOUT MODAL DARK MODE ===== */
-    body.dark-mode .modal-content {
-        background: #131926 !important;
-        border: 1px solid #1e2a3a;
-    }
-    body.dark-mode .modal-header {
-        border-bottom: 1px solid #1e2a3a;
-    }
-    body.dark-mode .modal-footer {
-        border-top: 1px solid #1e2a3a;
-    }
-    body.dark-mode .modal-title {
-        color: #ffd700 !important;
-    }
-    body.dark-mode .modal-body h5 {
-        color: #e5e7eb !important;
-    }
-    body.dark-mode .modal-body .text-muted {
-        color: #6b7280 !important;
-    }
-    body.dark-mode .modal-body .badge.bg-secondary {
-        background: rgba(107, 114, 128, 0.3) !important;
-        color: #9ca3af !important;
-    }
-    body.dark-mode .btn-secondary {
-        background: #1e2a3a !important;
-        border: none !important;
-        color: #e5e7eb !important;
-    }
-    body.dark-mode .btn-secondary:hover {
-        background: #2d3548 !important;
-        color: #e5e7eb !important;
-    }
-    body.dark-mode .btn-close {
-        filter: invert(1) !important;
-    }
-    
-    /* ===== RESPONSIVE ===== */
-    @media (max-width: 768px) {
-        .logout-btn {
-            margin-top: 10px;
-            display: inline-block;
-        }
-        .navbar-text {
-            margin-bottom: 5px;
-        }
-    }
-</style>
-
-<script>
-    // Optional: Keyboard shortcut for logout (Ctrl+Shift+L)
-    document.addEventListener('keydown', function(e) {
-        if (e.ctrlKey && e.shiftKey && e.key === 'L') {
-            e.preventDefault();
-            const modal = new bootstrap.Modal(document.getElementById('logoutModal'));
-            modal.show();
-        }
-    });
-</script>
+    <!-- ===== NAVBAR (Separate file) ===== -->
+    <?php include 'includes/navbar.php'; ?>
 
     <!-- ===== MAIN CONTENT ===== -->
     <main class="main-content">
