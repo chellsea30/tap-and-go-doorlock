@@ -298,11 +298,6 @@
                             <i class="fas fa-user-plus me-2"></i> + New Visitor
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'visitor-logs.php' ? 'active' : ''; ?>" href="visitor-logs.php">
-                            <i class="fas fa-clock me-2"></i> Visitor Logs
-                        </a>
-                    </li>
                 </ul>
             </li>
             
