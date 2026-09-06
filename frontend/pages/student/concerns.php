@@ -566,58 +566,14 @@ foreach ($concerns as $c) {
 </head>
 <body>
 
-    <!-- ===== NAVBAR ===== -->
-    <nav class="navbar navbar-expand-lg fixed-top">
-        <div class="container-fluid">
-            <button class="navbar-toggler me-2" type="button" onclick="toggleSidebar()">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <a class="navbar-brand" href="dashboard.php">
-                <i class="fas fa-door-open me-2"></i> Tap-and-Go
-            </a>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="access-history.php"><i class="fas fa-clock"></i> Access History</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="my-rfid.php"><i class="fas fa-id-card"></i> My RFID Card</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="announcements.php"><i class="fas fa-bullhorn"></i> Announcements</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="concerns.php"><i class="fas fa-exclamation-circle"></i> Concerns</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="request-reset.php"><i class="fas fa-key"></i> Reset Password</a>
-                    </li>
-                </ul>
-                <div class="d-flex align-items-center">
-                    <span class="navbar-text me-2">
-                        <i class="fas fa-user-graduate me-1"></i>
-                        <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?>
-                        <span class="student-badge ms-1">Student</span>
-                    </span>
-                    <a href="../../logout.php" class="logout-btn">
-                        <i class="fas fa-sign-out-alt me-1"></i> Logout
-                    </a>
-                </div>
-            </div>
-        </div>
-    </nav>
-
     <!-- ===== SIDEBAR OVERLAY (mobile) ===== -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
     <!-- ===== SIDEBAR ===== -->
     <?php include 'includes/sidebar.php'; ?>
+
+    <!-- ===== NAVBAR (Separate file) ===== -->
+    <?php include 'includes/navbar.php'; ?>
 
     <!-- ===== MAIN CONTENT ===== -->
     <main class="main-content">
