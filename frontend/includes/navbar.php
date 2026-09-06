@@ -1,13 +1,13 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
     <div class="container-fluid">
         <a class="navbar-brand" href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? 'student-dashboard.php' : 'dashboard.php'; ?>">
-            <!-- Bagong Text para sa Roles -->
+            <!-- Bagong Text para sa Roles na may kulay -->
             <?php if (isset($_SESSION['role']) && $_SESSION['role'] == 'student'): ?>
-                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold text-success" style="font-size: 18px;">STUDENT</span>
+                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold" style="font-size: 20px; color: #34d399;">STUDENT</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'administrator'): ?>
-                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold text-danger" style="font-size: 18px;">ADMIN</span>
+                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold" style="font-size: 20px; color: #ffd700;">ADMIN</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'staff'): ?>
-                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold text-primary" style="font-size: 18px;">STAFF</span>
+                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold" style="font-size: 20px; color: #3b82f6;">STAFF</span>
             <?php else: ?>
                 <i class="fas fa-door-open me-2"></i> Tap-and-Go
             <?php endif; ?>
