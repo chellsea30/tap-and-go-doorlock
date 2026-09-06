@@ -1,7 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Student Access History
- * DARK MODE - FULLY READABLE
+ * DARK MODE - FULLY READABLE - WITH CORRECT LOGO PATH
  */
 
 session_start();
@@ -192,45 +192,6 @@ if ($user_id) {
             padding-top: 56px;
             min-height: 100vh;
         }
-        
-        /* ===== NAVBAR ===== */
-        .navbar {
-            background: linear-gradient(135deg, #0a1628, #1a2a4a) !important;
-            border-bottom: 1px solid #1e2a3a;
-            height: 56px;
-            padding: 0 20px;
-            z-index: 1050;
-        }
-        .navbar-brand { color: #ffd700 !important; font-weight: 700; font-size: 18px; }
-        .navbar-brand i { color: #ffd700; }
-        .navbar .nav-link {
-            color: rgba(255,255,255,0.7) !important;
-            font-size: 14px;
-            padding: 8px 15px;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
-        .navbar .nav-link:hover { color: white !important; background: rgba(255,255,255,0.08); }
-        .navbar .nav-link.active { color: white !important; background: rgba(255,215,0,0.15); }
-        .navbar .nav-link i { margin-right: 6px; }
-        .logout-btn {
-            color: rgba(255,255,255,0.7) !important;
-            padding: 6px 16px;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.15);
-            text-decoration: none;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-        .logout-btn:hover { background: rgba(255,255,255,0.1); color: white !important; }
-        .student-badge {
-            background: rgba(255, 215, 0, 0.15);
-            color: #ffd700;
-            padding: 2px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-        }
-        .navbar-text { color: rgba(255,255,255,0.8) !important; font-size: 14px; }
         
         /* ===== SIDEBAR ===== */
         .sidebar {
@@ -511,58 +472,14 @@ if ($user_id) {
 </head>
 <body>
 
-    <!-- ===== NAVBAR ===== -->
-    <nav class="navbar navbar-expand-lg fixed-top">
-        <div class="container-fluid">
-            <button class="navbar-toggler me-2" type="button" onclick="toggleSidebar()">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <a class="navbar-brand" href="dashboard.php">
-                <i class="fas fa-door-open me-2"></i> Tap-and-Go
-            </a>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="access-history.php"><i class="fas fa-clock"></i> Access History</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="my-rfid.php"><i class="fas fa-id-card"></i> My RFID Card</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="announcements.php"><i class="fas fa-bullhorn"></i> Announcements</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="concerns.php"><i class="fas fa-exclamation-circle"></i> Concerns</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="request-reset.php"><i class="fas fa-key"></i> Reset Password</a>
-                    </li>
-                </ul>
-                <div class="d-flex align-items-center">
-                    <span class="navbar-text me-2">
-                        <i class="fas fa-user-graduate me-1"></i>
-                        <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?>
-                        <span class="student-badge ms-1">Student</span>
-                    </span>
-                    <a href="../../logout.php" class="logout-btn">
-                        <i class="fas fa-sign-out-alt me-1"></i> Logout
-                    </a>
-                </div>
-            </div>
-        </div>
-    </nav>
-
     <!-- ===== SIDEBAR OVERLAY (mobile) ===== -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
     <!-- ===== SIDEBAR ===== -->
     <?php include 'includes/sidebar.php'; ?>
+
+    <!-- ===== NAVBAR ===== -->
+    <?php include 'includes/navbar.php'; ?>
 
     <!-- ===== MAIN CONTENT ===== -->
     <main class="main-content">
@@ -628,13 +545,12 @@ if ($user_id) {
                                 <th>RFID UID</th>
                                 <th>Type</th>
                                 <th>Status</th>
-                                <th>Power Source</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($accessHistory)): ?>
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">
+                                    <td colspan="4" class="text-center text-muted py-4">
                                         <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                         <?php if (!$user_id): ?>
                                             <p>No user account linked to your student profile.</p>
@@ -674,12 +590,6 @@ if ($user_id) {
                                                 <br>
                                                 <span class="text-muted small"><?php echo htmlspecialchars($log['reason']); ?></span>
                                             <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <span class="badge <?php echo $log['power_source'] == 'main' ? 'bg-success' : 'bg-warning'; ?>">
-                                                <i class="fas <?php echo $log['power_source'] == 'main' ? 'fa-bolt' : 'fa-battery-quarter'; ?> me-1"></i>
-                                                <?php echo ucfirst($log['power_source']); ?>
-                                            </span>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
