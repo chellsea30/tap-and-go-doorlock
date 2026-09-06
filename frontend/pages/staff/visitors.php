@@ -1,8 +1,10 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Staff Visitors Management
- * VIEW ONLY - Same as Admin but Read Only
- * PURE DARK MODE - Fully Readable
+ * SAME AS ADMIN - WITH ADD/EDIT/DELETE - WITH ENCRYPTION
+ * PURE DARK MODE - FULLY READABLE
+ * WITH EXPIRY DATE AND CARD STATUS
+ * WITH COUNTDOWN TIMER FOR EXPIRING CARDS & VISITS
  */
 
 // Start session
@@ -11,6 +13,7 @@ session_start();
 // Load config and functions
 require_once __DIR__ . '/../../../backend/config/config.php';
 require_once __DIR__ . '/../../../backend/helpers/functions.php';
+require_once __DIR__ . '/../../../backend/helpers/encryption.php';
 
 // Check authentication - Staff only
 if (!isset($_SESSION['staff_id']) || !isStaffSessionValid()) {
@@ -24,7 +27,241 @@ include __DIR__ . '/../../includes/navbar_staff.php';
 $conn = getDBConnection();
 
 // ============================================================
-// GET RESIDENTS LIST FOR DROPDOWN (View Only)
+// AUTO-CHECK EXPIRED CARDS ON PAGE LOAD
+// ============================================================
+$expired_deactivated = checkExpiredVisitorCards();
+if ($expired_deactivated > 0) {
+    $success = "✅ $expired_deactivated expired visitor card(s) have been automatically deactivated.";
+}
+
+// ============================================================
+// HANDLE DELETE
+// ============================================================
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $delete_id = (int)$_GET['delete'];
+    
+    $stmt = $conn->prepare("SELECT visitor_name FROM visitor_logs WHERE visitor_log_id = ?");
+    $stmt->bind_param("i", $delete_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $encrypted_name = $row['visitor_name'] ?? '';
+    $stmt->close();
+    
+    $stmt = $conn->prepare("DELETE FROM visitor_logs WHERE visitor_log_id = ?");
+    $stmt->bind_param("i", $delete_id);
+    
+    if ($stmt->execute()) {
+        $decrypted_name = decryptData($encrypted_name);
+        $success = "Visitor record deleted successfully!";
+        logStaffAudit($_SESSION['staff_id'], 'Delete Visitor', "Deleted visitor: " . ($decrypted_name ?: "ID: $delete_id"));
+    } else {
+        $error = "Failed to delete: " . $stmt->error;
+    }
+    $stmt->close();
+}
+
+// ============================================================
+// HANDLE CHECK-IN / CHECK-OUT
+// ============================================================
+if (isset($_GET['checkin']) && is_numeric($_GET['checkin'])) {
+    $visitor_id = (int)$_GET['checkin'];
+    
+    $checkStmt = $conn->prepare("
+        SELECT v.*, c.expiry_date, c.status as card_status 
+        FROM visitor_logs v
+        LEFT JOIN rfid_cards c ON v.temporary_card_uid = c.card_uid
+        WHERE v.visitor_log_id = ?
+    ");
+    $checkStmt->bind_param("i", $visitor_id);
+    $checkStmt->execute();
+    $checkResult = $checkStmt->get_result();
+    $visitorData = $checkResult->fetch_assoc();
+    $checkStmt->close();
+    
+    if ($visitorData && $visitorData['card_status'] == 'expired') {
+        $error = "❌ Cannot check in. Visitor card has expired.";
+    } elseif ($visitorData && $visitorData['expiry_date'] && strtotime($visitorData['expiry_date']) < time()) {
+        $error = "❌ Cannot check in. Visitor card expired on " . date('M d, Y', strtotime($visitorData['expiry_date']));
+    } else {
+        $stmt = $conn->prepare("UPDATE visitor_logs SET entry_timestamp = NOW(), access_status = 'granted' WHERE visitor_log_id = ?");
+        $stmt->bind_param("i", $visitor_id);
+        
+        if ($stmt->execute()) {
+            $nameStmt = $conn->prepare("SELECT visitor_name FROM visitor_logs WHERE visitor_log_id = ?");
+            $nameStmt->bind_param("i", $visitor_id);
+            $nameStmt->execute();
+            $nameResult = $nameStmt->get_result();
+            $nameRow = $nameResult->fetch_assoc();
+            $nameStmt->close();
+            $visitor_name = decryptData($nameRow['visitor_name'] ?? '');
+            
+            $success = "Visitor checked in successfully!";
+            logStaffAudit($_SESSION['staff_id'], 'Visitor Check In', "Checked in: " . ($visitor_name ?: "ID: $visitor_id"));
+        } else {
+            $error = "Failed to check in: " . $stmt->error;
+        }
+        $stmt->close();
+    }
+}
+
+if (isset($_GET['checkout']) && is_numeric($_GET['checkout'])) {
+    $visitor_id = (int)$_GET['checkout'];
+    
+    $nameStmt = $conn->prepare("SELECT visitor_name FROM visitor_logs WHERE visitor_log_id = ?");
+    $nameStmt->bind_param("i", $visitor_id);
+    $nameStmt->execute();
+    $nameResult = $nameStmt->get_result();
+    $nameRow = $nameResult->fetch_assoc();
+    $nameStmt->close();
+    $visitor_name = decryptData($nameRow['visitor_name'] ?? '');
+    
+    $stmt = $conn->prepare("UPDATE visitor_logs SET exit_timestamp = NOW() WHERE visitor_log_id = ?");
+    $stmt->bind_param("i", $visitor_id);
+    
+    if ($stmt->execute()) {
+        $success = "Visitor checked out successfully!";
+        logStaffAudit($_SESSION['staff_id'], 'Visitor Check Out', "Checked out: " . ($visitor_name ?: "ID: $visitor_id"));
+    } else {
+        $error = "Failed to check out: " . $stmt->error;
+    }
+    $stmt->close();
+}
+
+// ============================================================
+// HANDLE RENEW CARD
+// ============================================================
+if (isset($_GET['renew']) && !empty($_GET['renew'])) {
+    $card_uid = $_GET['renew'];
+    $new_expiry = date('Y-m-d', strtotime('+1 year'));
+    
+    $stmt = $conn->prepare("UPDATE rfid_cards SET expiry_date = ?, status = 'active' WHERE card_uid = ?");
+    $stmt->bind_param("ss", $new_expiry, $card_uid);
+    
+    if ($stmt->execute()) {
+        $success = "✅ Card renewed successfully! New expiry: " . date('M d, Y', strtotime($new_expiry));
+        logStaffAudit($_SESSION['staff_id'], 'Renew Card', "Renewed card: $card_uid");
+    } else {
+        $error = "Failed to renew card: " . $stmt->error;
+    }
+    $stmt->close();
+}
+
+// ============================================================
+// HANDLE ADD/EDIT VISITOR - WITH ENCRYPTION
+// ============================================================
+$visitor = null;
+$edit_id = isset($_GET['edit']) ? (int)$_GET['edit'] : 0;
+
+if ($edit_id > 0) {
+    $stmt = $conn->prepare("SELECT * FROM visitor_logs WHERE visitor_log_id = ?");
+    $stmt->bind_param("i", $edit_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $visitor = $result->fetch_assoc();
+    $stmt->close();
+    
+    if ($visitor) {
+        $visitor['visitor_name'] = decryptData($visitor['visitor_name'] ?? '');
+        $visitor['purpose_of_visit'] = decryptData($visitor['purpose_of_visit'] ?? '');
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
+    $visitor_name = trim($_POST['visitor_name'] ?? '');
+    $resident_visited = (int)($_POST['resident_visited'] ?? 0);
+    $purpose = trim($_POST['purpose_of_visit'] ?? '');
+    $validity_start = $_POST['validity_start'] ?? date('Y-m-d');
+    $validity_end = $_POST['validity_end'] ?? date('Y-m-d', strtotime('+1 week'));
+    $access_status = $_POST['access_status'] ?? 'pending';
+    $temporary_card_uid = trim($_POST['temporary_card_uid'] ?? '');
+    
+    if (empty($visitor_name) || empty($resident_visited) || empty($purpose)) {
+        $error = 'Please fill in all required fields.';
+    } else {
+        if (!empty($temporary_card_uid)) {
+            $cardCheck = $conn->prepare("SELECT status, expiry_date FROM rfid_cards WHERE card_uid = ?");
+            $cardCheck->bind_param("s", $temporary_card_uid);
+            $cardCheck->execute();
+            $cardResult = $cardCheck->get_result();
+            $cardData = $cardResult->fetch_assoc();
+            $cardCheck->close();
+            
+            if ($cardData && $cardData['status'] == 'expired') {
+                $error = "❌ Cannot assign expired card. Please activate a new card.";
+            }
+        }
+        
+        if (empty($error)) {
+            $encrypted_name = encryptData($visitor_name);
+            $encrypted_purpose = encryptData($purpose);
+            
+            if ($edit_id > 0) {
+                $stmt = $conn->prepare("
+                    UPDATE visitor_logs SET 
+                        visitor_name = ?, 
+                        resident_visited = ?, 
+                        purpose_of_visit = ?, 
+                        validity_start = ?, 
+                        validity_end = ?, 
+                        access_status = ?,
+                        temporary_card_uid = ?,
+                        is_encrypted = 1
+                    WHERE visitor_log_id = ?
+                ");
+                $stmt->bind_param("sisssssi", 
+                    $encrypted_name, 
+                    $resident_visited, 
+                    $encrypted_purpose, 
+                    $validity_start, 
+                    $validity_end, 
+                    $access_status, 
+                    $temporary_card_uid, 
+                    $edit_id
+                );
+            } else {
+                $stmt = $conn->prepare("
+                    INSERT INTO visitor_logs (
+                        visitor_name, 
+                        resident_visited, 
+                        purpose_of_visit, 
+                        validity_start, 
+                        validity_end, 
+                        access_status, 
+                        temporary_card_uid, 
+                        is_encrypted,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW())
+                ");
+                $stmt->bind_param("sisssss", 
+                    $encrypted_name, 
+                    $resident_visited, 
+                    $encrypted_purpose, 
+                    $validity_start, 
+                    $validity_end, 
+                    $access_status, 
+                    $temporary_card_uid
+                );
+            }
+            
+            if ($stmt->execute()) {
+                $success = $edit_id > 0 ? "Visitor updated successfully!" : "Visitor registered successfully!";
+                logStaffAudit($_SESSION['staff_id'], $edit_id > 0 ? 'Update Visitor' : 'Register Visitor', 
+                         ($edit_id > 0 ? "Updated" : "Registered") . " visitor: $visitor_name (Encrypted)");
+                $edit_id = 0;
+                $visitor = null;
+                header('Location: visitors.php?success=1');
+                exit();
+            } else {
+                $error = "Failed to save: " . $stmt->error;
+            }
+            $stmt->close();
+        }
+    }
+}
+
+// ============================================================
+// GET RESIDENTS LIST FOR DROPDOWN
 // ============================================================
 $residentsList = [];
 $result = $conn->query("SELECT user_id, full_name, room_number FROM users WHERE status = 'active' ORDER BY full_name");
@@ -35,72 +272,68 @@ if ($result) {
 }
 
 // ============================================================
-// GET VISITORS LIST WITH PAGINATION
+// GET AVAILABLE CARDS FOR DROPDOWN
 // ============================================================
-$perPage = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 10;
-$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$perPageOptions = [10, 25, 50, 100];
-if (!in_array($perPage, $perPageOptions)) {
-    $perPage = 10;
-}
-
-$searchFilter = isset($_GET['search']) ? trim($_GET['search']) : '';
-$statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
-$dateFilter = isset($_GET['date']) ? $_GET['date'] : '';
-
-// Count total visitors
-$countQuery = "
-    SELECT COUNT(*) as total
-    FROM visitor_logs v
-    LEFT JOIN users u ON v.resident_visited = u.user_id
-    WHERE 1=1
-";
-
-if (!empty($searchFilter)) {
-    $countQuery .= " AND (v.visitor_name LIKE '%$searchFilter%' OR u.full_name LIKE '%$searchFilter%')";
-}
-if (!empty($statusFilter)) {
-    $countQuery .= " AND v.access_status = '$statusFilter'";
-}
-if (!empty($dateFilter)) {
-    $countQuery .= " AND DATE(v.created_at) = '$dateFilter'";
-}
-
-$countResult = $conn->query($countQuery);
-$totalVisitors = 0;
-if ($countResult && $row = $countResult->fetch_assoc()) {
-    $totalVisitors = (int)$row['total'];
-}
-
-$totalPages = ceil($totalVisitors / $perPage);
-if ($totalPages < 1) $totalPages = 1;
-if ($page > $totalPages) $page = $totalPages;
-if ($page < 1) $page = 1;
-$offset = ($page - 1) * $perPage;
-
-$visitors = [];
-$query = "
-    SELECT v.*, u.full_name as resident_name, u.room_number 
-    FROM visitor_logs v
-    LEFT JOIN users u ON v.resident_visited = u.user_id
-    WHERE 1=1
-";
-
-if (!empty($searchFilter)) {
-    $query .= " AND (v.visitor_name LIKE '%$searchFilter%' OR u.full_name LIKE '%$searchFilter%')";
-}
-if (!empty($statusFilter)) {
-    $query .= " AND v.access_status = '$statusFilter'";
-}
-if (!empty($dateFilter)) {
-    $query .= " AND DATE(v.created_at) = '$dateFilter'";
-}
-
-$query .= " ORDER BY v.created_at DESC LIMIT $perPage OFFSET $offset";
-
-$result = $conn->query($query);
+$availableCards = [];
+$result = $conn->query("
+    SELECT card_uid 
+    FROM rfid_cards 
+    WHERE status = 'active' 
+    AND card_type = 'visitor'
+    AND (expiry_date IS NULL OR expiry_date >= CURDATE())
+    ORDER BY card_uid
+");
 if ($result) {
     while ($row = $result->fetch_assoc()) {
+        $availableCards[] = $row['card_uid'];
+    }
+}
+
+// ============================================================
+// GET VISITORS LIST WITH CARD INFO - WITH DECRYPTION
+// ============================================================
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$perPage = 15;
+$offset = ($page - 1) * $perPage;
+
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$searchQuery = '';
+if (!empty($search)) {
+    $searchQuery = " AND (v.visitor_name LIKE '%$search%' OR u.full_name LIKE '%$search%' OR v.temporary_card_uid LIKE '%$search%')";
+}
+
+$countResult = $conn->query("
+    SELECT COUNT(*) as total 
+    FROM visitor_logs v
+    LEFT JOIN users u ON v.resident_visited = u.user_id
+    WHERE 1=1 $searchQuery
+");
+$totalVisitors = $countResult->fetch_assoc()['total'] ?? 0;
+$totalPages = ceil($totalVisitors / $perPage);
+if ($totalPages == 0) $totalPages = 1;
+
+$visitors = [];
+$result = $conn->query("
+    SELECT 
+        v.*, 
+        u.full_name as resident_name, 
+        u.room_number,
+        c.expiry_date as card_expiry,
+        c.status as card_status
+    FROM visitor_logs v
+    LEFT JOIN users u ON v.resident_visited = u.user_id
+    LEFT JOIN rfid_cards c ON v.temporary_card_uid = c.card_uid
+    WHERE 1=1 $searchQuery
+    ORDER BY v.created_at DESC
+    LIMIT $offset, $perPage
+");
+
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        if ($row['is_encrypted'] == 1) {
+            $row['visitor_name'] = decryptData($row['visitor_name'] ?? '');
+            $row['purpose_of_visit'] = decryptData($row['purpose_of_visit'] ?? '');
+        }
         $visitors[] = $row;
     }
 }
@@ -112,24 +345,74 @@ $stats = [
     'total' => 0,
     'pending' => 0,
     'granted' => 0,
-    'denied' => 0
+    'exited' => 0,
+    'denied' => 0,
+    'expired_cards' => 0,
+    'expiring_soon' => 0,
+    'visits_expiring_soon' => 0,
+    'encrypted_visitors' => 0
 ];
 
 $result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['total'] = (int)$row['count'];
 }
+
 $result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE access_status = 'pending'");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['pending'] = (int)$row['count'];
 }
+
 $result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE access_status = 'granted'");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['granted'] = (int)$row['count'];
 }
+
+$result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE access_status = 'exited'");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['exited'] = (int)$row['count'];
+}
+
 $result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE access_status = 'denied'");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['denied'] = (int)$row['count'];
+}
+
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM rfid_cards 
+    WHERE card_type = 'visitor' 
+    AND status = 'expired'
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['expired_cards'] = (int)$row['count'];
+}
+
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM rfid_cards 
+    WHERE card_type = 'visitor' 
+    AND status = 'active'
+    AND expiry_date IS NOT NULL
+    AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['expiring_soon'] = (int)$row['count'];
+}
+
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM visitor_logs 
+    WHERE validity_end BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+    AND access_status != 'exited'
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['visits_expiring_soon'] = (int)$row['count'];
+}
+
+$result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE is_encrypted = 1");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['encrypted_visitors'] = (int)$row['count'];
 }
 
 // Get staff info
@@ -170,7 +453,7 @@ if (isset($_SESSION['staff_id'])) {
     <title>Staff Visitors - Tap-and-Go Doorlock</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../../assets/css/dashboard.css">
     <style>
         /* ============================================================
@@ -271,82 +554,47 @@ if (isset($_SESSION['staff_id'])) {
         }
         
         /* ============================================================
-           VIEW ONLY BADGE
+           ENCRYPTION BADGE
            ============================================================ */
-        .view-only-badge {
-            background: #4a3a1a !important;
-            color: #fbbf24 !important;
-            padding: 3px 12px;
+        .encryption-badge {
+            background: #1a3a6a !important;
+            color: #93c5fd !important;
+            border: 1px solid #2a5a9a !important;
+            padding: 4px 12px;
             border-radius: 20px;
             font-size: 11px;
-            font-weight: 500;
+        }
+        .encryption-badge i {
+            margin-right: 4px;
         }
         
         /* ============================================================
-           DARK STAT CARDS
-           ============================================================ */
-        .stat-card {
-            background: #111827 !important;
-            border: 1px solid #1a2a4a !important;
-            border-radius: 16px !important;
-            padding: 18px 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            color: white;
-            flex-shrink: 0;
-        }
-        .stat-number { font-size: 24px; font-weight: 700; color: #e0e0e0; margin: 0; }
-        .stat-label { font-size: 12px; color: #808090; margin: 0; }
-        
-        /* ============================================================
-           DARK VISITOR CARD
+           VISITOR CARD - DARK
            ============================================================ */
         .visitor-card {
-            background: #111827 !important;
-            border: 1px solid #1a2a4a !important;
-            border-radius: 16px !important;
+            background: #131926 !important;
+            border-radius: 16px;
             padding: 18px 22px;
             margin-bottom: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.4);
             transition: all 0.3s ease;
             border-left: 4px solid #8b5cf6;
+            border: 1px solid #1e2a3a;
         }
         .visitor-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.4) !important;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.5);
         }
-        .visitor-card.checked-in {
-            border-left-color: #10b981;
-        }
-        .visitor-card.checked-out {
-            border-left-color: #6b7280;
-            opacity: 0.7;
-        }
-        .visitor-card.pending {
-            border-left-color: #f59e0b;
-        }
-        .visitor-card .visitor-name {
-            color: #93c5fd !important;
-            font-weight: 600;
-            font-size: 16px;
-        }
-        .visitor-card .text-muted {
-            color: #808090 !important;
-        }
-        .visitor-card .small {
-            color: #808090 !important;
-        }
+        .visitor-card.checked-in { border-left-color: #10b981; }
+        .visitor-card.checked-out { border-left-color: #6b7280; opacity: 0.7; }
+        .visitor-card.pending { border-left-color: #f59e0b; }
+        .visitor-card.denied { border-left-color: #ef4444; }
+        .visitor-card.card-expired { border-left-color: #ef4444; background: #1a0a0a !important; }
+        .visitor-card.visit-expired { border-left-color: #ef4444; background: #1a0a0a !important; }
+        .visitor-card h6 { color: #ffd700 !important; }
+        .visitor-card .text-muted { color: #6b7280 !important; }
+        .visitor-card .small { color: #9ca3af !important; }
+        .visitor-card span { color: #d1d5db !important; }
         
         .resident-avatar {
             width: 45px;
@@ -357,73 +605,51 @@ if (isset($_SESSION['staff_id'])) {
             justify-content: center;
             font-size: 18px;
             font-weight: 600;
-            background: linear-gradient(135deg, #4a5a8a, #5a3a7a) !important;
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9) !important;
             color: white;
             flex-shrink: 0;
         }
         
         /* ============================================================
-           DARK BADGES
+           STAT CARDS
            ============================================================ */
-        .badge-status {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-        .badge-checked-in {
-            background: #065f46 !important;
-            color: #34d399 !important;
-        }
-        .badge-checked-out {
-            background: #2a2a3a !important;
-            color: #808090 !important;
-        }
-        .badge-pending {
-            background: #4a3a1a !important;
-            color: #fbbf24 !important;
-        }
-        
-        /* ============================================================
-           DARK FILTERS
-           ============================================================ */
-        .filter-section {
+        .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 15px;
+            border-radius: 16px !important;
+            padding: 18px 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+            transition: transform 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            position: relative;
+            overflow: hidden;
         }
-        .filter-section .form-control, .filter-section .form-select {
-            background: #1a1a2e !important;
-            border: 1px solid #2a2a4a !important;
-            border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 13px;
-            color: #e0e0e0 !important;
+        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; }
+        .stat-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; color: white; flex-shrink: 0;
         }
-        .filter-section .form-control:focus, .filter-section .form-select:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
+        .stat-number { font-size: 24px; font-weight: 700; color: #e0e0e0; margin: 0; }
+        .stat-label { font-size: 12px; color: #808090; margin: 0; }
+        .stat-number.text-danger { color: #f87171 !important; }
+        .stat-number.text-success { color: #34d399 !important; }
+        .stat-number.text-warning { color: #fbbf24 !important; }
+        
+        .pulse-badge {
+            animation: pulseBadge 1s infinite;
+            margin-left: 5px;
         }
-        .filter-section .form-control::placeholder { color: #606070 !important; }
-        .filter-section .form-label { color: #b0b0c0 !important; font-size: 13px; }
-        .filter-section .btn-filter {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 8px;
-            padding: 8px 20px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        .filter-section .btn-filter:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
+        @keyframes pulseBadge {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
         }
         
         /* ============================================================
-           DARK BUTTONS
+           BUTTONS - DARK
            ============================================================ */
         .btn-action {
             border-radius: 10px;
@@ -434,35 +660,211 @@ if (isset($_SESSION['staff_id'])) {
             border: 1px solid transparent;
         }
         .btn-action:hover { transform: translateY(-1px); }
-        .btn-view-visitor {
-            background: rgba(59, 130, 246, 0.15) !important;
+        
+        .btn-checkin {
+            background: rgba(16, 185, 129, 0.2) !important;
+            color: #6ee7b7 !important;
+            border: 1px solid rgba(16, 185, 129, 0.3) !important;
+        }
+        .btn-checkin:hover { background: rgba(16, 185, 129, 0.3) !important; color: #6ee7b7 !important; }
+        
+        .btn-checkout {
+            background: rgba(245, 158, 11, 0.2) !important;
+            color: #fbbf24 !important;
+            border: 1px solid rgba(245, 158, 11, 0.3) !important;
+        }
+        .btn-checkout:hover { background: rgba(245, 158, 11, 0.3) !important; color: #fbbf24 !important; }
+        
+        .btn-edit-visitor {
+            background: rgba(59, 130, 246, 0.2) !important;
             color: #93c5fd !important;
-            border: 1px solid rgba(59, 130, 246, 0.2) !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
         }
-        .btn-view-visitor:hover {
-            background: rgba(59, 130, 246, 0.25) !important;
-            color: #93c5fd !important;
+        .btn-edit-visitor:hover { background: rgba(59, 130, 246, 0.3) !important; color: #93c5fd !important; }
+        
+        .btn-delete-visitor {
+            background: rgba(239, 68, 68, 0.2) !important;
+            color: #fca5a5 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3) !important;
         }
-        .btn-outline-secondary {
-            border-color: #2a2a4a !important;
-            color: #808090 !important;
+        .btn-delete-visitor:hover { background: rgba(239, 68, 68, 0.3) !important; color: #fca5a5 !important; }
+        
+        .btn-renew-card {
+            background: rgba(245, 158, 11, 0.2) !important;
+            color: #fbbf24 !important;
+            border: 1px solid rgba(245, 158, 11, 0.3) !important;
         }
-        .btn-outline-secondary:hover {
-            background: #2a2a4a !important;
-            color: #e0e0e0 !important;
-        }
+        .btn-renew-card:hover { background: rgba(245, 158, 11, 0.3) !important; color: #fbbf24 !important; }
+        
         .btn-primary {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
+            background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
             border: none !important;
-            color: white !important;
+            color: #0a0e1a !important;
+            font-weight: 600;
         }
         .btn-primary:hover {
-            background: linear-gradient(135deg, #2a5a9a, #3a6a9a) !important;
-            color: white !important;
+            background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+            color: #0a0e1a !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+        }
+        
+        .btn-submit {
+            background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
+            border: none !important;
+            padding: 10px 35px;
+            border-radius: 12px;
+            font-weight: 600;
+            color: #0a0e1a !important;
+            transition: all 0.3s ease;
+        }
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.3) !important;
+            color: #0a0e1a !important;
+        }
+        
+        .btn-secondary {
+            background: #1e2a3a !important;
+            border: none !important;
+            color: #e5e7eb !important;
+        }
+        .btn-secondary:hover { background: #2d3548 !important; color: #e5e7eb !important; }
+        
+        /* ============================================================
+           BADGES - DARK
+           ============================================================ */
+        .badge-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .badge-checked-in { background: rgba(16, 185, 129, 0.2) !important; color: #6ee7b7 !important; }
+        .badge-checked-out { background: rgba(107, 114, 128, 0.2) !important; color: #9ca3af !important; }
+        .badge-pending { background: rgba(245, 158, 11, 0.2) !important; color: #fbbf24 !important; }
+        .badge-denied { background: rgba(239, 68, 68, 0.2) !important; color: #f87171 !important; }
+        .badge-card-expired { background: rgba(239, 68, 68, 0.2) !important; color: #f87171 !important; }
+        .badge-card-expiring { background: rgba(245, 158, 11, 0.2) !important; color: #fbbf24 !important; }
+        .badge-card-active { background: rgba(16, 185, 129, 0.2) !important; color: #6ee7b7 !important; }
+        .badge-visit-expired { background: rgba(239, 68, 68, 0.2) !important; color: #f87171 !important; }
+        
+        /* ============================================================
+           COUNTDOWN TIMER
+           ============================================================ */
+        .countdown-timer {
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-block;
+            margin-top: 2px;
+            background: rgba(0,0,0,0.3);
+        }
+        .countdown-timer.countdown-urgent {
+            color: #fbbf24 !important;
+            animation: pulse-urgent 1.5s ease-in-out infinite;
+            background: rgba(245, 158, 11, 0.15);
+        }
+        .countdown-timer.countdown-expired {
+            color: #f87171 !important;
+            background: rgba(239, 68, 68, 0.15);
+        }
+        .countdown-timer.countdown-normal {
+            color: #6ee7b7 !important;
+            background: rgba(16, 185, 129, 0.1);
+        }
+        @keyframes pulse-urgent {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.98); }
         }
         
         /* ============================================================
-           DARK PAGINATION
+           SEARCH BOX - DARK
+           ============================================================ */
+        .search-box { max-width: 350px; }
+        .search-box .form-control {
+            border-radius: 12px 0 0 12px;
+            background: #0d1220 !important;
+            border: 1px solid #1e2a3a !important;
+            color: #e5e7eb !important;
+            padding: 10px 16px;
+        }
+        .search-box .form-control:focus {
+            border-color: #ffd700 !important;
+            box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15) !important;
+        }
+        .search-box .form-control::placeholder { color: #6b7280 !important; }
+        .search-box .btn {
+            border-radius: 0 12px 12px 0;
+            background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
+            color: #0a0e1a !important;
+            border: none;
+            font-weight: 600;
+        }
+        .search-box .btn:hover { background: linear-gradient(135deg, #f59e0b, #d97706) !important; }
+        
+        /* ============================================================
+           ALERTS - DARK
+           ============================================================ */
+        .alert-success {
+            background: rgba(16, 185, 129, 0.15) !important;
+            border-color: #10b981 !important;
+            color: #6ee7b7 !important;
+        }
+        .alert-danger {
+            background: rgba(239, 68, 68, 0.15) !important;
+            border-color: #ef4444 !important;
+            color: #fca5a5 !important;
+        }
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.15) !important;
+            border-color: #f59e0b !important;
+            color: #fbbf24 !important;
+        }
+        .btn-close { filter: invert(1) !important; }
+        
+        /* ============================================================
+           FORMS - DARK
+           ============================================================ */
+        .form-control, .form-select {
+            background: #0d1220 !important;
+            border: 1px solid #1e2a3a !important;
+            color: #e5e7eb !important;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 14px;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #ffd700 !important;
+            box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15) !important;
+            background: #0d1220 !important;
+            color: #e5e7eb !important;
+        }
+        .form-control::placeholder { color: #6b7280 !important; }
+        .form-select option { background: #131926 !important; color: #e5e7eb !important; }
+        .form-label {
+            font-weight: 500;
+            font-size: 13px;
+            color: #d1d5db !important;
+        }
+        .required { color: #ef4444 !important; margin-left: 2px; }
+        
+        /* ============================================================
+           MODAL - DARK
+           ============================================================ */
+        .modal-content {
+            background: #131926 !important;
+            border-radius: 16px;
+            border: 1px solid #1e2a3a;
+        }
+        .modal-header { border-bottom: 1px solid #1e2a3a; }
+        .modal-footer { border-top: 1px solid #1e2a3a; }
+        .modal-title { color: #ffd700 !important; }
+        .modal-title i { color: #ffd700 !important; }
+        
+        /* ============================================================
+           PAGINATION - DARK
            ============================================================ */
         .pagination-container {
             background: #111827 !important;
@@ -494,37 +896,18 @@ if (isset($_SESSION['staff_id'])) {
         .pagination .page-item.disabled .page-link {
             color: #4a4a5a !important;
         }
-        .page-info { color: #808090 !important; font-size: 14px; }
-        .page-info strong { color: #93c5fd !important; }
         
         /* ============================================================
-           PER PAGE SELECTOR
-           ============================================================ */
-        .per-page-selector select {
-            background: #1a1a2e !important;
-            border: 1px solid #2a2a4a !important;
-            color: #e0e0e0 !important;
-            border-radius: 8px;
-            padding: 4px 8px;
-            font-size: 13px;
-        }
-        .per-page-selector select:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
-        }
-        .per-page-selector label { color: #808090 !important; font-size: 13px; margin: 0; }
-        
-        /* ============================================================
-           DARK CARDS
+           CARDS - DARK
            ============================================================ */
         .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
             border-radius: 16px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+            margin-bottom: 20px;
         }
-        .card .card-body { background: transparent !important; }
-        .card h5 { color: #e0e0e0 !important; }
-        .card .text-muted { color: #808090 !important; }
+        .card-body { background: #111827 !important; }
         
         /* ============================================================
            BORDER & MISC
@@ -532,36 +915,32 @@ if (isset($_SESSION['staff_id'])) {
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
         .text-muted { color: #808090 !important; }
-        .text-warning { color: #fbbf24 !important; }
         .text-success { color: #34d399 !important; }
+        .text-warning { color: #fbbf24 !important; }
         .text-danger { color: #f87171 !important; }
         
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #34d399;
+            animation: pulse 1.5s infinite;
+            margin-right: 4px;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
         /* ============================================================
-           SEARCH BOX
+           SCROLLBAR
            ============================================================ */
-        .search-box { max-width: 350px; }
-        .search-box .form-control {
-            border-radius: 12px 0 0 12px;
-            background: #1a1a2e !important;
-            border: 1px solid #2a2a4a !important;
-            color: #e0e0e0 !important;
-            padding: 10px 16px;
-        }
-        .search-box .form-control:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
-        }
-        .search-box .form-control::placeholder { color: #606070 !important; }
-        .search-box .btn {
-            border-radius: 0 12px 12px 0;
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-            border: none;
-            font-weight: 600;
-        }
-        .search-box .btn:hover {
-            background: linear-gradient(135deg, #2a5a9a, #3a6a9a) !important;
-        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0e1a; }
+        ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
         /* ============================================================
            RESPONSIVE
@@ -581,8 +960,13 @@ if (isset($_SESSION['staff_id'])) {
                 margin-left: 0;
                 padding: 15px;
             }
+            .stat-card { padding: 15px; }
+            .stat-number { font-size: 20px; }
+            .stat-icon { width: 40px; height: 40px; font-size: 16px; }
             .visitor-card { padding: 15px; }
-            .search-box { max-width: 100%; }
+            .btn-action { font-size: 11px; padding: 4px 10px; }
+            .search-box { max-width: 100%; margin-bottom: 10px; }
+            .countdown-timer { font-size: 10px; padding: 1px 8px; }
             .pagination-container .row {
                 flex-direction: column;
                 gap: 10px;
@@ -595,141 +979,334 @@ if (isset($_SESSION['staff_id'])) {
                 justify-content: center !important;
             }
         }
+        
+        @media (max-width: 576px) {
+            .visitor-card .row .col-md-4,
+            .visitor-card .row .col-md-3,
+            .visitor-card .row .col-md-2 {
+                margin-bottom: 8px;
+            }
+            .visitor-card .d-flex.gap-1 {
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body class="<?php echo $darkModeClass; ?>">
     
-    <!-- ===== NAVBAR ===== -->
     <?php include __DIR__ . '/includes/navbar_staff.php'; ?>
     
     <div class="container-fluid">
         <div class="row">
-            <!-- ===== SIDEBAR ===== -->
             <?php include __DIR__ . '/includes/sidebar_staff.php'; ?>
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
-                        <i class="fas fa-eye me-2" style="color: #fbbf24;"></i>
-                        <i class="fas fa-user-plus me-1" style="color: #1a3a6a;"></i>
+                        <i class="fas fa-user-plus me-2" style="color: #ffd700;"></i>
                         Visitors Management
+                        <span class="encryption-badge ms-2">
+                            <i class="fas fa-lock"></i> AES-256 Encrypted
+                        </span>
+                        <?php if ($stats['pending'] > 0): ?>
+                            <span class="badge bg-danger ms-2 pulse-badge">
+                                <i class="fas fa-exclamation-circle me-1"></i>
+                                <?php echo $stats['pending']; ?> pending
+                            </span>
+                        <?php endif; ?>
                     </h1>
                     <div>
-                        <span class="view-only-badge me-2">
-                            <i class="fas fa-eye me-1"></i> View Only
+                        <span class="badge bg-success me-2">
+                            <span class="live-indicator"></span> Live
                         </span>
-                        <span class="badge bg-secondary">Total: <?php echo $stats['total']; ?></span>
+                        <span class="badge bg-secondary" id="lastUpdate">Updated: <?php echo date('h:i A'); ?></span>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm ms-2" data-bs-toggle="modal" data-bs-target="#visitorModal">
+                            <i class="fas fa-plus me-1"></i> Quick Add
+                        </button>
                     </div>
                 </div>
 
-                <!-- Stats -->
+                <?php if (!empty($success)): ?>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="fas fa-check-circle me-2"></i> <?php echo $success; ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($error)): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-circle me-2"></i> <?php echo $error; ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($stats['expiring_soon'] > 0 || $stats['visits_expiring_soon'] > 0): ?>
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        <i class="fas fa-clock me-2"></i>
+                        <?php if ($stats['expiring_soon'] > 0): ?>
+                            <strong><?php echo $stats['expiring_soon']; ?> visitor card(s)</strong> will expire within 3 days.
+                        <?php endif; ?>
+                        <?php if ($stats['expiring_soon'] > 0 && $stats['visits_expiring_soon'] > 0): ?>
+                            <br>
+                        <?php endif; ?>
+                        <?php if ($stats['visits_expiring_soon'] > 0): ?>
+                            <strong><?php echo $stats['visits_expiring_soon']; ?> visit(s)</strong> will end within 3 days.
+                        <?php endif; ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+
+                <!-- STATS CARDS -->
                 <div class="row g-3 mb-4">
-                    <div class="col-6 col-sm-6 col-xl-3">
+                    <div class="col-6 col-sm-4 col-xl-2">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-users"></i></div>
+                            <div class="stat-icon" style="background: #667eea;"><i class="fas fa-users"></i></div>
                             <div>
                                 <div class="stat-number"><?php echo $stats['total']; ?></div>
-                                <div class="stat-label">Total Visitors</div>
+                                <div class="stat-label">Total</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-3">
+                    <div class="col-6 col-sm-4 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-clock"></i></div>
                             <div>
-                                <div class="stat-number"><?php echo $stats['pending']; ?></div>
+                                <div class="stat-number <?php echo $stats['pending'] > 0 ? 'text-warning' : ''; ?>">
+                                    <?php echo $stats['pending']; ?>
+                                </div>
                                 <div class="stat-label">Pending</div>
                             </div>
+                            <?php if ($stats['pending'] > 0): ?>
+                                <span class="badge bg-danger pulse-badge"><?php echo $stats['pending']; ?></span>
+                            <?php endif; ?>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-3">
+                    <div class="col-6 col-sm-4 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #10b981;"><i class="fas fa-check-circle"></i></div>
                             <div>
                                 <div class="stat-number"><?php echo $stats['granted']; ?></div>
-                                <div class="stat-label">Granted</div>
+                                <div class="stat-label">Checked In</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-3">
+                    <div class="col-6 col-sm-4 col-xl-2">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: #ef4444;"><i class="fas fa-times-circle"></i></div>
+                            <div class="stat-icon" style="background: #6b7280;"><i class="fas fa-sign-out-alt"></i></div>
                             <div>
-                                <div class="stat-number"><?php echo $stats['denied']; ?></div>
-                                <div class="stat-label">Denied</div>
+                                <div class="stat-number"><?php echo $stats['exited']; ?></div>
+                                <div class="stat-label">Checked Out</div>
                             </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-4 col-xl-2">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: <?php echo $stats['expired_cards'] > 0 ? '#ef4444' : '#6b7280'; ?>;">
+                                <i class="fas fa-hourglass-end"></i>
+                            </div>
+                            <div>
+                                <div class="stat-number <?php echo $stats['expired_cards'] > 0 ? 'text-danger' : ''; ?>">
+                                    <?php echo $stats['expired_cards']; ?>
+                                </div>
+                                <div class="stat-label">Expired Cards</div>
+                            </div>
+                            <?php if ($stats['expired_cards'] > 0): ?>
+                                <span class="badge bg-danger pulse-badge">⚠️</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-4 col-xl-2">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: <?php echo ($stats['expiring_soon'] > 0 || $stats['visits_expiring_soon'] > 0) ? '#f59e0b' : '#10b981'; ?>;">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div>
+                                <div class="stat-number <?php echo ($stats['expiring_soon'] > 0 || $stats['visits_expiring_soon'] > 0) ? 'text-warning' : 'text-success'; ?>">
+                                    <?php echo $stats['expiring_soon'] + $stats['visits_expiring_soon']; ?>
+                                </div>
+                                <div class="stat-label">Expiring Soon</div>
+                            </div>
+                            <?php if ($stats['expiring_soon'] > 0 || $stats['visits_expiring_soon'] > 0): ?>
+                                <span class="badge bg-warning pulse-badge">⏰</span>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
 
-                <!-- Filters -->
-                <div class="filter-section">
-                    <form method="GET" action="" class="row g-2 align-items-end">
-                        <div class="col-md-2">
-                            <label class="form-label">Date</label>
-                            <input type="date" class="form-control" name="date" value="<?php echo htmlspecialchars($dateFilter); ?>">
+                <!-- ENCRYPTION STATUS -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="alert alert-info" style="background: rgba(59, 130, 246, 0.1) !important; border-color: #3b82f6 !important; color: #93c5fd !important;">
+                            <i class="fas fa-lock me-2"></i>
+                            <strong><?php echo $stats['encrypted_visitors']; ?></strong> visitor records are encrypted with AES-256-CBC.
+                            <?php if ($stats['encrypted_visitors'] < $stats['total']): ?>
+                                <span class="text-warning ms-2">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    <?php echo $stats['total'] - $stats['encrypted_visitors']; ?> records need encryption upgrade.
+                                </span>
+                            <?php endif; ?>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Status</label>
-                            <select class="form-select" name="status">
-                                <option value="">All</option>
-                                <option value="pending" <?php echo $statusFilter == 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                <option value="granted" <?php echo $statusFilter == 'granted' ? 'selected' : ''; ?>>Granted</option>
-                                <option value="denied" <?php echo $statusFilter == 'denied' ? 'selected' : ''; ?>>Denied</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Search</label>
-                            <input type="text" class="form-control" name="search" placeholder="Name or Card UID" value="<?php echo htmlspecialchars($searchFilter); ?>">
-                        </div>
-                        <div class="col-md-3">
-                            <button type="submit" class="btn btn-filter w-100">
-                                <i class="fas fa-filter me-1"></i> Apply
-                            </button>
-                        </div>
-                        <div class="col-md-2">
-                            <a href="register-visitor.php" class="btn btn-primary w-100">
-                                <i class="fas fa-plus me-1"></i> New Visitor
-                            </a>
-                        </div>
-                        <!-- Hidden fields to preserve pagination -->
-                        <input type="hidden" name="per_page" value="<?php echo $perPage; ?>">
-                        <input type="hidden" name="page" value="1">
-                    </form>
+                    </div>
                 </div>
 
-                <!-- Visitors List -->
+                <!-- SEARCH BAR -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <form method="GET" action="" class="search-box d-flex">
+                            <input type="text" class="form-control" name="search" placeholder="Search visitor or resident..." value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>">
+                            <button type="submit" class="btn"><i class="fas fa-search"></i></button>
+                        </form>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <span class="text-muted small">
+                            <i class="fas fa-users me-1"></i>
+                            <?php echo count($visitors); ?> visitors found
+                        </span>
+                        <button type="button" class="btn btn-primary btn-sm ms-2" data-bs-toggle="modal" data-bs-target="#visitorModal">
+                            <i class="fas fa-plus me-1"></i> Quick Add
+                        </button>
+                    </div>
+                </div>
+
+                <!-- VISITORS LIST -->
                 <?php if (empty($visitors)): ?>
                     <div class="card">
                         <div class="card-body text-center py-5">
                             <i class="fas fa-user-plus fa-3x text-muted mb-3"></i>
                             <h5 class="text-muted">No visitors found</h5>
-                            <p class="text-muted">No visitor records available</p>
+                            <p class="text-muted">Click "Quick Add" to register a visitor</p>
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#visitorModal">
+                                <i class="fas fa-plus me-1"></i> Register Visitor
+                            </button>
                         </div>
                     </div>
                 <?php else: ?>
                     <?php foreach ($visitors as $visitor): 
                         $status = $visitor['access_status'] ?? 'pending';
-                        $statusClass = $status == 'granted' ? 'checked-in' : ($status == 'pending' ? 'pending' : 'checked-out');
-                        $initials = '';
-                        $nameParts = explode(' ', $visitor['visitor_name'] ?? '');
-                        foreach ($nameParts as $part) {
-                            if (!empty($part)) {
-                                $initials .= strtoupper($part[0]);
+                        $card_expired = $visitor['card_status'] == 'expired';
+                        $card_expiring = false;
+                        $visit_expired = false;
+                        $visit_expiring = false;
+                        $days_left = 0;
+                        $expiry_date_str = $visitor['card_expiry'] ?? null;
+                        $countdown_display = '';
+                        $countdown_class = 'countdown-normal';
+                        $show_countdown = false;
+                        $countdown_label = 'Card Expiry';
+                        $is_visit_countdown = false;
+                        
+                        // CHECK CARD EXPIRY
+                        if ($expiry_date_str) {
+                            $now = new DateTime();
+                            $expiry = new DateTime($expiry_date_str);
+                            $diff = $now->diff($expiry);
+                            $days_left = $diff->days;
+                            $is_expired = $diff->invert == 1;
+                            $show_countdown = true;
+                            $countdown_label = 'Card Expiry';
+                            
+                            if (!$is_expired && $days_left <= 3 && $visitor['card_status'] == 'active') {
+                                $card_expiring = true;
+                                $countdown_class = 'countdown-urgent';
+                                $hours_left = $diff->h + ($diff->days * 24);
+                                $minutes_left = $diff->i;
+                                
+                                if ($days_left >= 1) {
+                                    $countdown_display = "📅 {$days_left} day" . ($days_left > 1 ? 's' : '') . " left";
+                                } else if ($hours_left >= 1) {
+                                    $countdown_display = "⏰ {$hours_left} hour" . ($hours_left > 1 ? 's' : '') . " left";
+                                } else if ($minutes_left > 0) {
+                                    $countdown_display = "⏱️ {$minutes_left} minute" . ($minutes_left > 1 ? 's' : '') . " left";
+                                } else {
+                                    $countdown_display = "⚠️ Expiring today!";
+                                }
+                            } elseif ($is_expired) {
+                                $card_expired = true;
+                                $countdown_class = 'countdown-expired';
+                                $countdown_display = "⛔ EXPIRED";
+                            } else {
+                                $countdown_class = 'countdown-normal';
+                                $countdown_display = "📅 {$days_left} day" . ($days_left > 1 ? 's' : '') . " remaining";
+                            }
+                        } 
+                        // CHECK VISIT VALIDITY
+                        else if (!empty($visitor['validity_end']) && $status != 'exited') {
+                            $now = new DateTime();
+                            $validity_end = new DateTime($visitor['validity_end']);
+                            $diff = $now->diff($validity_end);
+                            $days_left = $diff->days;
+                            $is_expired = $diff->invert == 1;
+                            $show_countdown = true;
+                            $countdown_label = 'Visit Validity';
+                            $is_visit_countdown = true;
+                            
+                            if (!$is_expired && $days_left <= 3) {
+                                $visit_expiring = true;
+                                $countdown_class = 'countdown-urgent';
+                                $hours_left = $diff->h + ($diff->days * 24);
+                                $minutes_left = $diff->i;
+                                
+                                if ($days_left >= 1) {
+                                    $countdown_display = "📅 Visit ends in {$days_left} day" . ($days_left > 1 ? 's' : '');
+                                } else if ($hours_left >= 1) {
+                                    $countdown_display = "⏰ Visit ends in {$hours_left} hour" . ($hours_left > 1 ? 's' : '');
+                                } else if ($minutes_left > 0) {
+                                    $countdown_display = "⏱️ Visit ends in {$minutes_left} minute" . ($minutes_left > 1 ? 's' : '');
+                                } else {
+                                    $countdown_display = "⚠️ Visit ends today!";
+                                }
+                            } elseif ($is_expired) {
+                                $visit_expired = true;
+                                $countdown_class = 'countdown-expired';
+                                $countdown_display = "⛔ Visit period expired";
+                            } else {
+                                $countdown_class = 'countdown-normal';
+                                $countdown_display = "📅 {$days_left} day" . ($days_left > 1 ? 's' : '') . " remaining";
                             }
                         }
-                        $initials = substr($initials, 0, 2) ?: '?';
+                        
+                        $card_class = '';
+                        if ($card_expired || $visit_expired) {
+                            $card_class = 'card-expired';
+                        } elseif ($status == 'granted' && empty($visitor['exit_timestamp'])) {
+                            $card_class = 'checked-in';
+                        } elseif ($status == 'exited') {
+                            $card_class = 'checked-out';
+                        } elseif ($status == 'pending') {
+                            $card_class = 'pending';
+                        } elseif ($status == 'denied') {
+                            $card_class = 'denied';
+                        }
                     ?>
-                        <div class="visitor-card <?php echo $statusClass; ?>">
+                        <div class="visitor-card <?php echo $card_class; ?>">
                             <div class="row align-items-center">
                                 <!-- Visitor Info -->
                                 <div class="col-md-4 col-lg-3">
                                     <div class="d-flex align-items-center gap-3">
                                         <div class="resident-avatar">
-                                            <?php echo $initials; ?>
+                                            <?php 
+                                                $nameParts = explode(' ', $visitor['visitor_name'] ?? '');
+                                                $initials = '';
+                                                foreach ($nameParts as $part) {
+                                                    if (!empty($part)) {
+                                                        $initials .= strtoupper($part[0]);
+                                                    }
+                                                }
+                                                echo substr($initials, 0, 2) ?: '?';
+                                            ?>
                                         </div>
                                         <div>
-                                            <div class="visitor-name"><?php echo htmlspecialchars($visitor['visitor_name']); ?></div>
+                                            <h6 class="mb-0">
+                                                <?php echo htmlspecialchars($visitor['visitor_name']); ?>
+                                                <?php if ($visitor['is_encrypted'] == 1): ?>
+                                                    <span class="encryption-badge ms-1" style="font-size: 8px;">
+                                                        <i class="fas fa-lock"></i>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </h6>
                                             <span class="text-muted small">
                                                 <i class="fas fa-user me-1"></i>
                                                 Visiting: <?php echo htmlspecialchars($visitor['resident_name'] ?? 'N/A'); ?>
@@ -766,9 +1343,38 @@ if (isset($_SESSION['staff_id'])) {
                                             <span class="badge-status badge-pending">
                                                 <i class="fas fa-clock me-1"></i> Pending
                                             </span>
+                                        <?php elseif ($status == 'denied'): ?>
+                                            <span class="badge-status badge-denied">
+                                                <i class="fas fa-times-circle me-1"></i> Denied
+                                            </span>
                                         <?php else: ?>
                                             <span class="badge-status badge-checked-out">
                                                 <i class="fas fa-check-circle me-1"></i> Checked Out
+                                            </span>
+                                        <?php endif; ?>
+                                        
+                                        <?php if ($visitor['temporary_card_uid']): ?>
+                                            <br>
+                                            <span class="text-muted small">Card:</span>
+                                            <?php if ($card_expired): ?>
+                                                <span class="badge-status badge-card-expired">
+                                                    <i class="fas fa-exclamation-triangle me-1"></i> Expired
+                                                </span>
+                                            <?php elseif ($card_expiring): ?>
+                                                <span class="badge-status badge-card-expiring">
+                                                    <i class="fas fa-clock me-1"></i> <?php echo $days_left; ?> day(s)
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="badge-status badge-card-active">
+                                                    <i class="fas fa-check-circle me-1"></i> Active
+                                                </span>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                        
+                                        <?php if ($visit_expired && $status != 'exited'): ?>
+                                            <br>
+                                            <span class="badge-status badge-visit-expired">
+                                                <i class="fas fa-exclamation-triangle me-1"></i> Visit Expired
                                             </span>
                                         <?php endif; ?>
                                     </div>
@@ -784,14 +1390,53 @@ if (isset($_SESSION['staff_id'])) {
                                     </div>
                                 </div>
 
-                                <!-- Actions (View Only) -->
+                                <!-- Actions -->
                                 <div class="col-md-2 col-lg-3">
-                                    <div class="d-flex flex-wrap gap-1">
-                                        <a href="visitor-logs.php?search=<?php echo urlencode($visitor['visitor_name']); ?>" class="btn btn-action btn-view-visitor">
-                                            <i class="fas fa-eye me-1"></i> View Logs
-                                        </a>
-                                        <a href="register-visitor.php?edit=<?php echo $visitor['visitor_log_id']; ?>" class="btn btn-action btn-view-visitor">
+                                    <?php if ($show_countdown): ?>
+                                        <div class="mb-2">
+                                            <span class="text-muted small"><?php echo $countdown_label; ?></span>
+                                            <br>
+                                            <?php if ($visitor['card_expiry'] && !$is_visit_countdown): ?>
+                                                <span class="small <?php echo $card_expired ? 'text-danger' : ($card_expiring ? 'text-warning' : ''); ?>">
+                                                    <?php echo date('M d, Y', strtotime($visitor['card_expiry'])); ?>
+                                                </span>
+                                            <?php elseif ($is_visit_countdown): ?>
+                                                <span class="small <?php echo $visit_expired ? 'text-danger' : ($visit_expiring ? 'text-warning' : ''); ?>">
+                                                    <?php echo date('M d, Y', strtotime($visitor['validity_end'])); ?>
+                                                </span>
+                                            <?php endif; ?>
+                                            <br>
+                                            <span class="countdown-timer <?php echo $countdown_class; ?>">
+                                                <?php echo $countdown_display; ?>
+                                            </span>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <div class="d-flex flex-wrap gap-1 mt-2">
+                                        <?php if ($status == 'pending' && !$card_expired && !$visit_expired): ?>
+                                            <a href="?checkin=<?php echo $visitor['visitor_log_id']; ?>" class="btn btn-action btn-checkin">
+                                                <i class="fas fa-sign-in-alt me-1"></i> Check In
+                                            </a>
+                                        <?php endif; ?>
+                                        
+                                        <?php if ($status == 'granted' && empty($visitor['exit_timestamp'])): ?>
+                                            <a href="?checkout=<?php echo $visitor['visitor_log_id']; ?>" class="btn btn-action btn-checkout">
+                                                <i class="fas fa-sign-out-alt me-1"></i> Check Out
+                                            </a>
+                                        <?php endif; ?>
+                                        
+                                        <?php if ($card_expired && $visitor['temporary_card_uid']): ?>
+                                            <a href="?renew=<?php echo $visitor['temporary_card_uid']; ?>" class="btn btn-action btn-renew-card" onclick="return confirm('Renew this card for another year?')">
+                                                <i class="fas fa-sync me-1"></i> Renew Card
+                                            </a>
+                                        <?php endif; ?>
+                                        
+                                        <a href="?edit=<?php echo $visitor['visitor_log_id']; ?>" class="btn btn-action btn-edit-visitor" data-bs-toggle="modal" data-bs-target="#visitorModal">
                                             <i class="fas fa-edit me-1"></i> Edit
+                                        </a>
+                                        
+                                        <a href="?delete=<?php echo $visitor['visitor_log_id']; ?>" class="btn btn-action btn-delete-visitor" onclick="return confirm('Are you sure you want to delete this visitor record?')">
+                                            <i class="fas fa-trash me-1"></i> Delete
                                         </a>
                                     </div>
                                 </div>
@@ -800,86 +1445,134 @@ if (isset($_SESSION['staff_id'])) {
                     <?php endforeach; ?>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                PAGINATION WITH SHOW ENTRIES
-                ============================================================ -->
+                <!-- PAGINATION -->
                 <?php if ($totalPages > 1): ?>
                 <div class="pagination-container">
                     <div class="row align-items-center">
                         <div class="col-md-6">
-                            <div class="page-info">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalVisitors); ?> of <?php echo $totalVisitors; ?> visitors
+                            <span class="text-muted small">
+                                Showing page <?php echo $page; ?> of <?php echo $totalPages; ?>
                                 <span class="mx-1 text-muted">|</span>
-                                <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
-                            </div>
+                                Total: <?php echo $totalVisitors; ?> visitors
+                            </span>
                         </div>
                         <div class="col-md-6">
-                            <div class="d-flex align-items-center justify-content-end gap-3 flex-wrap">
-                                <!-- Per Page Selector -->
-                                <div class="per-page-selector d-flex align-items-center gap-2">
-                                    <label>Show:</label>
-                                    <select onchange="changePerPage(this.value)">
-                                        <?php foreach ($perPageOptions as $option): ?>
-                                            <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                                <?php echo $option; ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                
-                                <!-- Pagination -->
-                                <nav aria-label="Page navigation">
-                                    <ul class="pagination justify-content-end mb-0">
-                                        <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=1<?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-double-left"></i>
-                                            </a>
+                            <nav aria-label="Page navigation">
+                                <ul class="pagination justify-content-end mb-0">
+                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">First</a>
+                                    </li>
+                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">Prev</a>
+                                    </li>
+                                    <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                                        <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
+                                            <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>"><?php echo $i; ?></a>
                                         </li>
-                                        <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-left"></i>
-                                            </a>
-                                        </li>
-                                        
-                                        <?php
-                                        $startPage = max(1, $page - 2);
-                                        $endPage = min($totalPages, $page + 2);
-                                        if ($startPage > 1) {
-                                            echo '<li class="page-item"><span class="page-link">...</span></li>';
-                                        }
-                                        for ($i = $startPage; $i <= $endPage; $i++):
-                                        ?>
-                                            <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                    <?php echo $i; ?>
-                                                </a>
-                                            </li>
-                                        <?php endfor; ?>
-                                        <?php if ($endPage < $totalPages): ?>
-                                            <li class="page-item"><span class="page-link">...</span></li>
-                                        <?php endif; ?>
-                                        
-                                        <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-right"></i>
-                                            </a>
-                                        </li>
-                                        <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($dateFilter) ? '&date=' . urlencode($dateFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-double-right"></i>
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </nav>
-                            </div>
+                                    <?php endfor; ?>
+                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">Next</a>
+                                    </li>
+                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">Last</a>
+                                    </li>
+                                </ul>
+                            </nav>
                         </div>
                     </div>
                 </div>
                 <?php endif; ?>
 
+                <!-- VISITOR MODAL (Add/Edit) -->
+                <div class="modal fade" id="visitorModal" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-user-plus me-2"></i>
+                                    <?php echo $edit_id > 0 ? 'Edit Visitor' : 'New Visitor Registration'; ?>
+                                    <span class="encryption-badge ms-2" style="font-size: 10px;">
+                                        <i class="fas fa-lock me-1"></i> AES-256
+                                    </span>
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <form method="POST" action="">
+                                <div class="modal-body">
+                                    <input type="hidden" name="edit_id" value="<?php echo $edit_id; ?>">
+                                    
+                                    <div class="alert alert-info mb-3" style="background: rgba(59, 130, 246, 0.1) !important; border-color: #3b82f6 !important; color: #93c5fd !important;">
+                                        <i class="fas fa-lock me-2"></i>
+                                        <strong>Data Encryption:</strong> Visitor name and purpose will be encrypted with AES-256-CBC before storing in the database.
+                                    </div>
+                                    
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Visitor Name <span class="required">*</span></label>
+                                            <input type="text" class="form-control" name="visitor_name" placeholder="Full name" value="<?php echo htmlspecialchars($visitor['visitor_name'] ?? ''); ?>" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Resident to Visit <span class="required">*</span></label>
+                                            <select class="form-select" name="resident_visited" required>
+                                                <option value="">Select Resident</option>
+                                                <?php foreach ($residentsList as $res): ?>
+                                                    <option value="<?php echo $res['user_id']; ?>" <?php echo (isset($visitor['resident_visited']) && $visitor['resident_visited'] == $res['user_id']) ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($res['full_name']); ?> (Room <?php echo htmlspecialchars($res['room_number'] ?? 'N/A'); ?>)
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-12">
+                                            <label class="form-label">Purpose of Visit <span class="required">*</span></label>
+                                            <input type="text" class="form-control" name="purpose_of_visit" placeholder="e.g., Visit friend, Meeting, etc." value="<?php echo htmlspecialchars($visitor['purpose_of_visit'] ?? ''); ?>" required>
+                                            <small class="text-muted">This will be encrypted in the database</small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Validity Start <span class="required">*</span></label>
+                                            <input type="date" class="form-control" name="validity_start" value="<?php echo htmlspecialchars($visitor['validity_start'] ?? date('Y-m-d')); ?>" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Validity End <span class="required">*</span></label>
+                                            <input type="date" class="form-control" name="validity_end" value="<?php echo htmlspecialchars($visitor['validity_end'] ?? date('Y-m-d', strtotime('+1 week'))); ?>" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Access Status</label>
+                                            <select class="form-select" name="access_status">
+                                                <option value="pending" <?php echo (isset($visitor['access_status']) && $visitor['access_status'] == 'pending') ? 'selected' : ''; ?>>Pending</option>
+                                                <option value="granted" <?php echo (isset($visitor['access_status']) && $visitor['access_status'] == 'granted') ? 'selected' : ''; ?>>Granted</option>
+                                                <option value="denied" <?php echo (isset($visitor['access_status']) && $visitor['access_status'] == 'denied') ? 'selected' : ''; ?>>Denied</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Temporary Card UID</label>
+                                            <select class="form-select" name="temporary_card_uid">
+                                                <option value="">-- No Card --</option>
+                                                <?php foreach ($availableCards as $card): ?>
+                                                    <option value="<?php echo htmlspecialchars($card); ?>" <?php echo (isset($visitor['temporary_card_uid']) && $visitor['temporary_card_uid'] == $card) ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($card); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <small class="text-muted">Assign an available visitor RFID card</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" name="submit" class="btn btn-submit">
+                                        <i class="fas fa-lock me-1"></i> 
+                                        <?php echo $edit_id > 0 ? 'Update Visitor' : 'Register Visitor'; ?>
+                                        (Encrypted)
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="text-center text-muted small mt-3">
-                    <i class="fas fa-eye me-1"></i> View Only Access
+                    <i class="fas fa-lock me-1"></i>
+                    <?php echo $stats['encrypted_visitors']; ?> encrypted records
                     <span class="mx-2">|</span>
                     <i class="fas fa-database me-1"></i>
                     Total: <?php echo $stats['total']; ?> visitor records
@@ -902,28 +1595,36 @@ if (isset($_SESSION['staff_id'])) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
-        // CHANGE PER PAGE
+        // AUTO-OPEN MODAL WHEN EDITING
         // ============================================================
-        function changePerPage(value) {
-            const urlParams = new URLSearchParams(window.location.search);
-            urlParams.set('per_page', value);
-            urlParams.set('page', 1);
-            window.location.href = '?' + urlParams.toString();
-        }
-        
-        // ============================================================
-        // AUTO-SUBMIT FILTER ON CHANGE
-        // ============================================================
-        document.querySelectorAll('.filter-section select, .filter-section input[type="date"]').forEach(el => {
-            el.addEventListener('change', function() {
-                if (this.name !== 'search') {
-                    this.closest('form').submit();
-                }
+        <?php if ($edit_id > 0): ?>
+            document.addEventListener('DOMContentLoaded', function() {
+                var modal = new bootstrap.Modal(document.getElementById('visitorModal'));
+                modal.show();
             });
-        });
+        <?php endif; ?>
         
         // ============================================================
-        // SIDEBAR TOGGLE (mobile)
+        // UPDATE TIME
+        // ============================================================
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true 
+            });
+            const updateElement = document.getElementById('lastUpdate');
+            if (updateElement) {
+                updateElement.textContent = 'Updated: ' + timeString;
+            }
+        }
+
+        setInterval(updateLastUpdateTime, 10000);
+        document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
+        
+        // ============================================================
+        // SIDEBAR TOGGLE
         // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
