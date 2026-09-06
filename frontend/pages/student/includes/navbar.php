@@ -5,7 +5,7 @@
         </button>
         <a class="navbar-brand" href="dashboard.php">
             <!-- Logo -->
-            <img src="../assets/images/isu-logo.png" alt="ISU Logo" style="width: 45px; height: 45px; border-radius: 50%; object-fit: contain; border: 2px solid #ffd700; background: white; padding: 2px; margin-right: 10px; vertical-align: middle;">
+            <img src="../../assets/images/isu-logo.png" alt="ISU Logo" style="width: 45px; height: 45px; border-radius: 50%; object-fit: contain; border: 2px solid #ffd700; background: white; padding: 2px; margin-right: 10px; vertical-align: middle;">
             
             <!-- Pangalan ng Dormitory -->
             <span style="font-size: 20px; font-weight: 900; color: #ffffff; letter-spacing: 1px; vertical-align: middle;">
