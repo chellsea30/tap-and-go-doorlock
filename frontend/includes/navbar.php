@@ -1,13 +1,15 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
     <div class="container-fluid">
         <a class="navbar-brand" href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? 'student-dashboard.php' : 'dashboard.php'; ?>">
-            <i class="fas fa-door-open me-2"></i> Tap-and-Go
+            <!-- Bagong Text para sa Roles -->
             <?php if (isset($_SESSION['role']) && $_SESSION['role'] == 'student'): ?>
-                <span class="badge bg-success ms-2" style="font-size: 14px; padding: 6px 12px; border-radius: 8px;">Student</span>
+                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold text-success" style="font-size: 18px;">STUDENT</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'administrator'): ?>
-                <span class="badge bg-danger ms-2" style="font-size: 14px; padding: 6px 12px; border-radius: 8px;">Admin</span>
+                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold text-danger" style="font-size: 18px;">ADMIN</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'staff'): ?>
-                <span class="badge bg-primary ms-2" style="font-size: 14px; padding: 6px 12px; border-radius: 8px;">Staff</span>
+                <i class="fas fa-door-open me-2"></i> Welcome Back <span class="fw-bold text-primary" style="font-size: 18px;">STAFF</span>
+            <?php else: ?>
+                <i class="fas fa-door-open me-2"></i> Tap-and-Go
             <?php endif; ?>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
