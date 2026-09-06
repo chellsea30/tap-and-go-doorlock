@@ -234,35 +234,7 @@
                     <span class="badge bg-info rounded-pill ms-2"><?php echo $roomsUsed; ?>/5</span>
                 </a>
             </li>
-            
-            <!-- ===== RESIDENTS (VIEW ONLY) ===== -->
-            <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'residents.php' ? 'active' : ''; ?>" href="residents.php">
-                    <i class="fas fa-users me-2"></i> Residents
-                    <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM users WHERE status = 'active'");
-                        $row = $result->fetch_assoc();
-                        $residentCount = $row['count'] ?? 0;
-                    ?>
-                    <span class="badge bg-primary rounded-pill ms-2"><?php echo $residentCount; ?></span>
-                </a>
-            </li>
-            
-            <!-- ===== RFID CARDS (VIEW ONLY) ===== -->
-            <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'cards.php' ? 'active' : ''; ?>" href="cards.php">
-                    <i class="fas fa-id-card me-2"></i> RFID Cards
-                    <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'active'");
-                        $row = $result->fetch_assoc();
-                        $activeCards = $row['count'] ?? 0;
-                    ?>
-                    <span class="badge bg-success rounded-pill ms-2"><?php echo $activeCards; ?></span>
-                </a>
-            </li>
-            
+  
             <!-- ===== ACCESS LOGS ===== -->
             <li class="nav-item">
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'logs.php' ? 'active' : ''; ?>" href="logs.php">
@@ -334,13 +306,7 @@
                 </ul>
             </li>
             
-            <!-- ===== REPORTS ===== -->
-            <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>" href="reports.php">
-                    <i class="fas fa-chart-bar me-2"></i> Reports
-                </a>
-            </li>
-            
+         
             <!-- ===== ANNOUNCEMENTS ===== -->
             <li class="nav-item">
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php">
