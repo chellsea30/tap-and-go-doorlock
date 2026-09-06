@@ -1,14 +1,18 @@
 <?php
 /**
- * Tap-and-Go Doorlock - Staff View
- * VIEW-ONLY - WITH PROFILE PHOTO - WITH CARD UID - WITH PRINT ID
- * PURE DARK MODE - WITH PAGINATION
+ * Tap-and-Go Doorlock - Residents View
+ * VIEW-ONLY - WITH PROFILE PHOTO - WITH CARD STATUS - WITH ADMISSION STATUS
+ * PURE DARK MODE - WITH PAGINATION - WITH SEARCH
  */
 
+// Start session
 session_start();
+
+// Load config and functions
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
 
+// Check authentication
 if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
@@ -24,8 +28,8 @@ $success = '';
 // ============================================================
 // INITIALIZE VARIABLES
 // ============================================================
-$staffList = [];
-$totalStaff = 0;
+$residents = [];
+$totalResidents = 0;
 $totalPages = 1;
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
@@ -38,20 +42,16 @@ if (!in_array($perPage, $perPageOptions)) {
 }
 
 // ============================================================
-// GET STAFF LIST - VIEW ONLY
+// GET RESIDENTS LIST - VIEW ONLY
 // ============================================================
 try {
-    // Check if avatar column exists
-    $tableCheck = $conn->query("SHOW COLUMNS FROM staff_users LIKE 'avatar'");
-    $hasAvatar = $tableCheck && $tableCheck->num_rows > 0;
-    
-    // Count total staff
-    $countQuery = "SELECT COUNT(*) as total FROM staff_users";
+    // Count total residents
+    $countQuery = "SELECT COUNT(*) as total FROM users WHERE status != 'deleted'";
     $countParams = [];
     $types = "";
     
     if (!empty($search)) {
-        $countQuery .= " WHERE full_name LIKE ? OR staff_id_number LIKE ? OR email LIKE ? OR department LIKE ?";
+        $countQuery .= " AND (full_name LIKE ? OR student_id LIKE ? OR room_number LIKE ? OR course LIKE ?)";
         $searchTerm = "%$search%";
         $countParams = [$searchTerm, $searchTerm, $searchTerm, $searchTerm];
         $types = "ssss";
@@ -64,32 +64,52 @@ try {
     $stmt->execute();
     $result = $stmt->get_result();
     $totalRow = $result->fetch_assoc();
-    $totalStaff = (int)($totalRow['total'] ?? 0);
+    $totalResidents = (int)($totalRow['total'] ?? 0);
     $stmt->close();
     
-    $totalPages = ceil($totalStaff / $perPage);
+    $totalPages = ceil($totalResidents / $perPage);
     if ($totalPages < 1) $totalPages = 1;
     if ($page > $totalPages) $page = $totalPages;
     if ($page < 1) $page = 1;
     $offset = ($page - 1) * $perPage;
     
-    // Get staff
+    // Get residents
     $query = "
-        SELECT staff_id, staff_id_number, full_name, email, department, card_uid, avatar, created_at
-        FROM staff_users
+        SELECT 
+            u.user_id,
+            u.full_name,
+            u.student_id,
+            u.room_number,
+            u.contact_number,
+            u.email,
+            u.profile_photo,
+            u.created_at,
+            rp.course,
+            rp.year_level,
+            rp.gender,
+            rp.age,
+            c.card_uid,
+            c.status as card_status,
+            ar.status as admission_status,
+            ar.room_assignment
+        FROM users u
+        LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+        LEFT JOIN rfid_cards c ON u.user_id = c.user_id AND c.status = 'active'
+        LEFT JOIN admission_records ar ON u.user_id = ar.user_id
+        WHERE u.status != 'deleted'
     ";
     
     $params = [];
     $types = "";
     
     if (!empty($search)) {
-        $query .= " WHERE full_name LIKE ? OR staff_id_number LIKE ? OR email LIKE ? OR department LIKE ?";
+        $query .= " AND (u.full_name LIKE ? OR u.student_id LIKE ? OR u.room_number LIKE ? OR rp.course LIKE ?)";
         $searchTerm = "%$search%";
         $params = [$searchTerm, $searchTerm, $searchTerm, $searchTerm];
         $types = "ssss";
     }
     
-    $query .= " ORDER BY full_name LIMIT ? OFFSET ?";
+    $query .= " ORDER BY u.created_at DESC LIMIT ? OFFSET ?";
     $params[] = $perPage;
     $params[] = $offset;
     $types .= "ii";
@@ -101,25 +121,35 @@ try {
     $stmt->execute();
     $result = $stmt->get_result();
     
-    $staffList = [];
+    $residents = [];
     while ($row = $result->fetch_assoc()) {
-        $staffList[] = $row;
+        $residents[] = $row;
     }
     $stmt->close();
     
 } catch (Exception $e) {
-    $error = 'Error loading staff: ' . $e->getMessage();
-    $staffList = [];
+    $error = 'Error loading residents: ' . $e->getMessage();
+    $residents = [];
 }
 
+// Count statistics
 $hasCardCount = 0;
 $noCardCount = 0;
+$activeCount = 0;
+$pendingCount = 0;
 
-foreach ($staffList as $staff) {
-    if (!empty($staff['card_uid'])) {
+foreach ($residents as $resident) {
+    if (!empty($resident['card_uid'])) {
         $hasCardCount++;
     } else {
         $noCardCount++;
+    }
+    
+    $admStatus = $resident['admission_status'] ?? 'pending';
+    if ($admStatus == 'active') {
+        $activeCount++;
+    } elseif ($admStatus == 'pending') {
+        $pendingCount++;
     }
 }
 
@@ -137,13 +167,33 @@ function getInitials($name) {
     }
     return substr($initials, 0, 2) ?: '?';
 }
+
+// ============================================================
+// HELPER: GET PROFILE PHOTO PATH
+// ============================================================
+function getProfilePhotoPath($photoPath) {
+    if (empty($photoPath)) {
+        return null;
+    }
+    
+    if (strpos($photoPath, 'uploads/') === 0) {
+        $fullPath = '../../' . $photoPath;
+    } else {
+        $fullPath = '../../uploads/resident_photos/' . $photoPath;
+    }
+    
+    if (file_exists($fullPath)) {
+        return $fullPath;
+    }
+    return null;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Staff View - Tap-and-Go Doorlock</title>
+    <title>Residents - Tap-and-Go Doorlock</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -202,37 +252,37 @@ function getInitials($name) {
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* STAFF CARD */
-        .staff-card {
+        /* RESIDENT CARD */
+        .resident-card {
             background: #111827 !important;
-            border-radius: 16px;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 16px !important;
             padding: 20px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
             transition: all 0.3s ease;
             text-align: center;
             height: 100%;
-            border: 1px solid #1a2a4a;
         }
-        .staff-card:hover {
+        .resident-card:hover {
             transform: translateY(-4px);
             box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important;
         }
-        .staff-card .name {
+        .resident-card .name {
             font-weight: 700;
             color: #ffd700 !important;
             font-size: 18px;
         }
-        .staff-card .department {
-            color: #9ca3af !important;
-            font-size: 14px;
-        }
-        .staff-card .staff-id {
+        .resident-card .student-id {
             color: #6b7280 !important;
             font-size: 12px;
         }
+        .resident-card .course-info {
+            color: #9ca3af !important;
+            font-size: 14px;
+        }
         
-        /* STAFF AVATAR */
-        .staff-avatar {
+        /* RESIDENT AVATAR */
+        .resident-avatar {
             width: 80px;
             height: 80px;
             border-radius: 50%;
@@ -247,12 +297,12 @@ function getInitials($name) {
             border: 3px solid #1a2a4a;
             background: linear-gradient(135deg, #667eea, #764ba2);
         }
-        .staff-avatar img {
+        .resident-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-        .staff-avatar .no-photo {
+        .resident-avatar .no-photo {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -262,7 +312,7 @@ function getInitials($name) {
             font-weight: 700;
             color: white;
         }
-        .staff-avatar .has-photo-badge {
+        .resident-avatar .has-photo-badge {
             position: absolute;
             top: -5px;
             right: -5px;
@@ -277,12 +327,12 @@ function getInitials($name) {
             justify-content: center;
             border: 2px solid #111827;
         }
-        .staff-avatar-wrapper {
+        .resident-avatar-wrapper {
             position: relative;
             display: inline-block;
         }
         
-        /* CARD UID BADGE */
+        /* BADGES */
         .card-uid-badge {
             display: inline-block;
             padding: 4px 14px;
@@ -302,8 +352,31 @@ function getInitials($name) {
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
         
+        .status-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .status-badge.active {
+            background: rgba(16, 185, 129, 0.2) !important;
+            color: #34d399 !important;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .status-badge.pending {
+            background: rgba(245, 158, 11, 0.2) !important;
+            color: #fbbf24 !important;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .status-badge.inactive {
+            background: rgba(107, 114, 128, 0.2) !important;
+            color: #9ca3af !important;
+            border: 1px solid rgba(107, 114, 128, 0.3);
+        }
+        
         /* STAT CARDS */
-        .staff-stat {
+        .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
             border-radius: 16px !important;
@@ -312,34 +385,18 @@ function getInitials($name) {
             transition: transform 0.3s ease;
             text-align: center;
         }
-        .staff-stat:hover { transform: translateY(-4px); }
-        .staff-stat .number {
+        .stat-card:hover { transform: translateY(-4px); }
+        .stat-card .number {
             font-size: 32px;
             font-weight: 700;
             color: #ffd700 !important;
         }
-        .staff-stat .label {
+        .stat-card .label {
             font-size: 13px;
             color: #6b7280 !important;
         }
         
         /* BUTTONS - VIEW ONLY */
-        .btn-print-id {
-            background: rgba(59, 130, 246, 0.2) !important;
-            color: #93c5fd !important;
-            border: 1px solid rgba(59, 130, 246, 0.3) !important;
-            padding: 6px 14px;
-            border-radius: 8px;
-            font-size: 12px;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .btn-print-id:hover {
-            background: rgba(59, 130, 246, 0.3) !important;
-            color: #93c5fd !important;
-        }
-        
         .btn-view {
             background: rgba(139, 92, 246, 0.2) !important;
             color: #a78bfa !important;
@@ -356,21 +413,28 @@ function getInitials($name) {
             color: #a78bfa !important;
         }
         
-        .staff-actions {
+        .btn-print-id {
+            background: rgba(59, 130, 246, 0.2) !important;
+            color: #93c5fd !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-print-id:hover {
+            background: rgba(59, 130, 246, 0.3) !important;
+            color: #93c5fd !important;
+        }
+        
+        .resident-actions {
             display: flex;
             justify-content: center;
             gap: 5px;
             flex-wrap: wrap;
             margin-top: 8px;
-        }
-        
-        .staff-id-badge {
-            background: rgba(255, 215, 0, 0.1);
-            color: #ffd700;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            border: 1px solid rgba(255, 215, 0, 0.15);
         }
         
         /* SEARCH */
@@ -473,6 +537,9 @@ function getInitials($name) {
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
         .text-muted { color: #6b7280 !important; }
+        .text-success { color: #34d399 !important; }
+        .text-danger { color: #f87171 !important; }
+        .text-warning { color: #fbbf24 !important; }
         
         .card {
             background: #111827 !important;
@@ -527,17 +594,17 @@ function getInitials($name) {
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            .staff-card { padding: 15px; }
-            .staff-card .name { font-size: 16px; }
-            .staff-avatar { width: 60px; height: 60px; font-size: 24px; }
+            .resident-card { padding: 15px; }
+            .resident-card .name { font-size: 16px; }
+            .resident-avatar { width: 60px; height: 60px; font-size: 24px; }
         }
         
         @media (max-width: 576px) {
-            .staff-actions {
+            .resident-actions {
                 flex-direction: column;
                 align-items: center;
             }
-            .staff-actions .btn {
+            .resident-actions .btn {
                 width: 100%;
                 text-align: center;
             }
@@ -557,9 +624,9 @@ function getInitials($name) {
                 <!-- HEADER -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
-                        <i class="fas fa-user-tie me-2" style="color: #ffd700;"></i>
-                        Staff View
-                        <span class="badge bg-secondary ms-2"><?php echo $totalStaff; ?> total</span>
+                        <i class="fas fa-users me-2" style="color: #ffd700;"></i>
+                        Residents View
+                        <span class="badge bg-secondary ms-2"><?php echo $totalResidents; ?> total</span>
                     </h1>
                     <div>
                         <span class="badge bg-success me-2">
@@ -582,21 +649,27 @@ function getInitials($name) {
                 <!-- STATISTICS -->
                 <div class="row g-3 mb-4">
                     <div class="col-4 col-sm-4 col-xl-3">
-                        <div class="staff-stat">
-                            <div class="number"><?php echo $totalStaff; ?></div>
-                            <div class="label">Total Staff</div>
+                        <div class="stat-card">
+                            <div class="number"><?php echo $totalResidents; ?></div>
+                            <div class="label">Total Residents</div>
                         </div>
                     </div>
                     <div class="col-4 col-sm-4 col-xl-3">
-                        <div class="staff-stat">
+                        <div class="stat-card">
                             <div class="number"><?php echo $hasCardCount; ?></div>
                             <div class="label">With Card</div>
                         </div>
                     </div>
                     <div class="col-4 col-sm-4 col-xl-3">
-                        <div class="staff-stat">
+                        <div class="stat-card">
                             <div class="number"><?php echo $noCardCount; ?></div>
                             <div class="label">No Card</div>
+                        </div>
+                    </div>
+                    <div class="col-4 col-sm-4 col-xl-3">
+                        <div class="stat-card">
+                            <div class="number"><?php echo $activeCount; ?></div>
+                            <div class="label">Active Admission</div>
                         </div>
                     </div>
                 </div>
@@ -608,13 +681,13 @@ function getInitials($name) {
                             <input type="text" 
                                    class="form-control" 
                                    name="search" 
-                                   placeholder="Search staff by name, ID, email, department..." 
+                                   placeholder="Search by name, ID, room, course..." 
                                    value="<?php echo htmlspecialchars($search); ?>">
                             <button type="submit" class="btn">
                                 <i class="fas fa-search"></i>
                             </button>
                             <?php if (!empty($search)): ?>
-                                <a href="staff-view.php" class="btn btn-outline-secondary ms-2">
+                                <a href="residents.php" class="btn btn-outline-secondary ms-2">
                                     <i class="fas fa-times"></i> Clear
                                 </a>
                             <?php endif; ?>
@@ -623,63 +696,57 @@ function getInitials($name) {
                     <div class="col-md-6 text-end">
                         <span class="text-muted small">
                             <i class="fas fa-users me-1"></i>
-                            Showing <?php echo count($staffList); ?> of <?php echo $totalStaff; ?> staff
+                            Showing <?php echo count($residents); ?> of <?php echo $totalResidents; ?> residents
                         </span>
                     </div>
                 </div>
 
-                <!-- STAFF LIST -->
+                <!-- RESIDENTS LIST -->
                 <div class="section-header mb-3">
-                    <h5><i class="fas fa-list me-2"></i>Staff List</h5>
+                    <h5><i class="fas fa-list me-2"></i>Residents List</h5>
                 </div>
 
-                <?php if (empty($staffList)): ?>
+                <?php if (empty($residents)): ?>
                     <div class="card">
                         <div class="card-body text-center py-5">
-                            <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">No staff members found</h5>
+                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No residents found</h5>
                             <?php if (!empty($search)): ?>
                                 <p class="text-muted small">Try adjusting your search criteria</p>
-                                <a href="staff-view.php" class="btn btn-outline-secondary btn-sm">Clear Search</a>
+                                <a href="residents.php" class="btn btn-outline-secondary btn-sm">Clear Search</a>
                             <?php else: ?>
-                                <p class="text-muted small">No staff records available</p>
+                                <p class="text-muted small">No resident records available</p>
                             <?php endif; ?>
                         </div>
                     </div>
                 <?php else: ?>
                     <div class="row g-4">
-                        <?php foreach ($staffList as $staff): 
-                            $name = $staff['full_name'] ?? 'Staff';
-                            $initials = '';
-                            $parts = explode(' ', $name);
-                            foreach ($parts as $p) {
-                                if (!empty($p)) $initials .= strtoupper($p[0]);
-                            }
-                            $initials = substr($initials, 0, 2) ?: 'ST';
+                        <?php foreach ($residents as $resident): 
+                            $name = $resident['full_name'] ?? 'Unknown';
+                            $initials = getInitials($name);
                             
-                            $photoPath = $staff['avatar'] ?? '';
+                            $photoPath = $resident['profile_photo'] ?? '';
                             $hasPhoto = false;
                             $fullPhotoPath = '';
                             
                             if (!empty($photoPath)) {
-                                if (strpos($photoPath, 'uploads/') === 0) {
-                                    $fullPhotoPath = '../../' . $photoPath;
-                                } else {
-                                    $fullPhotoPath = '../../uploads/staff_photos/' . $photoPath;
-                                }
-                                if (file_exists($fullPhotoPath)) {
+                                $fullPhotoPath = getProfilePhotoPath($photoPath);
+                                if ($fullPhotoPath) {
                                     $hasPhoto = true;
                                 }
                             }
+                            
+                            $admStatus = $resident['admission_status'] ?? 'pending';
+                            $statusClass = $admStatus == 'active' ? 'active' : ($admStatus == 'pending' ? 'pending' : 'inactive');
                         ?>
                             <div class="col-md-4 col-lg-3">
-                                <div class="staff-card">
-                                    <!-- Staff Avatar -->
-                                    <div class="staff-avatar-wrapper">
-                                        <div class="staff-avatar">
+                                <div class="resident-card">
+                                    <!-- Resident Avatar -->
+                                    <div class="resident-avatar-wrapper">
+                                        <div class="resident-avatar">
                                             <?php if ($hasPhoto): ?>
                                                 <img src="<?php echo $fullPhotoPath; ?>" 
-                                                     alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
+                                                     alt="<?php echo htmlspecialchars($resident['full_name']); ?>"
                                                      onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
                                                 <span class="has-photo-badge">
                                                     <i class="fas fa-check-circle"></i>
@@ -690,20 +757,34 @@ function getInitials($name) {
                                         </div>
                                     </div>
                                     
-                                    <div class="name"><?php echo htmlspecialchars($staff['full_name']); ?></div>
-                                    <div class="department"><?php echo htmlspecialchars($staff['department'] ?? 'Staff'); ?></div>
-                                    <div class="staff-id">
-                                        <span class="staff-id-badge">
-                                            <?php echo htmlspecialchars($staff['staff_id_number']); ?>
+                                    <div class="name"><?php echo htmlspecialchars($resident['full_name']); ?></div>
+                                    <div class="student-id">
+                                        <span class="text-muted small">
+                                            <i class="fas fa-id-card me-1"></i>
+                                            <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
+                                        </span>
+                                    </div>
+                                    <div class="course-info">
+                                        <?php echo htmlspecialchars($resident['course'] ?? 'N/A'); ?>
+                                        <?php if (!empty($resident['year_level'])): ?>
+                                            - <?php echo htmlspecialchars($resident['year_level']); ?>
+                                        <?php endif; ?>
+                                    </div>
+                                    
+                                    <!-- Room -->
+                                    <div class="mt-1">
+                                        <span class="text-muted small">
+                                            <i class="fas fa-door-open me-1"></i>
+                                            Room: <?php echo htmlspecialchars($resident['room_number'] ?? 'Not Assigned'); ?>
                                         </span>
                                     </div>
                                     
                                     <!-- Card UID -->
                                     <div class="mt-2">
-                                        <?php if (!empty($staff['card_uid'])): ?>
+                                        <?php if (!empty($resident['card_uid'])): ?>
                                             <span class="card-uid-badge has-card">
                                                 <i class="fas fa-id-card me-1"></i>
-                                                <?php echo htmlspecialchars($staff['card_uid']); ?>
+                                                <?php echo htmlspecialchars($resident['card_uid']); ?>
                                             </span>
                                         <?php else: ?>
                                             <span class="card-uid-badge no-card">
@@ -713,27 +794,35 @@ function getInitials($name) {
                                         <?php endif; ?>
                                     </div>
                                     
+                                    <!-- Admission Status -->
                                     <div class="mt-1">
-                                        <span class="text-muted small">
-                                            <i class="fas fa-envelope me-1"></i>
-                                            <?php echo htmlspecialchars($staff['email']); ?>
+                                        <span class="status-badge <?php echo $statusClass; ?>">
+                                            <i class="fas <?php echo $admStatus == 'active' ? 'fa-check-circle' : ($admStatus == 'pending' ? 'fa-clock' : 'fa-minus-circle'); ?> me-1"></i>
+                                            <?php echo ucfirst($admStatus); ?>
                                         </span>
                                     </div>
                                     
-                                    <!-- Staff Actions - VIEW ONLY -->
-                                    <div class="staff-actions">
-                                        <?php if (!empty($staff['card_uid'])): ?>
-                                            <a href="print-staff-id.php?uid=<?php echo $staff['card_uid']; ?>" 
+                                    <!-- Resident Actions - VIEW ONLY -->
+                                    <div class="resident-actions">
+                                        <?php if (!empty($resident['card_uid'])): ?>
+                                            <a href="print-resident-id.php?uid=<?php echo $resident['card_uid']; ?>" 
                                                target="_blank" 
                                                class="btn-print-id">
                                                 <i class="fas fa-print me-1"></i> Print ID
                                             </a>
                                         <?php endif; ?>
                                         
-                                        <a href="view-staff.php?id=<?php echo $staff['staff_id']; ?>" 
+                                        <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
                                            class="btn-view">
                                             <i class="fas fa-eye me-1"></i> View
                                         </a>
+                                        
+                                        <?php if (!empty($resident['admission_status'])): ?>
+                                            <a href="view-admission.php?id=<?php echo $resident['user_id']; ?>" 
+                                               class="btn-view">
+                                                <i class="fas fa-clipboard-list me-1"></i> Admission
+                                            </a>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -741,13 +830,13 @@ function getInitials($name) {
                     </div>
 
                     <!-- PAGINATION -->
-                    <?php if ($totalPages > 1 || $totalStaff > 0): ?>
+                    <?php if ($totalPages > 1 || $totalResidents > 0): ?>
                     <div class="pagination-container">
                         <div class="row align-items-center">
                             <div class="col-md-6">
                                 <div class="page-info">
                                     <i class="fas fa-info-circle me-1"></i>
-                                    Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalStaff); ?> of <?php echo $totalStaff; ?> staff
+                                    Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalResidents); ?> of <?php echo $totalResidents; ?> residents
                                     <span class="mx-1 text-muted">|</span>
                                     <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
                                 </div>
@@ -824,6 +913,8 @@ function getInitials($name) {
                     <span id="serverTime">Server Time: <?php echo date('F d, Y h:i A'); ?></span>
                     <span class="mx-2">|</span>
                     <span><?php echo $hasCardCount; ?> with card, <?php echo $noCardCount; ?> without card</span>
+                    <span class="mx-2">|</span>
+                    <span><?php echo $activeCount; ?> active, <?php echo $pendingCount; ?> pending</span>
                 </footer>
             </main>
         </div>
