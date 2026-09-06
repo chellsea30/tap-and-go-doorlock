@@ -205,25 +205,36 @@ class EncryptionHelper {
     }
 }
 
-/**
- * Global encryption functions for easy use
- */
-function encryptData(string $data): string {
-    return EncryptionHelper::encrypt($data);
+// ============================================================
+// ✅ FIXED: Check if functions already exist before declaring
+// ============================================================
+
+if (!function_exists('encryptData')) {
+    function encryptData(string $data): string {
+        return EncryptionHelper::encrypt($data);
+    }
 }
 
-function decryptData(string $data): string {
-    return EncryptionHelper::decrypt($data);
+if (!function_exists('decryptData')) {
+    function decryptData(string $data): string {
+        return EncryptionHelper::decrypt($data);
+    }
 }
 
-function encryptVisitorData(array $data): array {
-    return EncryptionHelper::encryptVisitorArray($data);
+if (!function_exists('encryptVisitorData')) {
+    function encryptVisitorData(array $data): array {
+        return EncryptionHelper::encryptVisitorArray($data);
+    }
 }
 
-function decryptVisitorData(array $data): array {
-    return EncryptionHelper::decryptVisitorArray($data);
+if (!function_exists('decryptVisitorData')) {
+    function decryptVisitorData(array $data): array {
+        return EncryptionHelper::decryptVisitorArray($data);
+    }
 }
 
-function isDataEncrypted(string $data): bool {
-    return EncryptionHelper::isEncrypted($data);
+if (!function_exists('isDataEncrypted')) {
+    function isDataEncrypted(string $data): bool {
+        return EncryptionHelper::isEncrypted($data);
+    }
 }
