@@ -2,77 +2,35 @@
     <div class="container-fluid">
         <a class="navbar-brand" href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? 'student-dashboard.php' : 'dashboard.php'; ?>">
             
-            <!-- ===== LOGO AT PANGALAN NG DORMITORY ===== -->
-            <img src="../assets/images/isu-logo.png" alt="ISU Logo" style="width: 45px; height: 45px; border-radius: 50%; object-fit: contain; border: 2px solid #ffd700; background: white; padding: 2px; margin-right: 10px; vertical-align: middle;">
+            <!-- ===== LOGO ===== -->
+            <img src="../assets/images/isu-logo.png" alt="ISU Logo" style="width: 55px; height: 55px; border-radius: 50%; object-fit: contain; border: 2px solid #ffd700; background: white; padding: 2px; margin-right: 15px;">
             
-            <span style="font-size: 18px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px; vertical-align: middle;">
+            <!-- ===== ISU-E LADIES DORMITORY (MAS MALAKI NA TEXT) ===== -->
+            <span style="font-size: 24px; font-weight: 900; color: #ffffff; letter-spacing: 1px; line-height: 1;">
                 ISU-E <span style="color: #ffd700;">LADIES DORMITORY</span>
             </span>
             
             <!-- ===== WELCOME BACK MESSAGE PER ROLE (MAS MALAKI AT MAY KULAY) ===== -->
             <?php if (isset($_SESSION['role']) && $_SESSION['role'] == 'student'): ?>
-                <span class="ms-3 fw-bold" style="font-size: 16px; color: #34d399;">Welcome back, STUDENT! 👋</span>
+                <span class="ms-4 fw-bold" style="font-size: 20px; color: #34d399;">Welcome back, STUDENT! 👋</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'administrator'): ?>
-                <span class="ms-3 fw-bold" style="font-size: 16px; color: #ffd700;">Welcome back, ADMIN! 👋</span>
+                <span class="ms-4 fw-bold" style="font-size: 20px; color: #ffd700;">Welcome back, ADMIN! 👋</span>
             <?php elseif (isset($_SESSION['role']) && $_SESSION['role'] == 'staff'): ?>
-                <span class="ms-3 fw-bold" style="font-size: 16px; color: #3b82f6;">Welcome back, STAFF! 👋</span>
+                <span class="ms-4 fw-bold" style="font-size: 20px; color: #3b82f6;">Welcome back, STAFF! 👋</span>
             <?php endif; ?>
             
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>
+        
+        <!-- ===== TINANGGAL NA ANG MGA NAV LINKS (Dashboard, Residents, etc.) PARA MALINIS ===== -->
         <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'dashboard.php' ? 'active' : ''; ?>" 
-                       href="<?php echo (isset($_SESSION['role']) && $_SESSION['role'] == 'student') ? 'student-dashboard.php' : 'dashboard.php'; ?>">
-                        <i class="fas fa-home"></i> Dashboard
-                    </a>
-                </li>
-                
-                <?php if (isset($_SESSION['role']) && $_SESSION['role'] != 'student'): ?>
-                <li class="nav-item">
-                    <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['residents.php', 'new-resident.php', 'admission-form.php']) ? 'active' : ''; ?>" href="residents.php">
-                        <i class="fas fa-users"></i> Residents
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'cards.php' ? 'active' : ''; ?>" href="cards.php">
-                        <i class="fas fa-id-card"></i> Cards
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'alerts.php' ? 'active' : ''; ?>" href="alerts.php">
-                        <i class="fas fa-bell"></i> Alerts
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'visitors.php' ? 'active' : ''; ?>" href="visitors.php">
-                        <i class="fas fa-user-plus"></i> Visitors
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>" href="reports.php">
-                        <i class="fas fa-chart-bar"></i> Reports
-                    </a>
-                </li>
-                <?php endif; ?>
-                
-                <?php if (isset($_SESSION['role']) && $_SESSION['role'] == 'administrator'): ?>
-                <li class="nav-item">
-                    <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'settings.php' ? 'active' : ''; ?>" href="settings.php">
-                        <i class="fas fa-cog"></i> Settings
-                    </a>
-                </li>
-                <?php endif; ?>
-            </ul>
-            
-            <!-- User Dropdown -->
-            <ul class="navbar-nav">
+            <ul class="navbar-nav ms-auto">
+                <!-- User Dropdown -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-user-circle me-1"></i>
+                        <i class="fas fa-user-circle me-1" style="font-size: 20px;"></i>
                         <?php echo htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['student_name'] ?? 'User'); ?>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
@@ -140,7 +98,7 @@
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 5px;
+        gap: 10px;
     }
     
     /* ===== LOGOUT MODAL DARK MODE COMPATIBILITY ===== */
@@ -237,6 +195,25 @@
     }
     
     /* ===== RESPONSIVE ===== */
+    @media (max-width: 992px) {
+        .navbar-brand {
+            flex-wrap: wrap;
+        }
+        .navbar-brand img {
+            width: 40px !important;
+            height: 40px !important;
+        }
+        .navbar-brand span {
+            font-size: 18px !important;
+        }
+        .ms-4 {
+            margin-left: 0 !important;
+            margin-top: 5px;
+            display: block;
+            width: 100%;
+        }
+    }
+    
     @media (max-width: 768px) {
         .navbar-brand {
             gap: 2px;
@@ -246,7 +223,7 @@
             height: 35px !important;
         }
         .navbar-brand span {
-            font-size: 14px !important;
+            font-size: 15px !important;
         }
         .modal-dialog {
             margin: 10px;
