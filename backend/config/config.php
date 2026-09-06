@@ -314,7 +314,7 @@ function closeDBConnectionSafe(?mysqli $conn): void {
 }
 
 // ============================================
-// ENCRYPTION FUNCTIONS
+// ENCRYPTION FUNCTIONS - FIXED
 // ============================================
 
 /**
@@ -331,9 +331,14 @@ function encryptData(string $data, ?string $key = null): string {
         $key = $key ?? ENCRYPTION_KEY;
         $method = ENCRYPTION_METHOD;
         
-        // Generate random IV
+        // Generate random IV (16 bytes for AES-256-CBC)
         $ivLength = openssl_cipher_iv_length($method);
         $iv = openssl_random_pseudo_bytes($ivLength);
+        
+        // Ensure IV is exactly the right length
+        if (strlen($iv) !== $ivLength) {
+            throw new Exception("Invalid IV length: " . strlen($iv) . " expected: $ivLength");
+        }
         
         // Encrypt data
         $encrypted = openssl_encrypt(
@@ -349,7 +354,15 @@ function encryptData(string $data, ?string $key = null): string {
         }
         
         // Combine IV and encrypted data, then base64 encode
-        return base64_encode($iv . $encrypted);
+        $result = base64_encode($iv . $encrypted);
+        
+        // Verify we can decrypt it (optional, removes if causing issues)
+        // $testDecrypt = decryptData($result, $key);
+        // if ($testDecrypt !== $data) {
+        //     error_log("Encryption verification failed for data: " . substr($data, 0, 50));
+        // }
+        
+        return $result;
         
     } catch (Exception $e) {
         error_log("Encryption error: " . $e->getMessage());
@@ -358,11 +371,12 @@ function encryptData(string $data, ?string $key = null): string {
 }
 
 /**
- * Decrypt data using AES-256-CBC
+ * Decrypt data using AES-256-CBC - SAFE VERSION
+ * Handles plain text data gracefully without errors
  * 
  * @param string $data Base64 encoded encrypted data
  * @param string|null $key Optional custom key
- * @return string Decrypted data
+ * @return string Decrypted data or original if not encrypted
  */
 function decryptData(string $data, ?string $key = null): string {
     if (empty($data)) return '';
@@ -370,17 +384,35 @@ function decryptData(string $data, ?string $key = null): string {
     try {
         $key = $key ?? ENCRYPTION_KEY;
         $method = ENCRYPTION_METHOD;
+        $ivLength = openssl_cipher_iv_length($method);
         
-        // Decode base64
-        $decoded = base64_decode($data);
+        // ✅ FIX: Try to decode base64
+        $decoded = base64_decode($data, true);
         if ($decoded === false) {
+            // Not base64 encoded - probably plain text
+            return $data;
+        }
+        
+        // ✅ FIX: Check if data is long enough
+        if (strlen($decoded) < $ivLength) {
+            // Data is too short - probably plain text
             return $data;
         }
         
         // Extract IV and encrypted data
-        $ivLength = openssl_cipher_iv_length($method);
         $iv = substr($decoded, 0, $ivLength);
         $encrypted = substr($decoded, $ivLength);
+        
+        // ✅ FIX: Verify IV length
+        if (strlen($iv) !== $ivLength) {
+            // Invalid IV - probably plain text
+            return $data;
+        }
+        
+        // ✅ FIX: Check if there's encrypted data
+        if (empty($encrypted)) {
+            return $data;
+        }
         
         // Decrypt
         $decrypted = openssl_decrypt(
@@ -391,7 +423,9 @@ function decryptData(string $data, ?string $key = null): string {
             $iv
         );
         
+        // ✅ FIX: Check if decryption succeeded
         if ($decrypted === false) {
+            // Decryption failed - maybe not encrypted or wrong key
             return $data;
         }
         
@@ -399,7 +433,8 @@ function decryptData(string $data, ?string $key = null): string {
         
     } catch (Exception $e) {
         error_log("Decryption error: " . $e->getMessage());
-        return $data; // Fallback to raw data
+        // ✅ FIX: Return original data on error
+        return $data;
     }
 }
 
@@ -410,7 +445,6 @@ function decryptData(string $data, ?string $key = null): string {
  * @return bool True if data appears encrypted
  */
 function isEncrypted(string $data): bool {
-    // Check if data is base64 encoded and likely encrypted
     if (empty($data)) return false;
     if (strlen($data) < 24) return false;
     
@@ -423,6 +457,40 @@ function isEncrypted(string $data): bool {
     if (strlen($decoded) < $ivLength + 16) return false;
     
     return true;
+}
+
+/**
+ * Check if data is properly encrypted with valid IV
+ * 
+ * @param string $data Data to check
+ * @return bool True if data appears to be properly encrypted
+ */
+function isProperlyEncrypted(string $data): bool {
+    if (empty($data)) return false;
+    
+    // Check if it's base64
+    $decoded = base64_decode($data, true);
+    if ($decoded === false) return false;
+    
+    // Check IV length
+    $ivLength = openssl_cipher_iv_length(ENCRYPTION_METHOD);
+    if (strlen($decoded) < $ivLength) return false;
+    
+    return true;
+}
+
+/**
+ * Safe decrypt - only decrypt if data is encrypted
+ * 
+ * @param string $data Data to decrypt
+ * @param string|null $key Optional custom key
+ * @return string Decrypted or original data
+ */
+function safeDecryptData(string $data, ?string $key = null): string {
+    if (isProperlyEncrypted($data)) {
+        return decryptData($data, $key);
+    }
+    return $data; // Return as-is if not encrypted
 }
 
 /**
@@ -447,7 +515,7 @@ function encryptArray(array $data, array $fields = []): array {
 }
 
 /**
- * Decrypt array values recursively
+ * Decrypt array values recursively - SAFE VERSION
  * 
  * @param array $data Array to decrypt
  * @param array $fields Fields to decrypt
@@ -459,7 +527,7 @@ function decryptArray(array $data, array $fields = []): array {
         if (is_array($value)) {
             $result[$key] = decryptArray($value, $fields);
         } elseif (is_string($value) && (empty($fields) || in_array($key, $fields))) {
-            $result[$key] = decryptData($value);
+            $result[$key] = safeDecryptData($value);
         } else {
             $result[$key] = $value;
         }
@@ -494,7 +562,7 @@ function encryptVisitor(array $visitorData): array {
 }
 
 /**
- * Decrypt visitor data
+ * Decrypt visitor data - SAFE VERSION
  * 
  * @param array $visitorData Visitor data array
  * @return array Decrypted visitor data
@@ -513,6 +581,35 @@ function decryptVisitor(array $visitorData): array {
     ];
     
     return decryptArray($visitorData, $decryptFields);
+}
+
+/**
+ * Check if a database record is encrypted
+ * 
+ * @param array $row Database row
+ * @param string $field Field name to check
+ * @return bool True if the field appears encrypted
+ */
+function isRecordEncrypted(array $row, string $field = 'is_encrypted'): bool {
+    return isset($row[$field]) && (int)$row[$field] === 1;
+}
+
+/**
+ * Decrypt a record field if encrypted
+ * 
+ * @param array $row Database row
+ * @param string $field Field name
+ * @param string $encryptedField Optional encrypted field name
+ * @return string Decrypted value or original
+ */
+function decryptFieldIfEncrypted(array $row, string $field, string $encryptedField = null): string {
+    $encryptedField = $encryptedField ?? $field;
+    
+    if (isRecordEncrypted($row) && isset($row[$encryptedField])) {
+        return safeDecryptData($row[$encryptedField]);
+    }
+    
+    return $row[$field] ?? '';
 }
 
 // ============================================
