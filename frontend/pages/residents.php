@@ -1,9 +1,10 @@
 <?php
 /**
- * Tap-and-Go Doorlock - Residents List
- * WITH PROFILE PHOTO UPLOAD AND DISPLAY - FIXED PATH
+ * Tap-and-Go Doorlock - Dashboard
+ * COMPLETE WITH UNAUTHORIZED ALERT - USING alert_logs
  * PURE DARK MODE - No white backgrounds
- * WITH SHOW ENTRIES PAGINATION
+ * WITH CUSTOM STATISTICS (Inside/Outside/Visitors)
+ * WITH COURSE & YEAR LEVEL PIE CHART (CSS-BASED)
  */
 
 // Start session
@@ -18,325 +19,337 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
 }
-
-// ============================================================
-// FIX: MOVE ALL REDIRECTS HERE (BEFORE INCLUDING HEADER)
-// ============================================================
-// Handle Delete Request
-if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
-    $delete_id = (int)$_GET['delete'];
-    
-    try {
-        $conn = getDBConnection();
-        $stmt = $conn->prepare("UPDATE users SET status = 'deleted' WHERE user_id = ?");
-        $stmt->bind_param("i", $delete_id);
-        
-        if ($stmt->execute()) {
-            header('Location: residents.php?msg=deleted');
-            exit();
-        } else {
-            $error = "Failed to delete resident: " . $stmt->error;
-        }
-        $stmt->close();
-    } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
-    }
-}
-
-// ============================================================
-// HANDLE PROFILE PHOTO UPLOAD - FIXED
-// ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && isset($_POST['user_id'])) {
-    $user_id = (int)$_POST['user_id'];
-    
-    if (isset($_FILES['profile_photo']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
-        $upload_dir = '../../uploads/resident_photos/';
-        
-        if (!is_dir($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
-        }
-        
-        $file_extension = pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION);
-        $file_name = time() . '_' . $user_id . '.' . $file_extension;
-        $target_file = $upload_dir . $file_name;
-        
-        $image_info = getimagesize($_FILES['profile_photo']['tmp_name']);
-        if ($image_info !== false) {
-            $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            if (in_array($image_info['mime'], $allowed_types)) {
-                if (move_uploaded_file($_FILES['profile_photo']['tmp_name'], $target_file)) {
-                    // FIX: Store relative path from root
-                    $photo_path = 'uploads/resident_photos/' . $file_name;
-                    
-                    $conn = getDBConnection();
-                    $stmt = $conn->prepare("UPDATE users SET profile_photo = ? WHERE user_id = ?");
-                    $stmt->bind_param("si", $photo_path, $user_id);
-                    
-                    if ($stmt->execute()) {
-                        $success = "Profile photo uploaded successfully!";
-                    } else {
-                        $error = "Failed to update database: " . $stmt->error;
-                    }
-                    $stmt->close();
-                } else {
-                    $error = "Failed to upload photo. Please check folder permissions.";
-                }
-            } else {
-                $error = "Invalid file type. Please upload JPEG, PNG, GIF, or WEBP.";
-            }
-        } else {
-            $error = "Uploaded file is not a valid image.";
-        }
-    } else {
-        $error = "Please select a photo to upload.";
-    }
-}
-
-// ============================================================
-// HANDLE PHOTO REMOVE - FIXED
-// ============================================================
-if (isset($_GET['remove_photo']) && is_numeric($_GET['remove_photo'])) {
-    $user_id = (int)$_GET['remove_photo'];
-    
-    try {
-        $conn = getDBConnection();
-        
-        $stmt = $conn->prepare("SELECT profile_photo FROM users WHERE user_id = ?");
-        $stmt->bind_param("i", $user_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
-        $stmt->close();
-        
-        if (!empty($row['profile_photo'])) {
-            // FIX: Determine correct file path
-            if (strpos($row['profile_photo'], 'uploads/') === 0) {
-                $file_path = '../../' . $row['profile_photo'];
-            } else {
-                $file_path = '../../uploads/resident_photos/' . $row['profile_photo'];
-            }
-            
-            if (file_exists($file_path)) {
-                unlink($file_path);
-            }
-        }
-        
-        $stmt = $conn->prepare("UPDATE users SET profile_photo = NULL WHERE user_id = ?");
-        $stmt->bind_param("i", $user_id);
-        
-        if ($stmt->execute()) {
-            $success = "Profile photo removed successfully!";
-        } else {
-            $error = "Failed to remove photo: " . $stmt->error;
-        }
-        $stmt->close();
-    } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
-    }
-}
-
-// ============================================================
-// NOW INCLUDE HEADER (AFTER ALL REDIRECTS)
-// ============================================================
+// Include header
 include '../includes/header.php'; 
 
-// ============================================================
-// INITIALIZE VARIABLES
-// ============================================================
-$residents = [];
-$totalResidents = 0;
-$totalPages = 1;
-$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$search = isset($_GET['search']) ? trim($_GET['search']) : '';
-$perPage = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 10;
-$error = '';
-$success = '';
-$delete_success = false;
+$conn = getDBConnection();
 
-// Valid per page options
-$perPageOptions = [10, 25, 50, 100];
-if (!in_array($perPage, $perPageOptions)) {
-    $perPage = 10;
+// ============================================================
+// GET DASHBOARD STATISTICS
+// ============================================================
+$stats = [
+    'total_residents' => 0,          // Total registered residents
+    'active_cards' => 0,             // Total active cards
+    'today_access' => 0,             // Total access today
+    'unauthorized_today' => 0,       // Total unauthorized today
+    'residents_inside' => 0,         // Total residents inside rooms
+    'residents_outside' => 0,        // Total residents outside
+    'total_visitors' => 0,           // Total registered visitors
+    'visitors_inside' => 0,          // Total visitors inside
+    'pending_alerts' => 0,
+    'critical_alerts' => 0,
+    'total_rooms' => 5,
+    'max_per_room' => 7
+];
+
+// 1. Total Registered Residents (ALL registered, regardless of status)
+$result = $conn->query("SELECT COUNT(*) as count FROM users");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['total_residents'] = (int)$row['count'];
 }
 
-// Get dark mode
-$darkModeClass = '';
-$darkModeFromDb = 'false';
-if (isset($_SESSION['admin_id'])) {
-    try {
-        $conn = getDBConnection();
-        $stmt = $conn->prepare("SELECT setting_value FROM user_settings WHERE admin_id = ? AND setting_key = 'dark_mode'");
-        $stmt->bind_param("i", $_SESSION['admin_id']);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($row = $result->fetch_assoc()) {
-            $darkModeFromDb = $row['setting_value'];
-            if ($darkModeFromDb == 'true') {
-                $darkModeClass = 'dark-mode';
-            }
+// 2. Total Active Cards
+$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'active'");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['active_cards'] = (int)$row['count'];
+}
+
+// 3. Today's Access
+$result = $conn->query("SELECT COUNT(*) as count FROM access_logs WHERE DATE(timestamp) = CURDATE()");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['today_access'] = (int)$row['count'];
+}
+
+// 4. Total Unauthorized Today (Denied access today)
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM access_logs 
+    WHERE DATE(timestamp) = CURDATE() 
+    AND access_status = 'denied'
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['unauthorized_today'] = (int)$row['count'];
+}
+
+// 5 & 6. Total Residents Inside & Outside
+$residentsStatus = [
+    'inside' => [],
+    'outside' => []
+];
+
+$result = $conn->query("
+    SELECT 
+        u.user_id, 
+        u.full_name, 
+        al.access_type as last_access_type,
+        al.timestamp as last_timestamp
+    FROM users u
+    LEFT JOIN access_logs al ON u.user_id = al.user_id 
+        AND al.timestamp = (
+            SELECT MAX(timestamp) 
+            FROM access_logs al2 
+            WHERE al2.user_id = u.user_id
+        )
+    WHERE u.status = 'active'
+    AND u.room_number IS NOT NULL
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        if ($row['last_access_type'] === 'entry') {
+            $residentsStatus['inside'][] = $row;
+        } else {
+            $residentsStatus['outside'][] = $row;
         }
-        $stmt->close();
-    } catch (Exception $e) {
-        // Silently fail
+    }
+}
+
+$stats['residents_inside'] = count($residentsStatus['inside']);
+$stats['residents_outside'] = count($residentsStatus['outside']);
+
+// 7. Total Visitors (Registered visitors)
+$result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE DATE(entry_timestamp) = CURDATE()");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['total_visitors'] = (int)$row['count'];
+}
+
+// 8. Total Visitors Inside (Visitors na hindi pa nag-exit)
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM visitor_logs 
+    WHERE DATE(entry_timestamp) = CURDATE() 
+    AND exit_timestamp IS NULL
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['visitors_inside'] = (int)$row['count'];
+}
+
+// Pending alerts
+$result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'pending'");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['pending_alerts'] = (int)$row['count'];
+}
+
+// Critical alerts (pending unauthorized)
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM alert_logs 
+    WHERE delivery_status = 'pending' 
+    AND alert_type = 'unauthorized'
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['critical_alerts'] = (int)$row['count'];
+}
+
+// ============================================================
+// GET COURSE & YEAR LEVEL DISTRIBUTION (FOR PIE CHART)
+// ============================================================
+$courseData = [];
+$yearLevelData = [];
+
+$result = $conn->query("
+    SELECT rp.course, COUNT(*) as count
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    WHERE u.status = 'active' AND rp.course IS NOT NULL
+    GROUP BY rp.course
+    ORDER BY count DESC
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $courseData[] = $row;
+    }
+}
+
+$result = $conn->query("
+    SELECT rp.year_level, COUNT(*) as count
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    WHERE u.status = 'active' AND rp.year_level IS NOT NULL
+    GROUP BY rp.year_level
+    ORDER BY FIELD(rp.year_level, '1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year')
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $yearLevelData[] = $row;
     }
 }
 
 // ============================================================
-// GET RESIDENTS LIST
+// GET LATEST UNAUTHORIZED ACCESS - FROM alert_logs
 // ============================================================
-try {
-    $conn = getDBConnection();
-    
-    // Count total residents
-    $countQuery = "SELECT COUNT(*) as total FROM users WHERE status != 'deleted'";
-    $countParams = [];
-    $types = "";
-    
-    if (!empty($search)) {
-        $countQuery .= " AND (full_name LIKE ? OR student_id LIKE ? OR room_number LIKE ?)";
-        $searchTerm = "%$search%";
-        $countParams = [$searchTerm, $searchTerm, $searchTerm];
-        $types = "sss";
+$latestUnauthorized = null;
+$result = $conn->query("
+    SELECT 
+        alog.*,
+        c.card_type as rfid_card_type,
+        c.visitor_name,
+        c.resident_visited,
+        u.full_name as user_name,
+        u.room_number,
+        ru.full_name as resident_visited_name
+    FROM alert_logs alog
+    LEFT JOIN rfid_cards c ON alog.card_uid = c.card_uid
+    LEFT JOIN users u ON c.user_id = u.user_id
+    LEFT JOIN users ru ON c.resident_visited = ru.user_id
+    WHERE alog.alert_type = 'unauthorized'
+    AND alog.delivery_status = 'pending'
+    ORDER BY alog.timestamp DESC 
+    LIMIT 1
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $displayName = !empty($row['user_name']) ? $row['user_name'] : 'Unknown';
+    if ($row['rfid_card_type'] == 'visitor' && !empty($row['visitor_name'])) {
+        $displayName = $row['visitor_name'] . ' (Visitor)';
     }
-    
-    $stmt = $conn->prepare($countQuery);
-    if (!empty($types)) {
-        $stmt->bind_param($types, ...$countParams);
+    if (empty($displayName) || $displayName == 'Unknown') {
+        $displayName = 'Unknown Card';
     }
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $totalRow = $result->fetch_assoc();
-    $totalResidents = (int)($totalRow['total'] ?? 0);
-    $stmt->close();
+    $row['display_name'] = $displayName;
+    $row['card_uid'] = $row['card_uid'] ?? 'N/A';
+    $row['access_type'] = $row['access_type'] ?? 'entry';
+    $row['timestamp'] = $row['timestamp'] ?? date('Y-m-d H:i:s');
+    $latestUnauthorized = $row;
+}
+
+// ============================================================
+// GET LATEST ALERTS
+// ============================================================
+$latestAlerts = [];
+$result = $conn->query("
+    SELECT 
+        alog.*,
+        c.card_type as rfid_card_type,
+        c.visitor_name,
+        c.resident_visited,
+        u.full_name as user_name,
+        u.room_number,
+        ru.full_name as resident_visited_name
+    FROM alert_logs alog
+    LEFT JOIN rfid_cards c ON alog.card_uid = c.card_uid
+    LEFT JOIN users u ON c.user_id = u.user_id
+    LEFT JOIN users ru ON c.resident_visited = ru.user_id
+    WHERE alog.delivery_status = 'pending'
+    ORDER BY alog.timestamp DESC 
+    LIMIT 5
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $displayName = !empty($row['user_name']) ? $row['user_name'] : 'Unknown';
+        if ($row['rfid_card_type'] == 'visitor' && !empty($row['visitor_name'])) {
+            $displayName = $row['visitor_name'] . ' (Visitor)';
+        }
+        if (empty($displayName) || $displayName == 'Unknown') {
+            $displayName = 'Unknown Card';
+        }
+        $row['display_name'] = $displayName;
+        $latestAlerts[] = $row;
+    }
+}
+
+// ============================================================
+// GET ROOM OCCUPANCY DATA (Rooms 1-5)
+// ============================================================
+$roomData = [];
+for ($i = 1; $i <= 5; $i++) {
+    $roomData[$i] = [
+        'room_number' => $i,
+        'occupants' => [],
+        'count' => 0,
+        'is_full' => false
+    ];
     
-    $totalPages = ceil($totalResidents / $perPage);
-    if ($totalPages < 1) $totalPages = 1;
-    if ($page > $totalPages) $page = $totalPages;
-    if ($page < 1) $page = 1;
-    $offset = ($page - 1) * $perPage;
-    
-    // Get residents
-    $query = "
-        SELECT 
-            u.*,
-            u.profile_photo,
-            rp.course,
-            rp.year_level,
-            rp.gender,
-            rp.birth_date,
-            rp.age,
-            rp.religion,
-            rp.dialect,
-            rp.emergency_name,
-            rp.emergency_relationship,
-            rp.emergency_address,
-            rp.date_registered,
-            c.card_uid,
-            c.status as card_status,
-            ar.status as admission_status,
-            ar.room_assignment
+    $stmt = $conn->prepare("
+        SELECT u.user_id, u.full_name, u.student_id, rp.course, rp.year_level,
+               al.timestamp as last_entry, al.card_uid
         FROM users u
         LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-        LEFT JOIN rfid_cards c ON u.user_id = c.user_id AND c.status = 'active'
-        LEFT JOIN admission_records ar ON u.user_id = ar.user_id
-        WHERE u.status != 'deleted'
-    ";
-    
-    $params = [];
-    $types = "";
-    
-    if (!empty($search)) {
-        $query .= " AND (u.full_name LIKE ? OR u.student_id LIKE ? OR u.room_number LIKE ?)";
-        $searchTerm = "%$search%";
-        $params = [$searchTerm, $searchTerm, $searchTerm];
-        $types = "sss";
-    }
-    
-    $query .= " ORDER BY u.created_at DESC LIMIT ? OFFSET ?";
-    $params[] = $perPage;
-    $params[] = $offset;
-    $types .= "ii";
-    
-    $stmt = $conn->prepare($query);
-    if (!empty($types)) {
-        $stmt->bind_param($types, ...$params);
-    }
+        LEFT JOIN access_logs al ON u.user_id = al.user_id AND al.access_type = 'entry'
+        WHERE u.room_number = ? 
+        AND u.status = 'active'
+        AND al.timestamp = (
+            SELECT MAX(timestamp) 
+            FROM access_logs al2 
+            WHERE al2.user_id = u.user_id
+        )
+        ORDER BY u.full_name
+    ");
+    $stmt->bind_param("i", $i);
     $stmt->execute();
     $result = $stmt->get_result();
     
-    $residents = [];
     while ($row = $result->fetch_assoc()) {
-        $residents[] = $row;
+        $roomData[$i]['occupants'][] = $row;
+        $roomData[$i]['count']++;
     }
     $stmt->close();
     
-} catch (Exception $e) {
-    $error = 'Error loading residents: ' . $e->getMessage();
-    $residents = [];
-}
-
-$delete_success = isset($_GET['msg']) && $_GET['msg'] === 'deleted';
-
-// ============================================================
-// HELPER FUNCTION: GET PROFILE PHOTO PATH - FIXED
-// ============================================================
-function getProfilePhotoPath($photoPath) {
-    if (empty($photoPath)) {
-        return null;
-    }
-    
-    // Check if path already has 'uploads/'
-    if (strpos($photoPath, 'uploads/') === 0) {
-        $fullPath = '../../' . $photoPath;
-    } else {
-        $fullPath = '../../uploads/resident_photos/' . $photoPath;
-    }
-    
-    if (file_exists($fullPath)) {
-        return $fullPath;
-    }
-    return null;
+    $roomData[$i]['is_full'] = $roomData[$i]['count'] >= 7;
 }
 
 // ============================================================
-// HELPER FUNCTION: GET INITIALS
+// GET RECENT ANNOUNCEMENTS
 // ============================================================
-function getInitials($name) {
-    if (empty($name)) return '?';
-    $parts = explode(' ', $name);
-    $initials = '';
-    foreach ($parts as $part) {
-        if (!empty($part)) {
-            $initials .= strtoupper($part[0]);
-        }
+$announcements = [];
+$result = $conn->query("
+    SELECT a.*, u.full_name as admin_name 
+    FROM announcements a
+    LEFT JOIN admin_users u ON a.admin_id = u.admin_id
+    WHERE a.is_active = 1
+    ORDER BY a.priority = 'high' DESC, a.created_at DESC
+    LIMIT 3
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $announcements[] = $row;
     }
-    return substr($initials, 0, 2) ?: '?';
 }
+
+$showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Residents - Tap-and-Go Doorlock</title>
+    <title>Dashboard - Tap-and-Go Doorlock</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="../assets/css/master.css">
+
     <style>
         /* ============================================================
            GLOBAL DARK THEME
            ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body {
-            height: 100%;
+        body {
             font-family: 'Inter', sans-serif;
             background: #0a0e1a !important;
             color: #e0e0e0 !important;
+            min-height: 100vh;
+            padding-top: 70px !important; /* FIX: Add padding for fixed navbar */
         }
         
         /* ============================================================
-           FIXED NAVBAR
+           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
+           ============================================================ */
+        .container-fluid {
+            padding-top: 10px !important;
+        }
+        
+        main {
+            padding-top: 10px !important;
+            margin-top: 0 !important;
+        }
+        
+        /* If navbar is fixed-top, ensure content doesn't hide behind it */
+        .navbar.fixed-top + .container-fluid,
+        .navbar.fixed-top ~ .container-fluid {
+            padding-top: 20px !important;
+        }
+        
+        /* ============================================================
+           DARK NAVBAR OVERRIDE
            ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
@@ -346,7 +359,7 @@ function getInitials($name) {
             left: 0 !important;
             right: 0 !important;
             z-index: 1050 !important;
-            height: 56px !important;
+            height: 70px !important;
         }
         .navbar-brand { color: #e0e0e0 !important; }
         .navbar .nav-link { color: rgba(255,255,255,0.6) !important; }
@@ -354,26 +367,16 @@ function getInitials($name) {
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
         /* ============================================================
-           SIDEBAR - FIXED POSITION
+           DARK SIDEBAR
            ============================================================ */
         .sidebar {
-            position: fixed !important;
-            top: 56px !important;
-            left: 0 !important;
-            bottom: 0 !important;
-            width: 220px !important;
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
-            overflow-y: auto !important;
-            z-index: 1040 !important;
-            padding-top: 10px !important;
+            padding-top: 80px !important; /* FIX: Add padding for fixed navbar */
+            min-height: calc(100vh - 70px) !important;
         }
         .sidebar .nav-link {
             color: #9090a0 !important;
-            padding: 8px 16px !important;
-            border-radius: 8px !important;
-            margin: 2px 10px !important;
-            font-size: 13px !important;
         }
         .sidebar .nav-link:hover {
             background: rgba(255,255,255,0.05) !important;
@@ -383,50 +386,8 @@ function getInitials($name) {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             color: white !important;
         }
-        .sidebar .nav-link i {
-            width: 18px;
-            text-align: center;
-        }
-        .sidebar-footer { 
-            border-top-color: #1a2a4a !important;
-            padding: 12px 16px !important;
-            margin-top: 10px !important;
-        }
-        .sidebar-footer .text-muted { color: #606070 !important; font-size: 11px !important; }
-        
-        /* ============================================================
-           WRAPPER - FULL HEIGHT
-           ============================================================ */
-        .wrapper {
-            display: flex;
-            min-height: 100vh;
-        }
-        
-        /* ============================================================
-           MAIN CONTENT - OFFSET FOR FIXED NAVBAR & SIDEBAR
-           ============================================================ */
-        .main-content {
-            margin-left: 220px !important;
-            margin-top: 56px !important;
-            padding: 15px 25px !important;
-            flex: 1;
-            min-height: calc(100vh - 56px) !important;
-            background: #0a0e1a !important;
-        }
-        
-        /* ============================================================
-           FOOTER
-           ============================================================ */
-        .footer {
-            margin-left: 220px !important;
-            margin-top: 0 !important;
-            padding: 10px 25px !important;
-            background: #0d1528 !important;
-            border-top: 1px solid #1a2a4a !important;
-            color: #606070 !important;
-            font-size: 12px !important;
-            text-align: center !important;
-        }
+        .sidebar-footer { border-top-color: #1a2a4a !important; }
+        .sidebar-footer .text-muted { color: #606070 !important; }
         
         /* ============================================================
            DARK CARDS
@@ -434,897 +395,1154 @@ function getInitials($name) {
         .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
-            border-radius: 12px !important;
+            border-radius: 16px !important;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
         }
+        .card-header {
+            background: #111827 !important;
+            border-bottom: 1px solid #1a2a4a !important;
+        }
+        .card-header h5 { color: #e0e0e0 !important; }
         .card-body { background: #111827 !important; }
-        .card .text-muted { color: #808090 !important; }
-        .card h5 { color: #e0e0e0 !important; }
         
         /* ============================================================
-           RESIDENT CARD - DARK
+           DARK STAT CARDS
            ============================================================ */
-        .resident-card {
+        .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
-            border-radius: 12px !important;
-            padding: 14px 18px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.3) !important;
-            transition: all 0.3s ease;
-            border-left: 3px solid #1a3a6a;
-        }
-        .resident-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 25px rgba(0,0,0,0.5) !important;
-        }
-        .resident-card .text-muted { color: #808090 !important; }
-        .resident-card strong { color: #e0e0e0 !important; }
-        
-        /* ============================================================
-           RESIDENT AVATAR
-           ============================================================ */
-        .resident-avatar {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
+            border-radius: 16px !important;
+            padding: 18px 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
             display: flex;
             align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            overflow: hidden;
-            border: 2px solid #2a2a4a;
+            gap: 15px;
             position: relative;
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
-            cursor: pointer;
+            overflow: hidden;
         }
-        .resident-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+        .stat-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; color: white; flex-shrink: 0;
         }
-        .resident-avatar .no-photo {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
+        .stat-number { font-size: 24px; font-weight: 700; color: #e0e0e0; margin: 0; }
+        .stat-label { font-size: 12px; color: #808090; margin: 0; }
+        .stat-card .text-danger { color: #f87171 !important; }
+        .stat-card .text-success { color: #34d399 !important; }
+        
+        /* ============================================================
+           DARK ROOM CARDS
+           ============================================================ */
+        .room-card {
+            background: #111827 !important;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 16px !important;
+            padding: 18px 20px;
+            border-left: 4px solid #10b981;
+            transition: all 0.3s ease;
             height: 100%;
-            font-size: 18px;
+        }
+        .room-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+        .room-card .room-title {
             font-weight: 700;
-            color: white;
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
+            color: #93c5fd !important;
+            font-size: 18px;
+            margin-bottom: 2px;
         }
-        .resident-avatar .upload-overlay {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            text-align: center;
-            font-size: 9px;
-            padding: 2px 0;
-            opacity: 0;
-            transition: all 0.3s ease;
-        }
-        .resident-avatar:hover .upload-overlay {
-            opacity: 1;
-        }
-        .resident-avatar .has-photo-overlay {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #10b981;
-            color: white;
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            font-size: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 2px solid #111827;
-        }
-        .resident-info h5 { color: #e0e0e0 !important; margin: 0; font-size: 14px; font-weight: 600; }
-        .resident-info .text-muted { color: #808090 !important; font-size: 11px; }
-        
-        /* ============================================================
-           BUTTON STYLES - DARK (SMALLER)
-           ============================================================ */
-        .btn-action {
-            border-radius: 8px;
-            padding: 4px 10px;
-            font-size: 11px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: 1px solid transparent;
-            margin: 1px;
-        }
-        .btn-action:hover { transform: translateY(-1px); }
-        
-        .btn-admission { 
-            background: #1a2a4a !important; 
-            color: #93c5fd !important; 
-            border-color: #1a3a6a !important; 
-        }
-        .btn-admission:hover { background: #1a3a6a !important; color: #bfdbfe !important; }
-        
-        .btn-profile { 
-            background: #1a2a3a !important; 
-            color: #6ee7b7 !important; 
-            border-color: #065f46 !important; 
-        }
-        .btn-profile:hover { background: #065f46 !important; color: #a7f3d0 !important; }
-        
-        .btn-edit { 
-            background: #2a1a0a !important; 
-            color: #fcd34d !important; 
-            border-color: #92400e !important; 
-        }
-        .btn-edit:hover { background: #92400e !important; color: #fde68a !important; }
-        
-        .btn-view { 
-            background: #1a1a3a !important; 
-            color: #a5b4fc !important; 
-            border-color: #3730a3 !important; 
-        }
-        .btn-view:hover { background: #3730a3 !important; color: #c7d2fe !important; }
-        
-        .btn-delete { 
-            background: #2a1a1a !important; 
-            color: #f87171 !important; 
-            border-color: #991b1b !important; 
-        }
-        .btn-delete:hover { background: #991b1b !important; color: #fca5a5 !important; }
-        
-        .btn-upload-photo { 
-            background: #5b3a9a !important; 
-            color: #e0d0ff !important; 
-            border-color: #7c3aed !important; 
-        }
-        .btn-upload-photo:hover { background: #7c3aed !important; color: white !important; }
-        
-        .btn-remove-photo { 
-            background: #7a3a0a !important; 
-            color: #fbbf24 !important; 
-            border-color: #d97706 !important; 
-        }
-        .btn-remove-photo:hover { background: #d97706 !important; color: white !important; }
-        
-        .btn-primary {
-            background: #1a3a6a !important;
-            border-color: #1a3a6a !important;
-            color: white !important;
-            padding: 5px 14px !important;
-            font-size: 12px !important;
-            border-radius: 8px !important;
-        }
-        .btn-primary:hover {
-            background: #2a5a9a !important;
-            border-color: #2a5a9a !important;
-        }
-        .btn-outline-secondary {
-            border-color: #2a2a4a !important;
-            color: #808090 !important;
-            font-size: 12px !important;
-            padding: 5px 12px !important;
-            border-radius: 8px !important;
-        }
-        .btn-outline-secondary:hover {
-            background: #2a2a4a !important;
-            color: #e0e0e0 !important;
-        }
-        
-        /* ============================================================
-           BADGES - DARK
-           ============================================================ */
-        .badge-status { padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 500; }
-        .badge-active { background: #065f46 !important; color: #6ee7b7 !important; }
-        .badge-pending { background: #92400e !important; color: #fcd34d !important; }
-        .badge-inactive { background: #2a2a3a !important; color: #808090 !important; }
-        .badge-no-card { background: #2a2a3a !important; color: #808090 !important; }
-        .badge-success { background: #065f46 !important; color: #34d399 !important; }
-        .badge-danger { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-info { background: #1a3a6a !important; color: #93c5fd !important; }
-        .badge-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
-        
-        /* ============================================================
-           SEARCH BOX - DARK
-           ============================================================ */
-        .search-box { max-width: 380px; }
-        .search-box .form-control {
-            background: #1a1a2e !important;
-            border: 1px solid #2a2a4a !important;
-            color: #e0e0e0 !important;
-            border-radius: 10px 0 0 10px;
-            padding: 7px 14px;
-            font-size: 13px;
-            height: 36px;
-        }
-        .search-box .form-control::placeholder { color: #606070 !important; }
-        .search-box .form-control:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
-        }
-        .search-box .btn {
-            background: #1a3a6a !important;
-            border: 1px solid #1a3a6a !important;
-            color: white !important;
-            border-radius: 0 10px 10px 0;
-            padding: 7px 14px;
-            height: 36px;
-        }
-        .search-box .btn:hover { background: #2a5a9a !important; }
-        .search-box .btn-outline-secondary {
-            background: transparent !important;
-            border-color: #2a2a4a !important;
-            color: #808090 !important;
-            border-radius: 10px !important;
-            height: 36px;
-            padding: 7px 12px !important;
-            font-size: 12px !important;
-        }
-        .search-box .btn-outline-secondary:hover {
-            background: #2a2a4a !important;
-            color: #e0e0e0 !important;
-        }
-        
-        /* ============================================================
-           PAGINATION - DARK
-           ============================================================ */
-        .pagination-container {
-            background: #111827 !important;
-            border: 1px solid #1a2a4a !important;
-            border-radius: 12px !important;
-            padding: 10px 18px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-            margin-top: 12px;
-        }
-        .pagination .page-link {
-            border-radius: 8px;
-            margin: 0 2px;
-            border: none;
-            color: #9090a0 !important;
-            background: transparent !important;
-            font-weight: 500;
-            padding: 5px 12px;
-            font-size: 12px;
-            transition: all 0.3s ease;
-        }
-        .pagination .page-link:hover {
-            background: #2a2a4a !important;
-            color: #e0e0e0 !important;
-        }
-        .pagination .page-item.active .page-link {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
-        }
-        .pagination .page-item.disabled .page-link {
-            color: #4a4a5a !important;
-        }
-        .page-info { color: #808090 !important; font-size: 12px; }
-        .page-info strong { color: #93c5fd !important; }
-        
-        /* ============================================================
-           PER PAGE SELECTOR - DARK
-           ============================================================ */
-        .per-page-selector select {
-            background: #1a1a2e !important;
-            border: 1px solid #2a2a4a !important;
-            color: #e0e0e0 !important;
+        .room-card .room-capacity { font-size: 12px; color: #808090; }
+        .room-card .room-count { font-size: 24px; font-weight: 700; }
+        .room-card .room-count.full { color: #f87171; }
+        .room-card .room-count.available { color: #34d399; }
+        .room-card .room-count.partial { color: #fbbf24; }
+        .room-card .occupant-item {
+            padding: 4px 8px;
+            margin: 2px 0;
+            background: #1a2a4a !important;
             border-radius: 6px;
-            padding: 3px 6px;
             font-size: 12px;
-        }
-        .per-page-selector select:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
-        }
-        .per-page-selector label { color: #808090 !important; font-size: 12px; margin: 0; }
-        
-        /* ============================================================
-           MODAL - DARK
-           ============================================================ */
-        .modal-content {
-            background: #111827 !important;
-            border: 1px solid #1a2a4a !important;
-            border-radius: 12px !important;
-        }
-        .modal-header {
-            border-bottom-color: #1a2a4a !important;
-            padding: 12px 18px !important;
-        }
-        .modal-header .modal-title { color: #e0e0e0 !important; font-size: 16px; }
-        .modal-body { color: #e0e0e0 !important; padding: 18px !important; }
-        .modal-footer { border-top-color: #1a2a4a !important; padding: 12px 18px !important; }
-        .modal-body .form-control {
-            background: #1a1a2e !important;
-            border: 1px solid #2a2a4a !important;
-            color: #e0e0e0 !important;
-            font-size: 13px;
-        }
-        .modal-body .form-control:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
-        }
-        .modal-body .form-text { color: #808090 !important; font-size: 11px; }
-        .modal-body .text-muted { color: #808090 !important; }
-        .btn-close { filter: invert(1) !important; }
-        .btn-secondary {
-            background: #2a2a4a !important;
-            border-color: #2a2a4a !important;
-            color: #b0b0c0 !important;
-            font-size: 12px !important;
-            padding: 5px 14px !important;
-            border-radius: 8px !important;
-        }
-        .btn-secondary:hover {
-            background: #3a3a5a !important;
-            color: white !important;
-        }
-        .btn-danger {
-            background: #7a2a2a !important;
-            border-color: #7a2a2a !important;
-            color: white !important;
-            font-size: 12px !important;
-            padding: 5px 14px !important;
-            border-radius: 8px !important;
-        }
-        .btn-danger:hover {
-            background: #8a3a3a !important;
-        }
-        
-        /* ============================================================
-           ALERT - DARK
-           ============================================================ */
-        .alert-success {
-            background: #065f46 !important;
-            border-color: #065f46 !important;
-            color: #6ee7b7 !important;
-            font-size: 13px !important;
-            padding: 10px 16px !important;
-            border-radius: 10px !important;
-        }
-        .alert-danger {
-            background: #7a2a2a !important;
-            border-color: #7a2a2a !important;
-            color: #f87171 !important;
-            font-size: 13px !important;
-            padding: 10px 16px !important;
-            border-radius: 10px !important;
-        }
-        .alert .btn-close { filter: invert(1) !important; }
-        
-        /* ============================================================
-           PAGE HEADER STYLES
-           ============================================================ */
-        .page-header {
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #1a2a4a;
-        }
-        .page-header h1 {
-            font-size: 20px;
-            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             color: #e0e0e0;
         }
-        .page-header h1 i {
-            color: #1a3a6a;
+        .room-card .room-empty { color: #606070; font-size: 13px; text-align: center; padding: 10px 0; }
+        .room-card .room-full-badge {
+            background: #7a2a2a;
+            color: #f87171;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 600;
         }
+        
+        /* ============================================================
+           DARK ALERT ITEMS
+           ============================================================ */
+        .alert-item {
+            background: #111827 !important;
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-left: 4px solid #f59e0b;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        .alert-item:hover { transform: translateX(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .alert-item.resolved { border-left-color: #10b981; opacity: 0.7; }
+        .alert-item.critical {
+            border-left-color: #ef4444;
+            background: #1a0a0a !important;
+        }
+        .alert-item .alert-uid { font-family: monospace; font-weight: 700; color: #93c5fd; font-size: 14px; }
+        .alert-item .alert-reason { font-size: 13px; color: #b0b0c0; }
+        .alert-item .alert-meta { font-size: 12px; color: #606070; }
+        .alert-item .alert-user { font-weight: 600; color: #93c5fd; }
+        .alert-item .fw-bold { color: #e0e0e0 !important; }
+        
+        .btn-resolve {
+            background: #10b981 !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px;
+            padding: 5px 15px;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .btn-resolve:hover { background: #059669 !important; color: white !important; }
+        
+        /* ============================================================
+           DARK ANNOUNCEMENTS
+           ============================================================ */
+        .announcement-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #1a2a4a;
+        }
+        .announcement-item:last-child { border-bottom: none; }
+        .announcement-item .title { font-weight: 600; color: #e0e0e0; }
+        .announcement-item .content { font-size: 13px; color: #b0b0c0; }
+        .announcement-item .meta { font-size: 11px; color: #606070; }
+        
+        /* ============================================================
+           DARK WARNING BAR
+           ============================================================ */
+        .warning-bar {
+            background: #1a0a0a !important;
+            border: 1px solid #5a2a2a !important;
+            border-radius: 12px;
+            padding: 12px 20px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            animation: slideDown 0.5s ease;
+        }
+        .warning-bar.danger {
+            background: #2a0a0a !important;
+            border-color: #7a2a2a !important;
+        }
+        .warning-bar .warning-text { font-weight: 600; color: #f87171; }
+        .warning-bar .warning-count {
+            background: #ef4444;
+            color: white;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        .warning-bar .text-muted { color: #808090 !important; }
+        
+        /* ============================================================
+           ALERT CARD
+           ============================================================ */
+        .alert-card {
+            animation: slideDown 0.5s ease;
+            border-left: 4px solid #ef4444 !important;
+            border-color: #5a2a2a !important;
+        }
+        .alert-card .card-header {
+            background: #2a0a0a !important;
+            border-bottom: 1px solid #5a2a2a !important;
+        }
+        .alert-card .card-header h5 { color: #f87171 !important; }
+        .alert-card .card-body { background: #1a0a0a !important; }
+        .alert-card .text-danger { color: #f87171 !important; }
+        .alert-card .text-muted { color: #808090 !important; }
+        .alert-card .bg-light { background: #1a2a4a !important; color: #93c5fd !important; }
+        .alert-card code { color: #93c5fd !important; background: #1a2a4a !important; padding: 2px 6px; border-radius: 4px; }
+        
+        /* ============================================================
+           TOAST NOTIFICATIONS
+           ============================================================ */
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+        }
+        .toast-notification {
+            background: #111827 !important;
+            color: #e0e0e0 !important;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            animation: slideInRight 0.5s ease;
+            max-width: 350px;
+            border-left: 4px solid #ef4444;
+            border: 1px solid #1a2a4a;
+        }
+        .toast-notification.success { border-left-color: #10b981; }
+        .toast-notification .toast-title { font-weight: 600; font-size: 14px; color: #e0e0e0; }
+        .toast-notification .toast-body { font-size: 12px; color: #b0b0c0; margin-top: 4px; }
+        .toast-notification .toast-time { font-size: 10px; color: #606070; margin-top: 4px; }
+        
+        /* ============================================================
+           ANIMATIONS
+           ============================================================ */
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(100px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes pulseBadge {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        @keyframes pulseRed {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.9); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .pulse-badge { animation: pulseBadge 1s infinite; display: inline-block; }
+        .pulse-red { animation: pulseRed 1.5s infinite; display: inline-block; }
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #34d399;
+            animation: pulse 1.5s infinite;
+        }
+        
+        /* ============================================================
+           PIE CHART / DONUT CHART (CSS conic-gradient)
+           ============================================================ */
+        .pie-chart-container {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        .pie-chart {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .pie-chart::after {
+            content: '';
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            width: 130px;
+            height: 130px;
+            background: #111827;
+            border-radius: 50%;
+        }
+        .pie-chart .center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+        }
+        .pie-chart .center-text .number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffd700 !important;
+        }
+        .pie-chart .center-text .label {
+            font-size: 11px;
+            color: #6b7280;
+        }
+        .pie-legend {
+            flex: 1;
+            min-width: 200px;
+        }
+        .pie-legend .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #e0e0e0;
+        }
+        .pie-legend .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 4px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        .pie-legend .legend-count {
+            margin-left: auto;
+            font-weight: 600;
+            color: #d1d5db;
+        }
+        .pie-legend .legend-percent {
+            font-size: 11px;
+            color: #6b7280;
+            margin-left: 5px;
+        }
+        
+        /* ============================================================
+           BORDER & DIVIDERS
+           ============================================================ */
+        .border-bottom { border-bottom-color: #1a2a4a !important; }
+        .border-top { border-top-color: #1a2a4a !important; }
+        .border { border-color: #1a2a4a !important; }
+        hr { border-color: #1a2a4a !important; }
+        
+        /* ============================================================
+           DARK BADGES
+           ============================================================ */
+        .badge-granted { background: #065f46 !important; color: #34d399 !important; }
+        .badge-denied { background: #7a2a2a !important; color: #f87171 !important; }
+        .badge-entry { background: #1a3a6a !important; color: #93c5fd !important; }
+        .badge-exit { background: #2a2a4a !important; color: #808090 !important; }
+        .badge-room { background: #4a3a1a !important; color: #fbbf24 !important; }
+        .badge-priority-high { background: #7a2a2a !important; color: #f87171 !important; }
+        .badge-priority-medium { background: #4a3a1a !important; color: #fbbf24 !important; }
+        .badge-priority-low { background: #065f46 !important; color: #34d399 !important; }
+        .badge-visitor { background: #1a2a5a !important; color: #93c5fd !important; }
+        .badge-resident { background: #065f46 !important; color: #34d399 !important; }
+        .badge-staff { background: #4a3a1a !important; color: #fbbf24 !important; }
+        .badge-pending { background: #4a3a1a !important; color: #fbbf24 !important; }
+        .badge-resolved { background: #065f46 !important; color: #34d399 !important; }
+        .badge-unauthorized { background: #7a2a2a !important; color: #f87171 !important; }
+        .badge-success { background: #065f46 !important; color: #34d399 !important; }
+        .badge-danger { background: #7a2a2a !important; color: #f87171 !important; }
+        .badge-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
+        .badge-secondary { background: #1a2a4a !important; color: #808090 !important; }
+        .badge-primary { background: #1a3a6a !important; color: #93c5fd !important; }
+        .badge-light { background: #2a2a4a !important; color: #b0b0c0 !important; }
+        
+        /* ============================================================
+           MISC
+           ============================================================ */
+        .text-muted { color: #808090 !important; }
+        .text-danger { color: #f87171 !important; }
+        .text-success { color: #34d399 !important; }
+        .text-warning { color: #fbbf24 !important; }
+        .text-primary { color: #93c5fd !important; }
+        .bg-light { background: #1a2a4a !important; }
+        .bg-success { background: #065f46 !important; color: #34d399 !important; }
+        .bg-danger { background: #7a2a2a !important; color: #f87171 !important; }
+        .bg-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
+        .bg-secondary { background: #1a2a4a !important; color: #808090 !important; }
+        .bg-primary { background: #1a3a6a !important; color: #93c5fd !important; }
+        
+        .h1, .h2, .h3, .h4, .h5, h1, h2, h3, h4, h5 { color: #e0e0e0 !important; }
+        .fw-bold { color: #e0e0e0 !important; }
+        .fw-medium { color: #e0e0e0 !important; }
+        
+        a { color: #93c5fd !important; text-decoration: none; }
+        a:hover { color: #bfdbfe !important; }
+        
+        .status-dot.inside { background: #34d399 !important; }
         
         /* ============================================================
            RESPONSIVE
            ============================================================ */
         @media (max-width: 768px) {
+            body {
+                padding-top: 60px !important;
+            }
+            
+            .navbar {
+                height: 60px !important;
+            }
+            
             .sidebar {
-                position: fixed !important;
-                top: 56px !important;
-                bottom: 0 !important;
-                left: -260px !important;
-                width: 260px !important;
-                transition: left 0.3s ease !important;
-                z-index: 1040 !important;
+                padding-top: 70px !important;
+                position: fixed;
+                top: 60px;
+                bottom: 0;
+                left: -280px;
+                width: 280px;
+                transition: left 0.3s ease;
+                z-index: 999;
+                min-height: calc(100vh - 60px) !important;
             }
-            .sidebar.show { left: 0 !important; }
-            .main-content {
-                margin-left: 0 !important;
-                padding: 12px 15px !important;
+            .sidebar.show { left: 0; }
+            
+            .room-card { padding: 15px; }
+            .stat-card { padding: 15px; }
+            .stat-number { font-size: 20px; }
+            .stat-icon { width: 40px; height: 40px; font-size: 16px; }
+            
+            .toast-container {
+                top: 70px;
+                right: 10px;
+                left: 10px;
             }
-            .footer {
-                margin-left: 0 !important;
-                padding: 8px 15px !important;
+            .toast-notification {
+                max-width: 100%;
             }
-            .resident-card { padding: 12px; }
-            .resident-actions { margin-top: 8px; }
-            .resident-actions .btn-action {
-                margin-bottom: 3px;
-                font-size: 10px;
-                padding: 3px 8px;
+            
+            .pie-chart {
+                width: 140px;
+                height: 140px;
             }
-            .pagination .page-link { padding: 4px 10px; font-size: 11px; }
-            .pagination-container { padding: 8px 12px; }
-            .page-info { font-size: 11px; }
+            .pie-chart::after {
+                top: 20px;
+                left: 20px;
+                width: 100px;
+                height: 100px;
+            }
         }
-        
-        /* ============================================================
-           MISC DARK
-           ============================================================ */
-        .border-bottom { border-bottom-color: #1a2a4a !important; }
-        .border-top { border-top-color: #1a2a4a !important; }
-        hr { border-color: #1a2a4a !important; }
-        .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
-        .text-muted { color: #808090 !important; }
-        .text-danger { color: #f87171 !important; }
-        .text-success { color: #34d399 !important; }
-        .small { font-size: 11px !important; }
     </style>
 </head>
-<body class="<?php echo $darkModeClass; ?>">
+<body>
+    
     <?php include '../includes/navbar.php'; ?>
     
-    <div class="wrapper">
-        <?php include '../includes/sidebar.php'; ?>
-        
-        <!-- MAIN CONTENT -->
-        <main class="main-content">
-            <!-- Page Header -->
-            <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
-                <h1><i class="fas fa-users me-2"></i>Residents</h1>
-                <div>
-                    <a href="new-resident.php" class="btn btn-primary btn-sm">
-                        <i class="fas fa-plus me-1"></i> New Resident
-                    </a>
-                </div>
-            </div>
-
-            <?php if ($delete_success): ?>
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    <i class="fas fa-check-circle me-2"></i> Resident deleted successfully!
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            <?php endif; ?>
-
-            <?php if (!empty($success)): ?>
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    <i class="fas fa-check-circle me-2"></i> <?php echo $success; ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            <?php endif; ?>
-
-            <?php if (!empty($error)): ?>
-                <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                    <i class="fas fa-exclamation-circle me-2"></i> <?php echo $error; ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            <?php endif; ?>
-
-            <!-- Search Bar -->
-            <div class="row mb-3">
-                <div class="col-md-8">
-                    <form method="GET" action="" class="search-box d-flex">
-                        <input type="text" 
-                               class="form-control" 
-                               name="search" 
-                               placeholder="Search by name, ID, course, or room..." 
-                               value="<?php echo htmlspecialchars($search); ?>">
-                        <button type="submit" class="btn">
-                            <i class="fas fa-search"></i>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+    
+    <div class="container-fluid">
+        <div class="row">
+            <?php include '../includes/sidebar.php'; ?>
+            
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2" style="color:#e0e0e0 !important;">
+                        Dashboard
+                        <?php if ($stats['pending_alerts'] > 0): ?>
+                            <span class="badge bg-danger ms-2 pulse-badge">
+                                <i class="fas fa-exclamation-circle me-1"></i>
+                                <?php echo $stats['pending_alerts']; ?>
+                            </span>
+                        <?php endif; ?>
+                    </h1>
+                    <div>
+                        <span class="badge bg-success me-2">
+                            <span class="live-indicator me-1"></span> Live
+                        </span>
+                        <span class="badge bg-secondary" id="lastUpdate">Updated: <?php echo date('h:i A'); ?></span>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()">
+                            <i class="fas fa-sync-alt"></i>
                         </button>
-                        <?php if (!empty($search)): ?>
-                            <a href="residents.php" class="btn btn-outline-secondary ms-2">
-                                <i class="fas fa-times"></i> Clear
-                            </a>
-                        <?php endif; ?>
-                    </form>
-                </div>
-                <div class="col-md-4 text-end">
-                    <span class="text-muted small">
-                        <i class="fas fa-users me-1"></i>
-                        Showing <?php echo count($residents); ?> of <?php echo $totalResidents; ?> residents
-                        <?php if (!empty($search)): ?>
-                            <br><span class="text-muted">(filtered)</span>
-                        <?php endif; ?>
-                    </span>
-                </div>
-            </div>
-
-            <!-- Residents List -->
-            <?php if (empty($residents)): ?>
-                <div class="card">
-                    <div class="card-body text-center py-4">
-                        <i class="fas fa-users fa-3x text-muted mb-2"></i>
-                        <h5 class="text-muted">No residents found</h5>
-                        <?php if (!empty($search)): ?>
-                            <p class="text-muted small">Try adjusting your search criteria</p>
-                            <a href="residents.php" class="btn btn-outline-secondary btn-sm">Clear Search</a>
-                        <?php else: ?>
-                            <p class="text-muted small">Start by adding your first resident</p>
-                            <a href="new-resident.php" class="btn btn-primary btn-sm">
-                                <i class="fas fa-plus me-1"></i> Add Resident
-                            </a>
-                        <?php endif; ?>
                     </div>
                 </div>
-            <?php else: ?>
-                <?php foreach ($residents as $resident): 
-                    $photoPath = $resident['profile_photo'] ?? '';
-                    $hasPhoto = false;
-                    $fullPhotoPath = '';
-                    
-                    // FIX: Get correct photo path
-                    if (!empty($photoPath)) {
-                        if (strpos($photoPath, 'uploads/') === 0) {
-                            $fullPhotoPath = '../../' . $photoPath;
-                        } else {
-                            $fullPhotoPath = '../../uploads/resident_photos/' . $photoPath;
-                        }
-                        
-                        if (file_exists($fullPhotoPath)) {
-                            $hasPhoto = true;
-                        }
-                    }
-                    
-                    $initials = getInitials($resident['full_name'] ?? '');
-                ?>
-                    <div class="resident-card">
-                        <div class="row align-items-center">
-                            <!-- Avatar & Name -->
-                            <div class="col-md-4 col-lg-3">
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="resident-avatar" 
-                                         data-bs-toggle="modal" 
-                                         data-bs-target="#photoModal<?php echo $resident['user_id']; ?>"
-                                         title="Click to upload/change photo">
-                                        <?php if ($hasPhoto): ?>
-                                            <img src="<?php echo $fullPhotoPath; ?>" 
-                                                 alt="Photo of <?php echo htmlspecialchars($resident['full_name'] ?? ''); ?>"
-                                                 onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
-                                            <span class="has-photo-overlay">
-                                                <i class="fas fa-check-circle"></i>
-                                            </span>
-                                        <?php else: ?>
-                                            <div class="no-photo"><?php echo $initials; ?></div>
-                                        <?php endif; ?>
-                                        <div class="upload-overlay">
-                                            <i class="fas fa-camera me-1"></i> Upload
-                                        </div>
-                                    </div>
-                                    <div class="resident-info">
-                                        <h5><?php echo htmlspecialchars($resident['full_name'] ?? 'Unknown'); ?></h5>
-                                        <span class="text-muted">
-                                            <i class="fas fa-id-card me-1"></i>
-                                            <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
-                                        </span>
-                                        <br>
-                                        <span class="text-muted">
-                                            <i class="fas fa-graduation-cap me-1"></i>
-                                            <?php echo htmlspecialchars($resident['course'] ?? 'N/A'); ?>
-                                            - <?php echo htmlspecialchars($resident['year_level'] ?? 'N/A'); ?>
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
 
-                            <!-- Room & Status -->
-                            <div class="col-md-3 col-lg-3">
-                                <div>
-                                    <span class="text-muted small">Room</span>
-                                    <br>
-                                    <strong><?php echo htmlspecialchars($resident['room_number'] ?? 'Not Assigned'); ?></strong>
-                                </div>
-                                <div class="mt-1">
-                                    <span class="text-muted small">Card Status</span>
-                                    <br>
-                                    <?php if (!empty($resident['card_uid'])): ?>
-                                        <span class="badge-status badge-active">
-                                            <i class="fas fa-check-circle me-1"></i> Active
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="badge-status badge-no-card">
-                                            <i class="fas fa-times-circle me-1"></i> No Card
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-
-                            <!-- Admission Status -->
-                            <div class="col-md-2 col-lg-2">
-                                <div>
-                                    <span class="text-muted small">Admission</span>
-                                    <br>
-                                    <?php 
-                                        $admStatus = $resident['admission_status'] ?? 'pending';
-                                        if ($admStatus == 'active'): ?>
-                                            <span class="badge-status badge-active">
-                                                <i class="fas fa-check-circle me-1"></i> Active
-                                            </span>
-                                        <?php elseif ($admStatus == 'pending'): ?>
-                                            <span class="badge-status badge-pending">
-                                                <i class="fas fa-clock me-1"></i> Pending
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="badge-status badge-inactive">
-                                                <i class="fas fa-minus-circle me-1"></i> Inactive
-                                            </span>
-                                        <?php endif; ?>
-                                    ?>
-                                </div>
-                            </div>
-
-                            <!-- Action Buttons -->
-                            <div class="col-md-3 col-lg-4">
-                                <div class="resident-actions d-flex flex-wrap gap-1">
-                                    <button type="button" 
-                                            class="btn btn-action btn-upload-photo"
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#photoModal<?php echo $resident['user_id']; ?>">
-                                        <i class="fas fa-camera me-1"></i> Photo
-                                    </button>
-                                    
-                                    <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                       class="btn btn-action btn-view">
-                                        <i class="fas fa-eye me-1"></i> View
-                                    </a>
-                                    
-                                    <?php if (!empty($resident['admission_status'])): ?>
-                                        <a href="view-admission.php?id=<?php echo $resident['user_id']; ?>" 
-                                           class="btn btn-action btn-admission">
-                                            <i class="fas fa-clipboard-list me-1"></i> Admission
-                                        </a>
-                                    <?php else: ?>
-                                        <a href="admission-form.php?id=<?php echo $resident['user_id']; ?>" 
-                                           class="btn btn-action btn-admission">
-                                            <i class="fas fa-plus-circle me-1"></i> Add Admission
-                                        </a>
-                                    <?php endif; ?>
-                                    
-                                    <?php if (!empty($resident['course'])): ?>
-                                        <a href="view-profile.php?id=<?php echo $resident['user_id']; ?>" 
-                                           class="btn btn-action btn-profile">
-                                            <i class="fas fa-user me-1"></i> Profile
-                                        </a>
-                                    <?php else: ?>
-                                        <a href="edit-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                           class="btn btn-action btn-profile">
-                                            <i class="fas fa-plus-circle me-1"></i> Add Profile
-                                        </a>
-                                    <?php endif; ?>
-                                    
-                                    <a href="edit-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                       class="btn btn-action btn-edit">
-                                        <i class="fas fa-edit me-1"></i> Edit
-                                    </a>
-                                    
-                                    <button type="button" 
-                                            class="btn btn-action btn-delete" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
-                                        <i class="fas fa-trash me-1"></i> Delete
-                                    </button>
-                                </div>
-                            </div>
+                <!-- ============================================================
+                WARNING NOTIFICATION BAR
+                ============================================================ -->
+                <?php if ($stats['critical_alerts'] > 0): ?>
+                <div class="warning-bar danger">
+                    <div class="d-flex align-items-center">
+                        <span class="warning-icon pulse-red" style="font-size:24px; margin-right:10px;">🚨</span>
+                        <div>
+                            <span class="warning-text">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                CRITICAL ALERT!
+                            </span>
+                            <span class="text-muted ms-2">
+                                <?php echo $stats['critical_alerts']; ?> unauthorized access <?php echo $stats['critical_alerts'] > 1 ? 'attempts' : 'attempt'; ?> detected
+                            </span>
                         </div>
                     </div>
-
-                    <!-- PHOTO UPLOAD MODAL - FIXED -->
-                    <div class="modal fade" id="photoModal<?php echo $resident['user_id']; ?>" tabindex="-1">
-                        <div class="modal-dialog modal-dialog-centered">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">
-                                        <i class="fas fa-camera me-2"></i>
-                                        Profile Photo - <?php echo htmlspecialchars($resident['full_name']); ?>
-                                    </h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body text-center">
-                                    <!-- Current Photo Preview - FIXED -->
-                                    <div class="mb-3">
-                                        <?php 
-                                            $photoPath = $resident['profile_photo'] ?? '';
-                                            $hasModalPhoto = false;
-                                            $fullModalPhotoPath = '';
-                                            
-                                            if (!empty($photoPath)) {
-                                                if (strpos($photoPath, 'uploads/') === 0) {
-                                                    $fullModalPhotoPath = '../../' . $photoPath;
-                                                } else {
-                                                    $fullModalPhotoPath = '../../uploads/resident_photos/' . $photoPath;
-                                                }
-                                                
-                                                if (file_exists($fullModalPhotoPath)) {
-                                                    $hasModalPhoto = true;
-                                                }
-                                            }
-                                        ?>
-                                        
-                                        <?php if ($hasModalPhoto): ?>
-                                            <img src="<?php echo $fullModalPhotoPath; ?>" 
-                                                 alt="Current Photo"
-                                                 style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #2a2a4a;">
-                                            <div class="mt-2">
-                                                <a href="?remove_photo=<?php echo $resident['user_id']; ?>" 
-                                                   class="btn btn-sm btn-remove-photo"
-                                                   onclick="return confirm('Remove this photo?')">
-                                                    <i class="fas fa-trash me-1"></i> Remove Photo
-                                                </a>
-                                            </div>
-                                        <?php else: ?>
-                                            <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#1a3a6a,#2a5a9a);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:40px;font-weight:700;color:white;">
-                                                <?php echo $initials; ?>
-                                            </div>
-                                            <div class="mt-2 text-muted small">
-                                                <i class="fas fa-info-circle me-1"></i>
-                                                No photo uploaded yet
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <hr>
-                                    
-                                    <!-- Upload Form -->
-                                    <form method="POST" enctype="multipart/form-data">
-                                        <input type="hidden" name="user_id" value="<?php echo $resident['user_id']; ?>">
-                                        <div class="mb-3">
-                                            <label class="form-label">Upload New Photo</label>
-                                            <input type="file" 
-                                                   class="form-control" 
-                                                   name="profile_photo" 
-                                                   accept="image/*"
-                                                   required>
-                                            <div class="form-text text-muted">
-                                                <i class="fas fa-info-circle me-1"></i>
-                                                Max size: 2MB. Allowed: JPG, PNG, GIF, WEBP
-                                            </div>
-                                        </div>
-                                        <button type="submit" name="upload_photo" class="btn btn-primary">
-                                            <i class="fas fa-upload me-1"></i> Upload Photo
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
+                    <div>
+                        <span class="warning-count"><?php echo $stats['critical_alerts']; ?></span>
+                        <span class="text-muted ms-2">pending</span>
+                        <a href="alerts.php" class="btn btn-sm btn-danger ms-2">
+                            <i class="fas fa-eye me-1"></i> View Alerts
+                        </a>
+                    </div>
+                </div>
+                <?php elseif ($stats['pending_alerts'] > 0): ?>
+                <div class="warning-bar">
+                    <div class="d-flex align-items-center">
+                        <span class="warning-icon" style="font-size:24px; margin-right:10px;">⚠️</span>
+                        <div>
+                            <span class="warning-text">
+                                <i class="fas fa-bell me-1"></i>
+                                New Alerts
+                            </span>
+                            <span class="text-muted ms-2">
+                                <?php echo $stats['pending_alerts']; ?> pending alert<?php echo $stats['pending_alerts'] > 1 ? 's' : ''; ?> need your attention
+                            </span>
                         </div>
                     </div>
+                    <div>
+                        <span class="warning-count"><?php echo $stats['pending_alerts']; ?></span>
+                        <span class="text-muted ms-2">pending</span>
+                        <a href="alerts.php" class="btn btn-sm btn-warning ms-2">
+                            <i class="fas fa-eye me-1"></i> View Alerts
+                        </a>
+                    </div>
+                </div>
+                <?php endif; ?>
 
-                    <!-- DELETE CONFIRMATION MODAL -->
-                    <div class="modal fade" id="deleteModal<?php echo $resident['user_id']; ?>" tabindex="-1">
-                        <div class="modal-dialog modal-dialog-centered">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title text-danger">
-                                        <i class="fas fa-exclamation-triangle me-2"></i>Confirm Delete
+                <!-- ============================================================
+                UNAUTHORIZED ACCESS ALERT CARD
+                ============================================================ -->
+                <?php if ($showAlert && $latestUnauthorized !== null): ?>
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="card alert-card border-danger">
+                            <div class="card-header bg-danger text-white">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">
+                                        <span class="pulse-red me-2">🔴</span>
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        UNAUTHORIZED ACCESS DETECTED!
                                     </h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="text-center py-2">
-                                        <i class="fas fa-user-times fa-3x text-danger mb-2"></i>
-                                        <p class="mb-1">
-                                            Are you sure you want to delete 
-                                            <strong><?php echo htmlspecialchars($resident['full_name']); ?></strong>?
-                                        </p>
-                                        <p class="text-muted small">
-                                            <i class="fas fa-info-circle me-1"></i>
-                                            Student ID: <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
-                                        </p>
-                                        <p class="text-danger small">
+                                    <div>
+                                        <span class="badge bg-light text-danger me-2">
+                                            <i class="fas fa-clock me-1"></i>
+                                            <?php echo date('h:i A', strtotime($latestUnauthorized['timestamp'])); ?>
+                                        </span>
+                                        <span class="badge bg-warning text-dark">
                                             <i class="fas fa-exclamation-circle me-1"></i>
-                                            This action cannot be undone.
-                                        </p>
+                                            <?php echo $stats['unauthorized_today']; ?> attempt(s) today
+                                        </span>
                                     </div>
                                 </div>
-                                <div class="modal-footer justify-content-center">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                        <i class="fas fa-times me-1"></i> Cancel
-                                    </button>
-                                    <a href="?delete=<?php echo $resident['user_id']; ?>&page=<?php echo $page; ?>" class="btn btn-danger">
-                                        <i class="fas fa-trash me-1"></i> Yes, Delete
-                                    </a>
-                                </div>
                             </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-
-                <!-- PAGINATION -->
-                <?php if ($totalPages > 1 || $totalResidents > 0): ?>
-                <div class="pagination-container">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <div class="page-info">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalResidents); ?> of <?php echo $totalResidents; ?> residents
-                                <span class="mx-1 text-muted">|</span>
-                                <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-                                <!-- Per Page Selector -->
-                                <div class="per-page-selector d-flex align-items-center gap-1">
-                                    <label>Show:</label>
-                                    <select onchange="changePerPage(this.value)">
-                                        <?php foreach ($perPageOptions as $option): ?>
-                                            <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                                <?php echo $option; ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-8">
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3" style="font-size: 40px;">
+                                                <i class="fas fa-user-slash text-danger"></i>
+                                            </div>
+                                            <div>
+                                                <h5 class="mb-1 text-danger">
+                                                    <i class="fas fa-exclamation-circle me-1"></i>
+                                                    Unauthorized Attempt
+                                                </h5>
+                                                <p class="mb-1">
+                                                    <span class="fw-bold">Card UID:</span>
+                                                    <code class="bg-light p-1 rounded"><?php echo htmlspecialchars($latestUnauthorized['card_uid'] ?? 'N/A'); ?></code>
+                                                    <span class="mx-2">|</span>
+                                                    <span class="fw-bold">Type:</span>
+                                                    <span class="badge badge-denied">
+                                                        <i class="fas fa-times-circle me-1"></i>
+                                                        Denied
+                                                    </span>
+                                                    <span class="mx-2">|</span>
+                                                    <span class="fw-bold">Access:</span>
+                                                    <span class="badge badge-entry"><?php echo ucfirst($latestUnauthorized['access_type'] ?? 'N/A'); ?></span>
+                                                </p>
+                                                <p class="mb-0 text-muted">
+                                                    <i class="fas fa-clock me-1"></i>
+                                                    <?php echo date('F d, Y h:i A', strtotime($latestUnauthorized['timestamp'])); ?>
+                                                    <?php if (!empty($latestUnauthorized['display_name'])): ?>
+                                                        <span class="mx-2">|</span>
+                                                        <i class="fas fa-user me-1"></i>
+                                                        <?php echo htmlspecialchars($latestUnauthorized['display_name']); ?>
+                                                        (Attempted)
+                                                    <?php endif; ?>
+                                                </p>
+                                                <p class="mb-0 text-danger small mt-1">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    <?php echo htmlspecialchars($latestUnauthorized['reason'] ?? 'Unauthorized card was denied access. Security alert triggered.'); ?>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 text-end">
+                                        <div class="d-flex gap-2 justify-content-end flex-wrap">
+                                            <button class="btn btn-sm btn-outline-danger" onclick="dismissAlert()">
+                                                <i class="fas fa-check me-1"></i> Dismiss
+                                            </button>
+                                            <a href="alerts.php" class="btn btn-sm btn-danger">
+                                                <i class="fas fa-eye me-1"></i> View All Alerts
+                                            </a>
+                                            <a href="logs.php?status=denied" class="btn btn-sm btn-outline-secondary">
+                                                <i class="fas fa-history me-1"></i> View Logs
+                                            </a>
+                                        </div>
+                                    </div>
                                 </div>
-                                
-                                <!-- Pagination -->
-                                <nav aria-label="Page navigation">
-                                    <ul class="pagination justify-content-end mb-0">
-                                        <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-double-left"></i>
-                                            </a>
-                                        </li>
-                                        <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-left"></i>
-                                            </a>
-                                        </li>
-                                        
-                                        <?php
-                                        $startPage = max(1, $page - 2);
-                                        $endPage = min($totalPages, $page + 2);
-                                        if ($startPage > 1) {
-                                            echo '<li class="page-item"><span class="page-link">...</span></li>';
-                                        }
-                                        for ($i = $startPage; $i <= $endPage; $i++):
-                                        ?>
-                                            <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                    <?php echo $i; ?>
-                                                </a>
-                                            </li>
-                                        <?php endfor; ?>
-                                        <?php if ($endPage < $totalPages): ?>
-                                            <li class="page-item"><span class="page-link">...</span></li>
-                                        <?php endif; ?>
-                                        
-                                        <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-right"></i>
-                                            </a>
-                                        </li>
-                                        <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-double-right"></i>
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </nav>
                             </div>
                         </div>
                     </div>
                 </div>
                 <?php endif; ?>
-            <?php endif; ?>
-        </main>
+
+                <!-- ============================================================
+                STATS CARDS (CUSTOMIZED)
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <!-- Total Registered Residents -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #667eea;"><i class="fas fa-users"></i></div>
+                            <div>
+                                <div class="stat-number"><?php echo $stats['total_residents']; ?></div>
+                                <div class="stat-label">Total Registered Residents</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Total Active Cards -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #10b981;"><i class="fas fa-id-card"></i></div>
+                            <div>
+                                <div class="stat-number"><?php echo $stats['active_cards']; ?></div>
+                                <div class="stat-label">Total Active Cards</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Today's Access -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-sign-in-alt"></i></div>
+                            <div>
+                                <div class="stat-number"><?php echo $stats['today_access']; ?></div>
+                                <div class="stat-label">Today's Access</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Total Unauthorized Today -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: <?php echo $stats['unauthorized_today'] > 0 ? '#ef4444' : '#6b7280'; ?>;">
+                                <i class="fas <?php echo $stats['unauthorized_today'] > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle'; ?>"></i>
+                            </div>
+                            <div>
+                                <div class="stat-number <?php echo $stats['unauthorized_today'] > 0 ? 'text-danger' : ''; ?>">
+                                    <?php echo $stats['unauthorized_today']; ?>
+                                </div>
+                                <div class="stat-label">Unauthorized Today</div>
+                            </div>
+                            <?php if ($stats['unauthorized_today'] > 0): ?>
+                                <span class="badge bg-danger pulse-badge">🚨</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                RESIDENT & VISITOR STATUS CARDS
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <!-- Total Residents Inside -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #34d399;"><i class="fas fa-door-open"></i></div>
+                            <div>
+                                <div class="stat-number text-success"><?php echo $stats['residents_inside']; ?></div>
+                                <div class="stat-label">Residents Inside Rooms</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Total Residents Outside -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #f87171;"><i class="fas fa-door-closed"></i></div>
+                            <div>
+                                <div class="stat-number text-danger"><?php echo $stats['residents_outside']; ?></div>
+                                <div class="stat-label">Residents Outside</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Total Visitors -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-user-friends"></i></div>
+                            <div>
+                                <div class="stat-number"><?php echo $stats['total_visitors']; ?></div>
+                                <div class="stat-label">Total Visitors Today</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Total Visitors Inside -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #3b82f6;"><i class="fas fa-user-check"></i></div>
+                            <div>
+                                <div class="stat-number text-primary"><?php echo $stats['visitors_inside']; ?></div>
+                                <div class="stat-label">Visitors Inside</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                LATEST ALERTS
+                ============================================================ -->
+                <?php if (!empty($latestAlerts)): ?>
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5><i class="fas fa-bell me-2"></i>Recent Alerts</h5>
+                                <a href="alerts.php" class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-eye me-1"></i> View All Alerts
+                                </a>
+                            </div>
+                            <div class="card-body">
+                                <?php foreach ($latestAlerts as $alert): 
+                                    $isCritical = $alert['delivery_status'] == 'pending' && $alert['alert_type'] == 'unauthorized';
+                                    $displayName = !empty($alert['display_name']) ? $alert['display_name'] : 'Unknown';
+                                ?>
+                                <div class="alert-item <?php echo $isCritical ? 'critical' : ''; ?>">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span class="fw-bold"><?php echo $isCritical ? '🚨' : '⚠️'; ?></span>
+                                            <span class="alert-uid"><?php echo htmlspecialchars($alert['card_uid']); ?></span>
+                                            <span class="badge <?php echo $isCritical ? 'bg-danger' : 'badge-pending'; ?> ms-2">
+                                                <?php echo ucfirst($alert['alert_type']); ?>
+                                            </span>
+                                            <span class="text-muted ms-2">
+                                                <i class="fas fa-user me-1"></i>
+                                                <?php echo htmlspecialchars($displayName); ?>
+                                            </span>
+                                            <span class="text-muted ms-2" style="font-size: 12px;">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <?php echo date('h:i A', strtotime($alert['timestamp'])); ?>
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <a href="alerts.php?resolve=<?php echo $alert['alert_id']; ?>" class="btn btn-sm btn-resolve">
+                                                <i class="fas fa-check me-1"></i> Resolve
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        <?php echo htmlspecialchars($alert['reason'] ?? 'Unauthorized access attempt'); ?>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <!-- ============================================================
+                ROOMS 1-5
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5><i class="fas fa-bed me-2"></i>Room Occupancy <span class="text-muted small">(Max 7 per room)</span></h5>
+                                <span class="text-muted small">
+                                    <?php 
+                                        $totalOccupied = 0;
+                                        $totalCapacity = 5 * 7;
+                                        foreach ($roomData as $room) {
+                                            $totalOccupied += $room['count'];
+                                        }
+                                        echo $totalOccupied . ' / ' . $totalCapacity . ' occupied';
+                                    ?>
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <?php foreach ($roomData as $room): 
+                                        $count = $room['count'];
+                                        $isFull = $count >= 7;
+                                        $isPartial = $count > 0 && $count < 7;
+                                        $isEmpty = $count == 0;
+                                        $statusClass = $isFull ? 'full' : ($isPartial ? 'partial' : 'available');
+                                    ?>
+                                    <div class="col-md-6 col-lg-4">
+                                        <div class="room-card">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <div class="room-title">
+                                                        Room <?php echo $room['room_number']; ?>
+                                                        <?php if ($isFull): ?>
+                                                            <span class="room-full-badge ms-1"><i class="fas fa-exclamation-triangle me-1"></i>FULL</span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div class="room-capacity">
+                                                        <span class="room-count <?php echo $statusClass; ?>"><?php echo $count; ?></span>
+                                                        / 7 residents
+                                                        <span class="badge <?php echo $isFull ? 'bg-danger' : ($isPartial ? 'bg-warning' : 'bg-success'); ?> ms-1">
+                                                            <?php echo $isFull ? 'Full' : ($isPartial ? 'Partial' : 'Available'); ?>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div class="text-end">
+                                                    <span class="badge bg-light text-dark"><?php echo 7 - $count; ?> slots</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <hr>
+                                            
+                                            <div class="room-occupants">
+                                                <?php if ($isEmpty): ?>
+                                                    <div class="room-empty">
+                                                        <i class="fas fa-bed fa-2x d-block mb-1"></i>
+                                                        No occupants
+                                                    </div>
+                                                <?php else: ?>
+                                                    <?php foreach ($room['occupants'] as $occupant): ?>
+                                                        <div class="occupant-item">
+                                                            <span>
+                                                                <span class="status-dot inside" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#34d399; margin-right:6px;"></span>
+                                                                <?php echo htmlspecialchars($occupant['full_name']); ?>
+                                                                <span class="text-muted small ms-1">
+                                                                    (<?php echo htmlspecialchars($occupant['student_id'] ?? 'N/A'); ?>)
+                                                                </span>
+                                                            </span>
+                                                            <span class="text-muted small">
+                                                                <i class="fas fa-clock me-1"></i>
+                                                                <?php echo $occupant['last_entry'] ? date('h:i A', strtotime($occupant['last_entry'])) : 'N/A'; ?>
+                                                            </span>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                ANNOUNCEMENTS ONLY (NO ACCESS LOGS)
+                ============================================================ -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5><i class="fas fa-bullhorn me-2"></i>Announcements</h5>
+                                <a href="announcements.php" class="btn btn-sm btn-outline-primary">View All</a>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($announcements)): ?>
+                                    <div class="text-center text-muted py-3">
+                                        <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                                        No announcements
+                                    </div>
+                                <?php else: ?>
+                                    <div class="row">
+                                        <?php foreach ($announcements as $announcement): 
+                                            $priority = $announcement['priority'] ?? 'medium';
+                                            $priorityBadge = 'badge-priority-' . $priority;
+                                        ?>
+                                        <div class="col-md-4">
+                                            <div class="announcement-item">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <span class="title"><?php echo htmlspecialchars($announcement['title']); ?></span>
+                                                    <span class="badge <?php echo $priorityBadge; ?>">
+                                                        <?php echo ucfirst($priority); ?>
+                                                    </span>
+                                                </div>
+                                                <div class="content">
+                                                    <?php echo htmlspecialchars(substr($announcement['content'] ?? '', 0, 80)); ?>
+                                                    <?php if (strlen($announcement['content'] ?? '') > 80): ?>...<?php endif; ?>
+                                                </div>
+                                                <div class="meta mt-1">
+                                                    <i class="far fa-calendar-alt me-1"></i>
+                                                    <?php echo date('M d, Y', strtotime($announcement['created_at'])); ?>
+                                                    <?php if (!empty($announcement['admin_name'])): ?>
+                                                        <span class="mx-1">•</span>
+                                                        <i class="far fa-user me-1"></i>
+                                                        <?php echo htmlspecialchars($announcement['admin_name']); ?>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                COURSE DISTRIBUTION PIE CHART (CSS-BASED)
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-pie me-2"></i>Course Distribution</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php 
+                                // Calculate colors and totals for pie
+                                $courseColors = ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6', '#06b6d4'];
+                                $courseTotal = 0;
+                                foreach ($courseData as $c) { $courseTotal += $c['count']; }
+                                
+                                if (empty($courseData) || $courseTotal == 0): ?>
+                                    <div class="text-center text-muted py-3">
+                                        <i class="fas fa-chart-pie fa-2x mb-2 d-block"></i>
+                                        No data available for courses
+                                    </div>
+                                <?php else: 
+                                    $courseGradient = '';
+                                    $currentPercent = 0;
+                                    foreach ($courseData as $index => $c) {
+                                        $percent = ($c['count'] / $courseTotal) * 100;
+                                        $color = $courseColors[$index % count($courseColors)];
+                                        $courseGradient .= $color . ' ' . $currentPercent . '% ' . ($currentPercent + $percent) . '%, ';
+                                        $currentPercent += $percent;
+                                    }
+                                    $courseGradient = rtrim($courseGradient, ', ');
+                                ?>
+                                <div class="pie-chart-container">
+                                    <div class="pie-chart" style="background: conic-gradient(<?php echo $courseGradient; ?>);">
+                                        <div class="center-text">
+                                            <div class="number"><?php echo $courseTotal; ?></div>
+                                            <div class="label">Residents</div>
+                                        </div>
+                                    </div>
+                                    <div class="pie-legend">
+                                        <?php foreach ($courseData as $index => $c): 
+                                            $color = $courseColors[$index % count($courseColors)];
+                                            $percent = round(($c['count'] / $courseTotal) * 100, 1);
+                                        ?>
+                                        <div class="legend-item">
+                                            <span class="legend-dot" style="background: <?php echo $color; ?>;"></span>
+                                            <span><?php echo htmlspecialchars($c['course']); ?></span>
+                                            <span class="legend-count"><?php echo $c['count']; ?></span>
+                                            <span class="legend-percent">(<?php echo $percent; ?>%)</span>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                YEAR LEVEL DISTRIBUTION PIE CHART (CSS-BASED)
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-pie me-2"></i>Year Level Distribution</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php 
+                                $yearColors = ['#10b981', '#667eea', '#f59e0b', '#ef4444', '#8b5cf6'];
+                                $yearTotal = 0;
+                                foreach ($yearLevelData as $y) { $yearTotal += $y['count']; }
+                                
+                                if (empty($yearLevelData) || $yearTotal == 0): ?>
+                                    <div class="text-center text-muted py-3">
+                                        <i class="fas fa-chart-pie fa-2x mb-2 d-block"></i>
+                                        No data available for year levels
+                                    </div>
+                                <?php else: 
+                                    $yearGradient = '';
+                                    $currentPercent = 0;
+                                    foreach ($yearLevelData as $index => $y) {
+                                        $percent = ($y['count'] / $yearTotal) * 100;
+                                        $color = $yearColors[$index % count($yearColors)];
+                                        $yearGradient .= $color . ' ' . $currentPercent . '% ' . ($currentPercent + $percent) . '%, ';
+                                        $currentPercent += $percent;
+                                    }
+                                    $yearGradient = rtrim($yearGradient, ', ');
+                                ?>
+                                <div class="pie-chart-container">
+                                    <div class="pie-chart" style="background: conic-gradient(<?php echo $yearGradient; ?>);">
+                                        <div class="center-text">
+                                            <div class="number"><?php echo $yearTotal; ?></div>
+                                            <div class="label">Residents</div>
+                                        </div>
+                                    </div>
+                                    <div class="pie-legend">
+                                        <?php foreach ($yearLevelData as $index => $y): 
+                                            $color = $yearColors[$index % count($yearColors)];
+                                            $percent = round(($y['count'] / $yearTotal) * 100, 1);
+                                        ?>
+                                        <div class="legend-item">
+                                            <span class="legend-dot" style="background: <?php echo $color; ?>;"></span>
+                                            <span><?php echo htmlspecialchars($y['year_level']); ?></span>
+                                            <span class="legend-count"><?php echo $y['count']; ?></span>
+                                            <span class="legend-percent">(<?php echo $percent; ?>%)</span>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
+                    &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
+                    <span class="mx-2">|</span>
+                    <span id="serverTime">Server Time: <?php echo date('F d, Y h:i A'); ?></span>
+                </footer>
+            </main>
+        </div>
     </div>
 
-    <!-- FOOTER -->
-    <div class="footer">
-        &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System - ISU-Echague Dormitory. All rights reserved.
-    </div>
-    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // CHANGE PER PAGE
-        function changePerPage(value) {
-            const urlParams = new URLSearchParams(window.location.search);
-            urlParams.set('per_page', value);
-            urlParams.set('page', 1);
-            window.location.href = '?' + urlParams.toString();
+        // ============================================================
+        // DISMISS ALERT
+        // ============================================================
+        function dismissAlert() {
+            const alertElement = document.querySelector('.alert-card');
+            if (alertElement) {
+                alertElement.style.transition = 'opacity 0.5s ease';
+                alertElement.style.opacity = '0';
+                setTimeout(() => {
+                    alertElement.style.display = 'none';
+                }, 500);
+            }
+            
+            const statCards = document.querySelectorAll('.stat-card');
+            statCards.forEach(card => {
+                const label = card.querySelector('.stat-label');
+                if (label && label.textContent.trim() === 'Unauthorized Today') {
+                    const number = card.querySelector('.stat-number');
+                    if (number) {
+                        number.textContent = '0';
+                        number.classList.remove('text-danger');
+                    }
+                    const icon = card.querySelector('.stat-icon');
+                    if (icon) {
+                        icon.style.background = '#6b7280';
+                        const iconElement = icon.querySelector('i');
+                        if (iconElement) {
+                            iconElement.className = 'fas fa-check-circle';
+                        }
+                    }
+                }
+            });
         }
+
+        // ============================================================
+        // SHOW TOAST
+        // ============================================================
+        function showToast(title, message, type = 'warning') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            if (type === 'success') {
+                toast.classList.add('success');
+            }
+            
+            const icon = type === 'success' ? '✅' : '🚨';
+            const time = new Date().toLocaleTimeString();
+            
+            toast.innerHTML = `
+                <div class="toast-title">${icon} ${title}</div>
+                <div class="toast-body">${message}</div>
+                <div class="toast-time">${time}</div>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => {
+                    toast.remove();
+                }, 500);
+            }, 5000);
+        }
+
+        // ============================================================
+        // CHECK NEW ALERTS
+        // ============================================================
+        function checkNewAlerts() {
+            fetch('api/check_alerts.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.new_alerts > 0) {
+                        showToast(
+                            'New Alert Detected!',
+                            `${data.new_alerts} new unauthorized access alert${data.new_alerts > 1 ? 's' : ''}`,
+                            'warning'
+                        );
+                    }
+                })
+                .catch(err => {});
+        }
+
+        // ============================================================
+        // UPDATE TIME
+        // ============================================================
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true 
+            });
+            const updateElement = document.getElementById('lastUpdate');
+            if (updateElement) {
+                updateElement.textContent = 'Updated: ' + timeString;
+            }
+        }
+
+        // ============================================================
+        // AUTO REFRESH
+        // ============================================================
+        setInterval(() => {
+            updateLastUpdateTime();
+            checkNewAlerts();
+        }, 10000);
+
+        // ============================================================
+        // INITIAL LOAD
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            updateLastUpdateTime();
+            
+            <?php if ($stats['pending_alerts'] > 0): ?>
+                setTimeout(() => {
+                    showToast(
+                        '⚠️ Pending Alerts',
+                        'You have <?php echo $stats['pending_alerts']; ?> pending alert<?php echo $stats['pending_alerts'] > 1 ? 's' : ''; ?> that need your attention.',
+                        'warning'
+                    );
+                }, 1000);
+            <?php endif; ?>
+        });
         
+        // ============================================================
         // SIDEBAR TOGGLE (mobile)
+        // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
     </script>
-</body>
+</body> 
 </html>
