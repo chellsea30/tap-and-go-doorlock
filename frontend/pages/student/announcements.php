@@ -1,7 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Student Announcements View
- * DARK MODE - FIXED ERRORS - WITH CORRECT NAVBAR
+ * DARK MODE - FIXED ERRORS - SEPARATE NAVBAR
  */
 
 session_start();
@@ -56,31 +56,6 @@ if ($result) {
             min-height: 100vh;
         }
         
-        /* ===== SIDEBAR (Styling for the included file) ===== */
-        .sidebar {
-            background: #131926 !important;
-            border-right: 1px solid #1e2a3a !important;
-            padding-top: 20px;
-        }
-        .sidebar .nav-link {
-            color: #9ca3af !important;
-            padding: 10px 20px;
-            border-radius: 8px;
-            margin: 2px 10px;
-        }
-        .sidebar .nav-link:hover {
-            background: rgba(255, 215, 0, 0.08);
-            color: #ffd700 !important;
-        }
-        .sidebar .nav-link.active {
-            background: rgba(255, 215, 0, 0.12);
-            color: #ffd700 !important;
-        }
-        .sidebar .nav-link i {
-            width: 20px;
-        }
-        
-        /* ===== MAIN CONTENT ===== */
         .main-content {
             margin-left: 260px;
             padding: 20px 30px;
@@ -88,7 +63,6 @@ if ($result) {
             background: #0a0e1a;
         }
         
-        /* ===== ANNOUNCEMENT CARDS ===== */
         .announcement-card {
             background: #131926 !important;
             border-radius: 16px;
@@ -124,6 +98,7 @@ if ($result) {
             background: rgba(59, 130, 246, 0.2) !important;
             color: #93c5fd !important;
         }
+        
         .badge.bg-success {
             background: rgba(16, 185, 129, 0.2) !important;
             color: #6ee7b7 !important;
@@ -133,7 +108,6 @@ if ($result) {
             color: #9ca3af !important;
         }
         
-        /* ===== CARDS ===== */
         .card {
             background: #131926 !important;
             border: 1px solid #1e2a3a !important;
@@ -152,14 +126,47 @@ if ($result) {
         .h1, .h2, .h3, .h4, .h5, h1, h2, h3, h4, h5 {
             color: #e5e7eb !important;
         }
+        
         .border-bottom {
             border-color: #1e2a3a !important;
         }
+        
         .text-muted {
             color: #6b7280 !important;
         }
         
-        /* ===== SCROLLBAR ===== */
+        /* Sidebar styles */
+        #sidebar {
+            background: #131926 !important;
+            border-right: 1px solid #1e2a3a !important;
+            padding-top: 20px;
+        }
+        #sidebar .nav-link {
+            color: #9ca3af !important;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin: 2px 10px;
+        }
+        #sidebar .nav-link:hover {
+            background: rgba(255, 215, 0, 0.08);
+            color: #ffd700 !important;
+        }
+        #sidebar .nav-link.active {
+            background: rgba(255, 215, 0, 0.12);
+            color: #ffd700 !important;
+        }
+        #sidebar .nav-link i {
+            width: 20px;
+        }
+        #sidebar .nav-header {
+            color: #6b7280;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 15px 20px 8px;
+        }
+        
+        /* Scrollbar */
         ::-webkit-scrollbar {
             width: 10px;
         }
@@ -174,13 +181,12 @@ if ($result) {
             background: #ffd700;
         }
         
-        /* ===== RESPONSIVE ===== */
         @media (max-width: 768px) {
             .main-content {
                 margin-left: 0;
                 padding: 15px;
             }
-            .sidebar {
+            #sidebar {
                 position: fixed;
                 top: 56px;
                 left: -280px;
@@ -190,7 +196,7 @@ if ($result) {
                 transition: left 0.3s ease;
                 overflow-y: auto;
             }
-            .sidebar.show {
+            #sidebar.show {
                 left: 0;
             }
             .sidebar-overlay {
@@ -209,16 +215,14 @@ if ($result) {
 </head>
 <body>
 
-    <!-- ===== SIDEBAR OVERLAY (mobile) ===== -->
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-
     <!-- ===== SIDEBAR ===== -->
     <?php include 'includes/sidebar.php'; ?>
 
-    <!-- ===== NAVBAR (Correct file with logo) ===== -->
+    <!-- ===== NAVBAR (Separate file) ===== -->
     <?php include 'includes/navbar.php'; ?>
 
-    <!-- ===== MAIN CONTENT ===== -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    
     <main class="main-content">
         <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
             <h1 class="h2" style="font-size:24px; font-weight:700;"><i class="fas fa-bullhorn me-2" style="color: #ffd700;"></i>Announcements</h1>
@@ -261,25 +265,19 @@ if ($result) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Tandaan: Tinawag natin ang sidebar na 'sidebar' pero sa include natin, ito ay naka-id na 'sidebar'. 
-        // Kung hindi naka-id, gagana pa rin ito sa pamamagitan ng pagkuha ng class.
         function toggleSidebar() {
-            const sidebar = document.querySelector('.sidebar');
-            const overlay = document.getElementById('sidebarOverlay');
-            if (sidebar) {
-                sidebar.classList.toggle('show');
-                overlay.classList.toggle('show');
-            }
+            document.getElementById('sidebar').classList.toggle('show');
+            document.getElementById('sidebarOverlay').classList.toggle('show');
         }
 
         // Close sidebar when clicking outside on mobile
         document.addEventListener('click', function(event) {
-            const sidebar = document.querySelector('.sidebar');
+            const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const toggler = document.querySelector('.navbar-toggler');
             
             if (window.innerWidth <= 768) {
-                if (sidebar && !sidebar.contains(event.target) && !toggler.contains(event.target) && sidebar.classList.contains('show')) {
+                if (!sidebar.contains(event.target) && !toggler.contains(event.target) && sidebar.classList.contains('show')) {
                     sidebar.classList.remove('show');
                     overlay.classList.remove('show');
                 }
