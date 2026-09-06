@@ -1,7 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Student Announcements View
- * DARK MODE - FIXED ERRORS
+ * DARK MODE - FIXED ERRORS - WITH CORRECT NAVBAR
  */
 
 session_start();
@@ -56,36 +56,31 @@ if ($result) {
             min-height: 100vh;
         }
         
-        .navbar {
-            background: linear-gradient(135deg, #0a1628, #1a2a4a) !important;
-            height: 56px;
-            padding: 0 20px;
-            border-bottom: 1px solid #1e2a3a;
+        /* ===== SIDEBAR (Styling for the included file) ===== */
+        .sidebar {
+            background: #131926 !important;
+            border-right: 1px solid #1e2a3a !important;
+            padding-top: 20px;
         }
-        .navbar-brand { color: #ffd700 !important; font-weight: 700; font-size: 18px; }
-        .navbar-brand i { color: #ffd700; }
-        .navbar .nav-link { color: rgba(255,255,255,0.7) !important; padding: 8px 15px; border-radius: 8px; }
-        .navbar .nav-link:hover { color: white !important; background: rgba(255,255,255,0.08); }
-        .navbar .nav-link.active { color: white !important; background: rgba(255,215,0,0.15); }
-        .logout-btn {
-            color: rgba(255,255,255,0.7) !important;
-            padding: 6px 16px;
+        .sidebar .nav-link {
+            color: #9ca3af !important;
+            padding: 10px 20px;
             border-radius: 8px;
-            border: 1px solid rgba(255,255,255,0.15);
-            text-decoration: none;
+            margin: 2px 10px;
         }
-        .logout-btn:hover { background: rgba(255,255,255,0.1); color: white !important; }
-        .student-badge {
-            background: rgba(255, 215, 0, 0.15);
-            color: #ffd700;
-            padding: 2px 12px;
-            border-radius: 20px;
-            font-size: 12px;
+        .sidebar .nav-link:hover {
+            background: rgba(255, 215, 0, 0.08);
+            color: #ffd700 !important;
         }
-        .navbar-text {
-            color: #e5e7eb !important;
+        .sidebar .nav-link.active {
+            background: rgba(255, 215, 0, 0.12);
+            color: #ffd700 !important;
+        }
+        .sidebar .nav-link i {
+            width: 20px;
         }
         
+        /* ===== MAIN CONTENT ===== */
         .main-content {
             margin-left: 260px;
             padding: 20px 30px;
@@ -93,6 +88,7 @@ if ($result) {
             background: #0a0e1a;
         }
         
+        /* ===== ANNOUNCEMENT CARDS ===== */
         .announcement-card {
             background: #131926 !important;
             border-radius: 16px;
@@ -128,7 +124,6 @@ if ($result) {
             background: rgba(59, 130, 246, 0.2) !important;
             color: #93c5fd !important;
         }
-        
         .badge.bg-success {
             background: rgba(16, 185, 129, 0.2) !important;
             color: #6ee7b7 !important;
@@ -138,6 +133,7 @@ if ($result) {
             color: #9ca3af !important;
         }
         
+        /* ===== CARDS ===== */
         .card {
             background: #131926 !important;
             border: 1px solid #1e2a3a !important;
@@ -156,47 +152,14 @@ if ($result) {
         .h1, .h2, .h3, .h4, .h5, h1, h2, h3, h4, h5 {
             color: #e5e7eb !important;
         }
-        
         .border-bottom {
             border-color: #1e2a3a !important;
         }
-        
         .text-muted {
             color: #6b7280 !important;
         }
         
-        /* Sidebar styles */
-        #sidebar {
-            background: #131926 !important;
-            border-right: 1px solid #1e2a3a !important;
-            padding-top: 20px;
-        }
-        #sidebar .nav-link {
-            color: #9ca3af !important;
-            padding: 10px 20px;
-            border-radius: 8px;
-            margin: 2px 10px;
-        }
-        #sidebar .nav-link:hover {
-            background: rgba(255, 215, 0, 0.08);
-            color: #ffd700 !important;
-        }
-        #sidebar .nav-link.active {
-            background: rgba(255, 215, 0, 0.12);
-            color: #ffd700 !important;
-        }
-        #sidebar .nav-link i {
-            width: 20px;
-        }
-        #sidebar .nav-header {
-            color: #6b7280;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 15px 20px 8px;
-        }
-        
-        /* Scrollbar */
+        /* ===== SCROLLBAR ===== */
         ::-webkit-scrollbar {
             width: 10px;
         }
@@ -211,12 +174,13 @@ if ($result) {
             background: #ffd700;
         }
         
+        /* ===== RESPONSIVE ===== */
         @media (max-width: 768px) {
             .main-content {
                 margin-left: 0;
                 padding: 15px;
             }
-            #sidebar {
+            .sidebar {
                 position: fixed;
                 top: 56px;
                 left: -280px;
@@ -226,7 +190,7 @@ if ($result) {
                 transition: left 0.3s ease;
                 overflow-y: auto;
             }
-            #sidebar.show {
+            .sidebar.show {
                 left: 0;
             }
             .sidebar-overlay {
@@ -244,57 +208,17 @@ if ($result) {
     </style>
 </head>
 <body>
-!-- ===== SIDEBAR ===== -->
-    <?php include 'includes/sidebar.php'; ?>
-    <nav class="navbar navbar-expand-lg fixed-top">
-        <div class="container-fluid">
-            <button class="navbar-toggler me-2" type="button" onclick="toggleSidebar()" style="border-color: rgba(255,255,255,0.1);">
-                <span class="navbar-toggler-icon" style="background-image: url('data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 30 30\'%3e%3cpath stroke=\'rgba(255,255,255,0.8)\' stroke-linecap=\'round\' stroke-miterlimit=\'10\' stroke-width=\'2\' d=\'M4 7h22M4 15h22M4 23h22\'/%3e%3c/svg%3e');"></span>
-            </button>
-            <a class="navbar-brand" href="dashboard.php">
-                <i class="fas fa-door-open me-2"></i> Tap-and-Go
-            </a>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="profile.php"><i class="fas fa-user"></i> My Profile</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="access-history.php"><i class="fas fa-clock"></i> Access History</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="my-rfid.php"><i class="fas fa-id-card"></i> My RFID Card</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="announcements.php"><i class="fas fa-bullhorn"></i> Announcements</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="concerns.php"><i class="fas fa-exclamation-circle"></i> Concerns</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="request-reset.php"><i class="fas fa-key"></i> Reset Password</a>
-                    </li>
-                </ul>
-                <div class="d-flex align-items-center">
-                    <span class="navbar-text me-2">
-                        <i class="fas fa-user-graduate me-1"></i>
-                        <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?>
-                        <span class="student-badge ms-1">Student</span>
-                    </span>
-                    <a href="../../logout.php" class="logout-btn">
-                        <i class="fas fa-sign-out-alt me-1"></i> Logout
-                    </a>
-                </div>
-            </div>
-        </div>
-    </nav>
 
+    <!-- ===== SIDEBAR OVERLAY (mobile) ===== -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-    
 
+    <!-- ===== SIDEBAR ===== -->
+    <?php include 'includes/sidebar.php'; ?>
+
+    <!-- ===== NAVBAR (Correct file with logo) ===== -->
+    <?php include 'includes/navbar.php'; ?>
+
+    <!-- ===== MAIN CONTENT ===== -->
     <main class="main-content">
         <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
             <h1 class="h2" style="font-size:24px; font-weight:700;"><i class="fas fa-bullhorn me-2" style="color: #ffd700;"></i>Announcements</h1>
@@ -337,19 +261,25 @@ if ($result) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Tandaan: Tinawag natin ang sidebar na 'sidebar' pero sa include natin, ito ay naka-id na 'sidebar'. 
+        // Kung hindi naka-id, gagana pa rin ito sa pamamagitan ng pagkuha ng class.
         function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('show');
-            document.getElementById('sidebarOverlay').classList.toggle('show');
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar) {
+                sidebar.classList.toggle('show');
+                overlay.classList.toggle('show');
+            }
         }
 
         // Close sidebar when clicking outside on mobile
         document.addEventListener('click', function(event) {
-            const sidebar = document.getElementById('sidebar');
+            const sidebar = document.querySelector('.sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             const toggler = document.querySelector('.navbar-toggler');
             
             if (window.innerWidth <= 768) {
-                if (!sidebar.contains(event.target) && !toggler.contains(event.target) && sidebar.classList.contains('show')) {
+                if (sidebar && !sidebar.contains(event.target) && !toggler.contains(event.target) && sidebar.classList.contains('show')) {
                     sidebar.classList.remove('show');
                     overlay.classList.remove('show');
                 }
