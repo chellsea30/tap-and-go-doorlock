@@ -4,7 +4,6 @@
  * VIEW ONLY - Same Design as Admin Sidebar
  * PURE DARK MODE - No white backgrounds
  * WITH VISITORS SUBMENU
- * FIXED: Proper links to view-only pages
  */
 ?>
 
@@ -247,22 +246,6 @@
                         $residentCount = $row['count'] ?? 0;
                     ?>
                     <span class="badge bg-primary rounded-pill ms-2"><?php echo $residentCount; ?></span>
-                    <span class="view-only-badge-sidebar">View</span>
-                </a>
-            </li>
-            
-            <!-- ===== STAFF (VIEW ONLY) ===== -->
-            <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-view.php' ? 'active' : ''; ?>" href="staff-view.php">
-                    <i class="fas fa-user-tie me-2"></i> Staff
-                    <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM staff_users");
-                        $row = $result->fetch_assoc();
-                        $staffCount = $row['count'] ?? 0;
-                    ?>
-                    <span class="badge bg-primary rounded-pill ms-2"><?php echo $staffCount; ?></span>
-                    <span class="view-only-badge-sidebar">View</span>
                 </a>
             </li>
             
@@ -340,7 +323,7 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'register-visitor.php' ? 'active' : ''; ?>" href="register-visitor.php">
-                            <i class="fas fa-user-plus me-2"></i> Register Visitor
+                            <i class="fas fa-user-plus me-2"></i> + New Visitor
                         </a>
                     </li>
                     <li class="nav-item">
