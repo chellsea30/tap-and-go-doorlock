@@ -4,6 +4,7 @@
  * DARK MODE - Desktop and Mobile
  * WITH RESIDENTS REPORT - PERMANENT STORAGE (NO DELETE)
  * WITH CHART REPORT - PIE CHART FOR COURSE & YEAR LEVEL
+ * REPORTS MOVED TO OTHERS SUBMENU
  */
 ?>
 
@@ -430,16 +431,6 @@ SIDEBAR OVERLAY - for mobile close
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'new-resident.php' ? 'active' : ''; ?>" href="new-resident.php">
-                            <i class="fas fa-user-plus"></i> New Resident
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'admission-form.php' ? 'active' : ''; ?>" href="admission-form.php">
-                            <i class="fas fa-clipboard-list"></i> Admission Form
-                        </a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'student-registration.php' ? 'active' : ''; ?>" href="student-registration.php">
                             <i class="fas fa-user-graduate"></i> Student Portal
                         </a>
@@ -561,56 +552,6 @@ SIDEBAR OVERLAY - for mobile close
                 </ul>
             </li>
             
-            <!-- ===== REPORTS with SUBMENU - WITH CHART REPORT ===== -->
-            <li class="nav-item">
-                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'active' : ''; ?>" 
-                   href="#reportsMenu" 
-                   data-bs-toggle="collapse" 
-                   role="button" 
-                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'true' : 'false'; ?>">
-                    <i class="fas fa-chart-bar"></i> Reports
-                    <i class="fas fa-chevron-down"></i>
-                    <?php
-                        // Get total residents count for badge
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM users WHERE status = 'active' OR status = 'inactive'");
-                        $row = $result->fetch_assoc();
-                        $totalResidents = $row['count'] ?? 0;
-                    ?>
-                    <span class="badge bg-info rounded-pill"><?php echo $totalResidents; ?></span>
-                </a>
-                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="reportsMenu">
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>" href="reports.php">
-                            <i class="fas fa-chart-pie"></i> Overview
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'resident-reports.php' || basename($_SERVER['PHP_SELF']) == 'residents-report.php' ? 'active' : ''; ?>" href="residents-report.php">
-                            <i class="fas fa-users"></i> Residents Report
-                            <?php if ($totalResidents > 0): ?>
-                                <span class="badge bg-success rounded-pill"><?php echo $totalResidents; ?></span>
-                            <?php endif; ?>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'access-reports.php' ? 'active' : ''; ?>" href="access-reports.php">
-                            <i class="fas fa-door-open"></i> Access Reports
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'visitor-reports.php' ? 'active' : ''; ?>" href="visitor-reports.php">
-                            <i class="fas fa-user-friends"></i> Visitor Reports
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'chart-report.php' ? 'active' : ''; ?>" href="chart-report.php">
-                            <i class="fas fa-chart-pie"></i> Chart Report
-                        </a>
-                    </li>
-                </ul>
-            </li>
-            
             <!-- ===== ANNOUNCEMENTS ===== -->
             <li class="nav-item">
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php">
@@ -669,11 +610,11 @@ SIDEBAR OVERLAY - for mobile close
             
             <!-- ===== OTHERS ===== -->
             <li class="nav-item">
-                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php']) ? 'active' : ''; ?>" 
+                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'active' : ''; ?>" 
                    href="#othersMenu" 
                    data-bs-toggle="collapse" 
                    role="button" 
-                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php']) ? 'true' : 'false'; ?>">
+                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'true' : 'false'; ?>">
                     <i class="fas fa-ellipsis-h"></i> Others
                     <i class="fas fa-chevron-down"></i>
                     <?php
@@ -692,7 +633,57 @@ SIDEBAR OVERLAY - for mobile close
                         <span class="badge bg-danger rounded-pill"><?php echo $totalOthersBadge; ?></span>
                     <?php endif; ?>
                 </a>
-                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php']) ? 'show' : ''; ?>" id="othersMenu">
+                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="othersMenu">
+                    
+                    <!-- REPORTS SUBMENU (MOVED HERE) -->
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'active' : ''; ?>" 
+                           href="#reportsSubMenu" 
+                           data-bs-toggle="collapse" 
+                           role="button" 
+                           aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'true' : 'false'; ?>">
+                            <i class="fas fa-chart-bar"></i> Reports
+                            <i class="fas fa-chevron-down"></i>
+                            <?php
+                                // Get total residents count for badge
+                                $conn = getDBConnection();
+                                $result = $conn->query("SELECT COUNT(*) as count FROM users WHERE status = 'active' OR status = 'inactive'");
+                                $row = $result->fetch_assoc();
+                                $totalResidents = $row['count'] ?? 0;
+                            ?>
+                            <span class="badge bg-info rounded-pill"><?php echo $totalResidents; ?></span>
+                        </a>
+                        <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="reportsSubMenu">
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>" href="reports.php">
+                                    <i class="fas fa-chart-pie"></i> Overview
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'resident-reports.php' || basename($_SERVER['PHP_SELF']) == 'residents-report.php' ? 'active' : ''; ?>" href="residents-report.php">
+                                    <i class="fas fa-users"></i> Residents Report
+                                    <?php if ($totalResidents > 0): ?>
+                                        <span class="badge bg-success rounded-pill"><?php echo $totalResidents; ?></span>
+                                    <?php endif; ?>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'access-reports.php' ? 'active' : ''; ?>" href="access-reports.php">
+                                    <i class="fas fa-door-open"></i> Access Reports
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'visitor-reports.php' ? 'active' : ''; ?>" href="visitor-reports.php">
+                                    <i class="fas fa-user-friends"></i> Visitor Reports
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'chart-report.php' ? 'active' : ''; ?>" href="chart-report.php">
+                                    <i class="fas fa-chart-pie"></i> Chart Report
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
                     
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'concerns-management.php' ? 'active' : ''; ?>" href="concerns-management.php">
