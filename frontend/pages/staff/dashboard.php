@@ -1,7 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Staff Dashboard
- * VIEW ONLY - Same Design as Admin Dashboard
+ * VIEW ONLY - UPDATED STATISTICS (SAME AS ADMIN)
  * PURE DARK MODE - No white backgrounds
  */
 
@@ -21,38 +21,102 @@ if (!isset($_SESSION['staff_id']) || !isStaffSessionValid()) {
 $conn = getDBConnection();
 
 // ============================================================
-// GET DASHBOARD STATISTICS
+// GET DASHBOARD STATISTICS (UPDATED)
 // ============================================================
 $stats = [
-    'total_residents' => 0,
-    'active_cards' => 0,
-    'today_access' => 0,
+    'total_residents' => 0,          // Total registered residents
+    'active_cards' => 0,             // Total active cards
+    'today_access' => 0,             // Total access today
+    'unauthorized_today' => 0,       // Total unauthorized today
+    'residents_inside' => 0,         // Total residents inside rooms
+    'residents_outside' => 0,        // Total residents outside
+    'total_visitors' => 0,           // Total registered visitors
+    'visitors_inside' => 0,          // Total visitors inside
     'pending_alerts' => 0,
-    'current_occupancy' => 0,
-    'total_visitors' => 0,
-    'total_announcements' => 0,
+    'critical_alerts' => 0,
     'total_rooms' => 5,
-    'max_per_room' => 7,
-    'unauthorized_today' => 0,
-    'critical_alerts' => 0
+    'max_per_room' => 7
 ];
 
-// Total active residents
-$result = $conn->query("SELECT COUNT(*) as count FROM users WHERE status = 'active'");
+// 1. Total Registered Residents (ALL registered)
+$result = $conn->query("SELECT COUNT(*) as count FROM users");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['total_residents'] = (int)$row['count'];
 }
 
-// Active cards
+// 2. Total Active Cards
 $result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'active'");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['active_cards'] = (int)$row['count'];
 }
 
-// Today's access
+// 3. Today's Access
 $result = $conn->query("SELECT COUNT(*) as count FROM access_logs WHERE DATE(timestamp) = CURDATE()");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['today_access'] = (int)$row['count'];
+}
+
+// 4. Total Unauthorized Today (Denied)
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM access_logs 
+    WHERE DATE(timestamp) = CURDATE() 
+    AND access_status = 'denied'
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['unauthorized_today'] = (int)$row['count'];
+}
+
+// 5 & 6. Total Residents Inside & Outside
+$residentsStatus = [
+    'inside' => [],
+    'outside' => []
+];
+
+$result = $conn->query("
+    SELECT 
+        u.user_id, 
+        u.full_name, 
+        al.access_type as last_access_type,
+        al.timestamp as last_timestamp
+    FROM users u
+    LEFT JOIN access_logs al ON u.user_id = al.user_id 
+        AND al.timestamp = (
+            SELECT MAX(timestamp) 
+            FROM access_logs al2 
+            WHERE al2.user_id = u.user_id
+        )
+    WHERE u.status = 'active'
+    AND u.room_number IS NOT NULL
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        if ($row['last_access_type'] === 'entry') {
+            $residentsStatus['inside'][] = $row;
+        } else {
+            $residentsStatus['outside'][] = $row;
+        }
+    }
+}
+
+$stats['residents_inside'] = count($residentsStatus['inside']);
+$stats['residents_outside'] = count($residentsStatus['outside']);
+
+// 7. Total Visitors (Registered visitors today)
+$result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE DATE(entry_timestamp) = CURDATE()");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['total_visitors'] = (int)$row['count'];
+}
+
+// 8. Total Visitors Inside (Not yet exited)
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM visitor_logs 
+    WHERE DATE(entry_timestamp) = CURDATE() 
+    AND exit_timestamp IS NULL
+");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['visitors_inside'] = (int)$row['count'];
 }
 
 // Pending alerts
@@ -70,45 +134,6 @@ $result = $conn->query("
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['critical_alerts'] = (int)$row['count'];
-}
-
-// Unauthorized today
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM access_logs 
-    WHERE DATE(timestamp) = CURDATE() 
-    AND access_status = 'denied'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['unauthorized_today'] = (int)$row['count'];
-}
-
-// Current occupancy
-$result = $conn->query("
-    SELECT COUNT(DISTINCT user_id) as count 
-    FROM access_logs 
-    WHERE user_id IS NOT NULL 
-    AND access_type = 'entry' 
-    AND timestamp = (
-        SELECT MAX(timestamp) 
-        FROM access_logs al2 
-        WHERE al2.user_id = access_logs.user_id
-    )
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['current_occupancy'] = (int)$row['count'];
-}
-
-// Total visitors today
-$result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE DATE(entry_timestamp) = CURDATE()");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['total_visitors'] = (int)$row['count'];
-}
-
-// Total announcements
-$result = $conn->query("SELECT COUNT(*) as count FROM announcements WHERE is_active = 1");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['total_announcements'] = (int)$row['count'];
 }
 
 // ============================================================
@@ -780,27 +805,32 @@ if (isset($_SESSION['staff_id'])) {
                 </div>
                 <?php endif; ?>
 
-                <!-- Stats Cards -->
+                <!-- ===== STATS CARDS (UPDATED - SAME AS ADMIN) ===== -->
                 <div class="row g-3 mb-4">
-                    <div class="col-6 col-sm-6 col-xl-2">
+                    <!-- Total Registered Residents -->
+                    <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #667eea;"><i class="fas fa-users"></i></div>
                             <div>
                                 <div class="stat-number"><?php echo $stats['total_residents']; ?></div>
-                                <div class="stat-label">Residents</div>
+                                <div class="stat-label">Total Registered Residents</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
+                    
+                    <!-- Total Active Cards -->
+                    <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #10b981;"><i class="fas fa-id-card"></i></div>
                             <div>
                                 <div class="stat-number"><?php echo $stats['active_cards']; ?></div>
-                                <div class="stat-label">Active Cards</div>
+                                <div class="stat-label">Total Active Cards</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
+                    
+                    <!-- Today's Access -->
+                    <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-sign-in-alt"></i></div>
                             <div>
@@ -809,7 +839,9 @@ if (isset($_SESSION['staff_id'])) {
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
+                    
+                    <!-- Total Unauthorized Today -->
+                    <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: <?php echo $stats['unauthorized_today'] > 0 ? '#ef4444' : '#6b7280'; ?>;">
                                 <i class="fas <?php echo $stats['unauthorized_today'] > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle'; ?>"></i>
@@ -825,30 +857,104 @@ if (isset($_SESSION['staff_id'])) {
                             <?php endif; ?>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
+                </div>
+
+                <!-- ===== RESIDENT & VISITOR STATUS CARDS ===== -->
+                <div class="row g-3 mb-4">
+                    <!-- Total Residents Inside -->
+                    <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-people-arrows"></i></div>
+                            <div class="stat-icon" style="background: #34d399;"><i class="fas fa-door-open"></i></div>
                             <div>
-                                <div class="stat-number"><?php echo $stats['current_occupancy']; ?></div>
-                                <div class="stat-label">Occupancy</div>
+                                <div class="stat-number text-success"><?php echo $stats['residents_inside']; ?></div>
+                                <div class="stat-label">Residents Inside Rooms</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
+                    
+                    <!-- Total Residents Outside -->
+                    <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
-                            <div class="stat-icon" style="background: #3b82f6;"><i class="fas fa-user-clock"></i></div>
+                            <div class="stat-icon" style="background: #f87171;"><i class="fas fa-door-closed"></i></div>
+                            <div>
+                                <div class="stat-number text-danger"><?php echo $stats['residents_outside']; ?></div>
+                                <div class="stat-label">Residents Outside</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Total Visitors -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-user-friends"></i></div>
                             <div>
                                 <div class="stat-number"><?php echo $stats['total_visitors']; ?></div>
-                                <div class="stat-label">Visitors Today</div>
+                                <div class="stat-label">Total Visitors Today</div>
                             </div>
-                            <?php if ($stats['pending_alerts'] > 0): ?>
-                                <span class="badge bg-warning pulse-badge">
-                                    <?php echo $stats['pending_alerts']; ?>
-                                </span>
-                            <?php endif; ?>
+                        </div>
+                    </div>
+                    
+                    <!-- Total Visitors Inside -->
+                    <div class="col-6 col-sm-6 col-xl-3">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #3b82f6;"><i class="fas fa-user-check"></i></div>
+                            <div>
+                                <div class="stat-number text-primary"><?php echo $stats['visitors_inside']; ?></div>
+                                <div class="stat-label">Visitors Inside</div>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Latest Alerts -->
+                <?php if (!empty($latestAlerts)): ?>
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5><i class="fas fa-bell me-2"></i>Recent Alerts</h5>
+                                <a href="alerts.php" class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-eye me-1"></i> View All Alerts
+                                </a>
+                            </div>
+                            <div class="card-body">
+                                <?php foreach ($latestAlerts as $alert): 
+                                    $isCritical = $alert['delivery_status'] == 'pending' && $alert['alert_type'] == 'unauthorized';
+                                    $displayName = !empty($alert['display_name']) ? $alert['display_name'] : 'Unknown';
+                                ?>
+                                <div class="alert-item <?php echo $isCritical ? 'critical' : ''; ?>">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span class="fw-bold"><?php echo $isCritical ? '🚨' : '⚠️'; ?></span>
+                                            <span class="alert-uid"><?php echo htmlspecialchars($alert['card_uid']); ?></span>
+                                            <span class="badge <?php echo $isCritical ? 'bg-danger' : 'badge-pending'; ?> ms-2">
+                                                <?php echo ucfirst($alert['alert_type']); ?>
+                                            </span>
+                                            <span class="text-muted ms-2">
+                                                <i class="fas fa-user me-1"></i>
+                                                <?php echo htmlspecialchars($displayName); ?>
+                                            </span>
+                                            <span class="text-muted ms-2" style="font-size: 12px;">
+                                                <i class="fas fa-clock me-1"></i>
+                                                <?php echo date('h:i A', strtotime($alert['timestamp'])); ?>
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <a href="alerts.php?resolve=<?php echo $alert['alert_id']; ?>" class="btn btn-sm btn-resolve">
+                                                <i class="fas fa-check me-1"></i> Resolve
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="text-muted small mt-1">
+                                        <?php echo htmlspecialchars($alert['reason'] ?? 'Unauthorized access attempt'); ?>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <!-- Rooms -->
                 <div class="row g-3 mb-4">
