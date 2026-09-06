@@ -106,7 +106,36 @@
         font-size: 14px;
     }
     
-    /* ===== DARK MODE ===== */
+    /* ===== DARK MODE DROPDOWN MENU ===== */
+    .dropdown-menu {
+        background: #131926 !important;
+        border: 1px solid #1e2a3a !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+    }
+    .dropdown-item {
+        color: #e5e7eb !important;
+        font-size: 14px;
+        padding: 10px 15px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+    .dropdown-item:hover {
+        background: rgba(255, 215, 0, 0.1) !important;
+        color: #ffd700 !important;
+    }
+    .dropdown-item.text-danger {
+        color: #f87171 !important;
+    }
+    .dropdown-item.text-danger:hover {
+        background: rgba(239, 68, 68, 0.1) !important;
+        color: #fca5a5 !important;
+    }
+    .dropdown-divider {
+        border-color: #1e2a3a !important;
+    }
+    
+    /* ===== DARK MODE MODAL ===== */
     body.dark-mode .modal-content {
         background: #131926 !important;
         border: 1px solid #1e2a3a;
