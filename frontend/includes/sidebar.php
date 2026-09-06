@@ -588,12 +588,7 @@ SIDEBAR OVERLAY - for mobile close
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-info.php' ? 'active' : ''; ?>" href="staff-info.php">
                             <i class="fas fa-address-card"></i> Staff Info
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-card.php' ? 'active' : ''; ?>" href="staff-card.php">
-                            <i class="fas fa-id-card"></i> Staff Card
-                        </a>
-                    </li>
+                    
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-logs.php' ? 'active' : ''; ?>" href="staff-logs.php">
                             <i class="fas fa-clock"></i> Access Logs
