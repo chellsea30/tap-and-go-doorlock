@@ -22,14 +22,10 @@
                         <i class="fas fa-user-circle me-1" style="font-size: 20px;"></i>
                         <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?>
                     </a>
+                    <!-- Dito: Logout Lang -->
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="profile.php"><i class="fas fa-user me-2"></i> My Profile</a></li>
-                        <li><a class="dropdown-item" href="request-reset.php"><i class="fas fa-key me-2"></i> Reset Password</a></li>
-                        <li><a class="dropdown-item" href="concerns.php"><i class="fas fa-exclamation-circle me-2"></i> Concerns</a></li>
-                        <li><a class="dropdown-item" href="announcements.php"><i class="fas fa-bullhorn me-2"></i> Announcements</a></li>
-                        <li><hr class="dropdown-divider"></li>
                         <li>
-                            <a class="dropdown-item text-danger" href="../../logout.php" data-bs-toggle="modal" data-bs-target="#logoutModal">
+                            <a class="dropdown-item text-danger" href="../../login.php">
                                 <i class="fas fa-sign-out-alt me-2"></i> Logout
                             </a>
                         </li>
@@ -39,40 +35,6 @@
         </div>
     </div>
 </nav>
-
-<!-- ===== LOGOUT CONFIRMATION MODAL ===== -->
-<div class="modal fade" id="logoutModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-sign-out-alt me-2" style="color: #ef4444;"></i>
-                    Confirm Logout
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center py-4">
-                <i class="fas fa-question-circle fa-4x mb-3" style="color: #f59e0b;"></i>
-                <h5 class="mb-2">Are you sure you want to logout?</h5>
-                <p class="text-muted mb-0">You will be redirected to the login page.</p>
-                <div class="mt-3">
-                    <span class="badge bg-secondary">
-                        <i class="fas fa-user me-1"></i>
-                        <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?>
-                    </span>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="fas fa-times me-1"></i> Cancel
-                </button>
-                <a href="../../logout.php" class="btn btn-danger">
-                    <i class="fas fa-sign-out-alt me-1"></i> Yes, Logout
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
 
 <style>
     /* ===== NAVBAR STYLES ===== */
@@ -119,10 +81,6 @@
         padding: 10px 15px;
         border-radius: 8px;
         transition: all 0.3s ease;
-    }
-    .dropdown-item:hover {
-        background: rgba(255, 215, 0, 0.1) !important;
-        color: #ffd700 !important;
     }
     .dropdown-item.text-danger {
         color: #f87171 !important;
@@ -190,14 +148,3 @@
         }
     }
 </style>
-
-<script>
-    // Keyboard shortcut for logout (Ctrl+Shift+L)
-    document.addEventListener('keydown', function(e) {
-        if (e.ctrlKey && e.shiftKey && e.key === 'L') {
-            e.preventDefault();
-            const modal = new bootstrap.Modal(document.getElementById('logoutModal'));
-            modal.show();
-        }
-    });
-</script>
