@@ -1300,6 +1300,9 @@ $stmt->close();
 <body>
     <?php include '../includes/navbar.php'; ?>
     
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+    
     <div class="container-fluid">
         <div class="row">
             <?php include '../includes/sidebar.php'; ?>
