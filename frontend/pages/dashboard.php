@@ -4,6 +4,7 @@
  * COMPLETE WITH UNAUTHORIZED ALERT - USING alert_logs
  * PURE DARK MODE - No white backgrounds
  * WITH CUSTOM STATISTICS (Inside/Outside/Visitors)
+ * WITH COURSE & YEAR LEVEL PIE CHART (CSS-BASED)
  */
 
 // Start session
@@ -71,7 +72,6 @@ if ($result && $row = $result->fetch_assoc()) {
 }
 
 // 5 & 6. Total Residents Inside & Outside
-// Kunin natin lahat ng active residents, tapos i-determine kung nasa loob o labas sila based sa latest access log nila
 $residentsStatus = [
     'inside' => [],
     'outside' => []
@@ -138,6 +138,40 @@ $result = $conn->query("
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['critical_alerts'] = (int)$row['count'];
+}
+
+// ============================================================
+// GET COURSE & YEAR LEVEL DISTRIBUTION (FOR PIE CHART)
+// ============================================================
+$courseData = [];
+$yearLevelData = [];
+
+$result = $conn->query("
+    SELECT rp.course, COUNT(*) as count
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    WHERE u.status = 'active' AND rp.course IS NOT NULL
+    GROUP BY rp.course
+    ORDER BY count DESC
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $courseData[] = $row;
+    }
+}
+
+$result = $conn->query("
+    SELECT rp.year_level, COUNT(*) as count
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    WHERE u.status = 'active' AND rp.year_level IS NOT NULL
+    GROUP BY rp.year_level
+    ORDER BY FIELD(rp.year_level, '1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year')
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $yearLevelData[] = $row;
+    }
 }
 
 // ============================================================
@@ -605,6 +639,78 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         }
         
         /* ============================================================
+           PIE CHART / DONUT CHART (CSS conic-gradient)
+           ============================================================ */
+        .pie-chart-container {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        .pie-chart {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .pie-chart::after {
+            content: '';
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            width: 130px;
+            height: 130px;
+            background: #111827;
+            border-radius: 50%;
+        }
+        .pie-chart .center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+        }
+        .pie-chart .center-text .number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffd700 !important;
+        }
+        .pie-chart .center-text .label {
+            font-size: 11px;
+            color: #6b7280;
+        }
+        .pie-legend {
+            flex: 1;
+            min-width: 200px;
+        }
+        .pie-legend .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #e0e0e0;
+        }
+        .pie-legend .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 4px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        .pie-legend .legend-count {
+            margin-left: auto;
+            font-weight: 600;
+            color: #d1d5db;
+        }
+        .pie-legend .legend-percent {
+            font-size: 11px;
+            color: #6b7280;
+            margin-left: 5px;
+        }
+        
+        /* ============================================================
            BORDER & DIVIDERS
            ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
@@ -697,6 +803,17 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
             }
             .toast-notification {
                 max-width: 100%;
+            }
+            
+            .pie-chart {
+                width: 140px;
+                height: 140px;
+            }
+            .pie-chart::after {
+                top: 20px;
+                left: 20px;
+                width: 100px;
+                height: 100px;
             }
         }
     </style>
@@ -1161,6 +1278,123 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                         </div>
                                         <?php endforeach; ?>
                                     </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                COURSE DISTRIBUTION PIE CHART (CSS-BASED)
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-pie me-2"></i>Course Distribution</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php 
+                                // Calculate colors and totals for pie
+                                $courseColors = ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6', '#06b6d4'];
+                                $courseTotal = 0;
+                                foreach ($courseData as $c) { $courseTotal += $c['count']; }
+                                
+                                if (empty($courseData) || $courseTotal == 0): ?>
+                                    <div class="text-center text-muted py-3">
+                                        <i class="fas fa-chart-pie fa-2x mb-2 d-block"></i>
+                                        No data available for courses
+                                    </div>
+                                <?php else: 
+                                    $courseGradient = '';
+                                    $currentPercent = 0;
+                                    foreach ($courseData as $index => $c) {
+                                        $percent = ($c['count'] / $courseTotal) * 100;
+                                        $color = $courseColors[$index % count($courseColors)];
+                                        $courseGradient .= $color . ' ' . $currentPercent . '% ' . ($currentPercent + $percent) . '%, ';
+                                        $currentPercent += $percent;
+                                    }
+                                    $courseGradient = rtrim($courseGradient, ', ');
+                                ?>
+                                <div class="pie-chart-container">
+                                    <div class="pie-chart" style="background: conic-gradient(<?php echo $courseGradient; ?>);">
+                                        <div class="center-text">
+                                            <div class="number"><?php echo $courseTotal; ?></div>
+                                            <div class="label">Residents</div>
+                                        </div>
+                                    </div>
+                                    <div class="pie-legend">
+                                        <?php foreach ($courseData as $index => $c): 
+                                            $color = $courseColors[$index % count($courseColors)];
+                                            $percent = round(($c['count'] / $courseTotal) * 100, 1);
+                                        ?>
+                                        <div class="legend-item">
+                                            <span class="legend-dot" style="background: <?php echo $color; ?>;"></span>
+                                            <span><?php echo htmlspecialchars($c['course']); ?></span>
+                                            <span class="legend-count"><?php echo $c['count']; ?></span>
+                                            <span class="legend-percent">(<?php echo $percent; ?>%)</span>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                YEAR LEVEL DISTRIBUTION PIE CHART (CSS-BASED)
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-pie me-2"></i>Year Level Distribution</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php 
+                                $yearColors = ['#10b981', '#667eea', '#f59e0b', '#ef4444', '#8b5cf6'];
+                                $yearTotal = 0;
+                                foreach ($yearLevelData as $y) { $yearTotal += $y['count']; }
+                                
+                                if (empty($yearLevelData) || $yearTotal == 0): ?>
+                                    <div class="text-center text-muted py-3">
+                                        <i class="fas fa-chart-pie fa-2x mb-2 d-block"></i>
+                                        No data available for year levels
+                                    </div>
+                                <?php else: 
+                                    $yearGradient = '';
+                                    $currentPercent = 0;
+                                    foreach ($yearLevelData as $index => $y) {
+                                        $percent = ($y['count'] / $yearTotal) * 100;
+                                        $color = $yearColors[$index % count($yearColors)];
+                                        $yearGradient .= $color . ' ' . $currentPercent . '% ' . ($currentPercent + $percent) . '%, ';
+                                        $currentPercent += $percent;
+                                    }
+                                    $yearGradient = rtrim($yearGradient, ', ');
+                                ?>
+                                <div class="pie-chart-container">
+                                    <div class="pie-chart" style="background: conic-gradient(<?php echo $yearGradient; ?>);">
+                                        <div class="center-text">
+                                            <div class="number"><?php echo $yearTotal; ?></div>
+                                            <div class="label">Residents</div>
+                                        </div>
+                                    </div>
+                                    <div class="pie-legend">
+                                        <?php foreach ($yearLevelData as $index => $y): 
+                                            $color = $yearColors[$index % count($yearColors)];
+                                            $percent = round(($y['count'] / $yearTotal) * 100, 1);
+                                        ?>
+                                        <div class="legend-item">
+                                            <span class="legend-dot" style="background: <?php echo $color; ?>;"></span>
+                                            <span><?php echo htmlspecialchars($y['year_level']); ?></span>
+                                            <span class="legend-count"><?php echo $y['count']; ?></span>
+                                            <span class="legend-percent">(<?php echo $percent; ?>%)</span>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
                                 <?php endif; ?>
                             </div>
                         </div>
