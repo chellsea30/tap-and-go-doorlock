@@ -1,278 +1,141 @@
 <?php
 /**
- * Tap-and-Go Doorlock - Staff Dashboard
- * VIEW ONLY - Same Design as Admin Dashboard
- * PURE DARK MODE - No white backgrounds
+ * Tap-and-Go Doorlock - Staff View
+ * VIEW-ONLY - WITH PROFILE PHOTO - WITH CARD UID - WITH PRINT ID
+ * PURE DARK MODE - WITH PAGINATION
  */
 
-// Start session
 session_start();
+require_once '../../backend/config/config.php';
+require_once '../../backend/helpers/functions.php';
 
-// Load config and functions - GUMAGAMIT NG __DIR__
-require_once __DIR__ . '/../../../backend/config/config.php';
-require_once __DIR__ . '/../../../backend/helpers/functions.php';
-
-// Check if logged in as staff
-if (!isset($_SESSION['staff_id']) || !isStaffSessionValid()) {
-    header('Location: ../login.php');
+if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
+    header('Location: login.php');
     exit();
 }
 
+// Include header
+include '../includes/header.php'; 
+
 $conn = getDBConnection();
+$error = '';
+$success = '';
 
 // ============================================================
-// GET DASHBOARD STATISTICS
+// INITIALIZE VARIABLES
 // ============================================================
-$stats = [
-    'total_residents' => 0,
-    'active_cards' => 0,
-    'today_access' => 0,
-    'pending_alerts' => 0,
-    'current_occupancy' => 0,
-    'total_visitors' => 0,
-    'total_announcements' => 0,
-    'total_rooms' => 5,
-    'max_per_room' => 7,
-    'unauthorized_today' => 0,
-    'critical_alerts' => 0
-];
+$staffList = [];
+$totalStaff = 0;
+$totalPages = 1;
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+$perPage = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 12;
 
-// Total active residents
-$result = $conn->query("SELECT COUNT(*) as count FROM users WHERE status = 'active'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['total_residents'] = (int)$row['count'];
-}
-
-// Active cards
-$result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'active'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['active_cards'] = (int)$row['count'];
-}
-
-// Today's access
-$result = $conn->query("SELECT COUNT(*) as count FROM access_logs WHERE DATE(timestamp) = CURDATE()");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['today_access'] = (int)$row['count'];
-}
-
-// Pending alerts
-$result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'pending'");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['pending_alerts'] = (int)$row['count'];
-}
-
-// Critical alerts
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM alert_logs 
-    WHERE delivery_status = 'pending' 
-    AND alert_type = 'unauthorized'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['critical_alerts'] = (int)$row['count'];
-}
-
-// Unauthorized today
-$result = $conn->query("
-    SELECT COUNT(*) as count 
-    FROM access_logs 
-    WHERE DATE(timestamp) = CURDATE() 
-    AND access_status = 'denied'
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['unauthorized_today'] = (int)$row['count'];
-}
-
-// Current occupancy
-$result = $conn->query("
-    SELECT COUNT(DISTINCT user_id) as count 
-    FROM access_logs 
-    WHERE user_id IS NOT NULL 
-    AND access_type = 'entry' 
-    AND timestamp = (
-        SELECT MAX(timestamp) 
-        FROM access_logs al2 
-        WHERE al2.user_id = access_logs.user_id
-    )
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['current_occupancy'] = (int)$row['count'];
-}
-
-// Total visitors today
-$result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE DATE(entry_timestamp) = CURDATE()");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['total_visitors'] = (int)$row['count'];
-}
-
-// Total announcements
-$result = $conn->query("SELECT COUNT(*) as count FROM announcements WHERE is_active = 1");
-if ($result && $row = $result->fetch_assoc()) {
-    $stats['total_announcements'] = (int)$row['count'];
+// Valid per page options
+$perPageOptions = [12, 24, 48, 96];
+if (!in_array($perPage, $perPageOptions)) {
+    $perPage = 12;
 }
 
 // ============================================================
-// GET LATEST UNAUTHORIZED ACCESS
+// GET STAFF LIST - VIEW ONLY
 // ============================================================
-$latestUnauthorized = null;
-$result = $conn->query("
-    SELECT 
-        alog.*,
-        c.card_type as rfid_card_type,
-        c.visitor_name,
-        c.resident_visited,
-        u.full_name as user_name,
-        u.room_number,
-        ru.full_name as resident_visited_name
-    FROM alert_logs alog
-    LEFT JOIN rfid_cards c ON alog.card_uid = c.card_uid
-    LEFT JOIN users u ON c.user_id = u.user_id
-    LEFT JOIN users ru ON c.resident_visited = ru.user_id
-    WHERE alog.alert_type = 'unauthorized'
-    AND alog.delivery_status = 'pending'
-    ORDER BY alog.timestamp DESC 
-    LIMIT 1
-");
-if ($result && $row = $result->fetch_assoc()) {
-    $displayName = !empty($row['user_name']) ? $row['user_name'] : 'Unknown';
-    if ($row['rfid_card_type'] == 'visitor' && !empty($row['visitor_name'])) {
-        $displayName = $row['visitor_name'] . ' (Visitor)';
-    }
-    if (empty($displayName) || $displayName == 'Unknown') {
-        $displayName = 'Unknown Card';
-    }
-    $row['display_name'] = $displayName;
-    $row['card_uid'] = $row['card_uid'] ?? 'N/A';
-    $row['access_type'] = $row['access_type'] ?? 'entry';
-    $row['timestamp'] = $row['timestamp'] ?? date('Y-m-d H:i:s');
-    $latestUnauthorized = $row;
-}
-
-// ============================================================
-// GET LATEST ALERTS
-// ============================================================
-$latestAlerts = [];
-$result = $conn->query("
-    SELECT 
-        alog.*,
-        c.card_type as rfid_card_type,
-        c.visitor_name,
-        c.resident_visited,
-        u.full_name as user_name,
-        u.room_number,
-        ru.full_name as resident_visited_name
-    FROM alert_logs alog
-    LEFT JOIN rfid_cards c ON alog.card_uid = c.card_uid
-    LEFT JOIN users u ON c.user_id = u.user_id
-    LEFT JOIN users ru ON c.resident_visited = ru.user_id
-    WHERE alog.delivery_status = 'pending'
-    ORDER BY alog.timestamp DESC 
-    LIMIT 5
-");
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $displayName = !empty($row['user_name']) ? $row['user_name'] : 'Unknown';
-        if ($row['rfid_card_type'] == 'visitor' && !empty($row['visitor_name'])) {
-            $displayName = $row['visitor_name'] . ' (Visitor)';
-        }
-        if (empty($displayName) || $displayName == 'Unknown') {
-            $displayName = 'Unknown Card';
-        }
-        $row['display_name'] = $displayName;
-        $latestAlerts[] = $row;
-    }
-}
-
-// ============================================================
-// GET ROOM OCCUPANCY DATA (Rooms 1-5)
-// ============================================================
-$roomData = [];
-for ($i = 1; $i <= 5; $i++) {
-    $roomData[$i] = [
-        'room_number' => $i,
-        'occupants' => [],
-        'count' => 0,
-        'is_full' => false
-    ];
+try {
+    // Check if avatar column exists
+    $tableCheck = $conn->query("SHOW COLUMNS FROM staff_users LIKE 'avatar'");
+    $hasAvatar = $tableCheck && $tableCheck->num_rows > 0;
     
-    $stmt = $conn->prepare("
-        SELECT u.user_id, u.full_name, u.student_id, rp.course, rp.year_level,
-               al.timestamp as last_entry, al.card_uid
-        FROM users u
-        LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-        LEFT JOIN access_logs al ON u.user_id = al.user_id AND al.access_type = 'entry'
-        WHERE u.room_number = ? 
-        AND u.status = 'active'
-        AND al.timestamp = (
-            SELECT MAX(timestamp) 
-            FROM access_logs al2 
-            WHERE al2.user_id = u.user_id
-        )
-        ORDER BY u.full_name
-    ");
-    $stmt->bind_param("i", $i);
+    // Count total staff
+    $countQuery = "SELECT COUNT(*) as total FROM staff_users";
+    $countParams = [];
+    $types = "";
+    
+    if (!empty($search)) {
+        $countQuery .= " WHERE full_name LIKE ? OR staff_id_number LIKE ? OR email LIKE ? OR department LIKE ?";
+        $searchTerm = "%$search%";
+        $countParams = [$searchTerm, $searchTerm, $searchTerm, $searchTerm];
+        $types = "ssss";
+    }
+    
+    $stmt = $conn->prepare($countQuery);
+    if (!empty($types)) {
+        $stmt->bind_param($types, ...$countParams);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $totalRow = $result->fetch_assoc();
+    $totalStaff = (int)($totalRow['total'] ?? 0);
+    $stmt->close();
+    
+    $totalPages = ceil($totalStaff / $perPage);
+    if ($totalPages < 1) $totalPages = 1;
+    if ($page > $totalPages) $page = $totalPages;
+    if ($page < 1) $page = 1;
+    $offset = ($page - 1) * $perPage;
+    
+    // Get staff
+    $query = "
+        SELECT staff_id, staff_id_number, full_name, email, department, card_uid, avatar, created_at
+        FROM staff_users
+    ";
+    
+    $params = [];
+    $types = "";
+    
+    if (!empty($search)) {
+        $query .= " WHERE full_name LIKE ? OR staff_id_number LIKE ? OR email LIKE ? OR department LIKE ?";
+        $searchTerm = "%$search%";
+        $params = [$searchTerm, $searchTerm, $searchTerm, $searchTerm];
+        $types = "ssss";
+    }
+    
+    $query .= " ORDER BY full_name LIMIT ? OFFSET ?";
+    $params[] = $perPage;
+    $params[] = $offset;
+    $types .= "ii";
+    
+    $stmt = $conn->prepare($query);
+    if (!empty($types)) {
+        $stmt->bind_param($types, ...$params);
+    }
     $stmt->execute();
     $result = $stmt->get_result();
     
+    $staffList = [];
     while ($row = $result->fetch_assoc()) {
-        $roomData[$i]['occupants'][] = $row;
-        $roomData[$i]['count']++;
+        $staffList[] = $row;
     }
     $stmt->close();
     
-    $roomData[$i]['is_full'] = $roomData[$i]['count'] >= 7;
+} catch (Exception $e) {
+    $error = 'Error loading staff: ' . $e->getMessage();
+    $staffList = [];
 }
 
-// ============================================================
-// GET RECENT ANNOUNCEMENTS
-// ============================================================
-$announcements = [];
-$result = $conn->query("
-    SELECT a.*, u.full_name as admin_name 
-    FROM announcements a
-    LEFT JOIN admin_users u ON a.admin_id = u.admin_id
-    WHERE a.is_active = 1
-    ORDER BY a.priority = 'high' DESC, a.created_at DESC
-    LIMIT 3
-");
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $announcements[] = $row;
+$hasCardCount = 0;
+$noCardCount = 0;
+
+foreach ($staffList as $staff) {
+    if (!empty($staff['card_uid'])) {
+        $hasCardCount++;
+    } else {
+        $noCardCount++;
     }
 }
 
-$showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
-
 // ============================================================
-// GET STAFF INFO FOR DISPLAY
+// HELPER: GET INITIALS
 // ============================================================
-$staffInfo = null;
-$stmt = $conn->prepare("SELECT * FROM staff_users WHERE staff_id = ?");
-$stmt->bind_param("i", $_SESSION['staff_id']);
-$stmt->execute();
-$result = $stmt->get_result();
-$staffInfo = $result->fetch_assoc();
-$stmt->close();
-
-// Get dark mode
-$darkModeClass = '';
-$darkModeFromDb = 'false';
-if (isset($_SESSION['staff_id'])) {
-    try {
-        $stmt = $conn->prepare("SELECT setting_value FROM user_settings WHERE staff_id = ? AND setting_key = 'dark_mode'");
-        $stmt->bind_param("i", $_SESSION['staff_id']);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($row = $result->fetch_assoc()) {
-            $darkModeFromDb = $row['setting_value'];
-            if ($darkModeFromDb == 'true') {
-                $darkModeClass = 'dark-mode';
-            }
+function getInitials($name) {
+    if (empty($name)) return '?';
+    $parts = explode(' ', $name);
+    $initials = '';
+    foreach ($parts as $part) {
+        if (!empty($part)) {
+            $initials .= strtoupper($part[0]);
         }
-        $stmt->close();
-    } catch (Exception $e) {
-        // Silently fail
     }
+    return substr($initials, 0, 2) ?: '?';
 }
 ?>
 <!DOCTYPE html>
@@ -280,54 +143,53 @@ if (isset($_SESSION['staff_id'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Staff Dashboard - Tap-and-Go Doorlock</title>
+    <title>Staff View - Tap-and-Go Doorlock</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../../assets/css/dashboard.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
         /* ============================================================
            GLOBAL DARK THEME
            ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
             font-family: 'Inter', sans-serif;
             background: #0a0e1a !important;
             color: #e0e0e0 !important;
             min-height: 100vh;
-            padding-top: 56px;
+            padding-top: 70px !important;
         }
         
-        /* ============================================================
-           DARK SIDEBAR
-           ============================================================ */
+        .container-fluid { padding-top: 10px !important; }
+        main { padding-top: 10px !important; margin-top: 0 !important; }
+        
+        /* NAVBAR */
+        .navbar {
+            background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
+            border-bottom: 1px solid #1a2a4a !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 1050 !important;
+            height: 70px !important;
+        }
+        .navbar-brand { color: #e0e0e0 !important; }
+        .navbar .nav-link { color: rgba(255,255,255,0.6) !important; }
+        .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
+        .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
+        
+        /* SIDEBAR */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
-            min-height: 100vh;
-            box-shadow: 2px 0 15px rgba(0,0,0,0.3) !important;
-            position: fixed;
-            top: 56px;
-            bottom: 0;
-            left: 0;
-            width: 260px;
-            z-index: 100;
-            padding: 15px 0 0;
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
+            padding-top: 80px !important;
+            min-height: calc(100vh - 70px) !important;
         }
         .sidebar .nav-link {
             color: #9090a0 !important;
-            padding: 10px 16px;
-            border-radius: 8px;
-            margin: 2px 8px;
-            transition: all 0.3s ease;
-            font-weight: 500;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            text-decoration: none;
         }
         .sidebar .nav-link:hover {
             background: rgba(255,255,255,0.05) !important;
@@ -336,332 +198,298 @@ if (isset($_SESSION['staff_id'])) {
         .sidebar .nav-link.active {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             color: white !important;
-            box-shadow: 0 4px 15px rgba(26,58,106,0.3) !important;
         }
-        .sidebar .nav-link i {
-            width: 20px;
+        .sidebar-footer { border-top-color: #1a2a4a !important; }
+        .sidebar-footer .text-muted { color: #606070 !important; }
+        
+        /* STAFF CARD */
+        .staff-card {
+            background: #111827 !important;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+            transition: all 0.3s ease;
             text-align: center;
-            color: #606070 !important;
-            margin-right: 10px;
+            height: 100%;
+            border: 1px solid #1a2a4a;
         }
-        .sidebar .nav-link.active i {
-            color: white !important;
+        .staff-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important;
         }
-        .sidebar .nav-link .badge {
+        .staff-card .name {
+            font-weight: 700;
+            color: #ffd700 !important;
+            font-size: 18px;
+        }
+        .staff-card .department {
+            color: #9ca3af !important;
+            font-size: 14px;
+        }
+        .staff-card .staff-id {
+            color: #6b7280 !important;
+            font-size: 12px;
+        }
+        
+        /* STAFF AVATAR */
+        .staff-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: white;
+            margin: 0 auto 15px;
+            font-weight: 700;
+            overflow: hidden;
+            border: 3px solid #1a2a4a;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+        .staff-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .staff-avatar .no-photo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+        }
+        .staff-avatar .has-photo-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
             font-size: 10px;
-            padding: 2px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #111827;
+        }
+        .staff-avatar-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        
+        /* CARD UID BADGE */
+        .card-uid-badge {
+            display: inline-block;
+            padding: 4px 14px;
             border-radius: 20px;
-            margin-left: auto;
+            font-size: 12px;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
         }
-        .sidebar .nav-link .fa-chevron-down {
-            font-size: 11px;
-            opacity: 0.4;
+        .card-uid-badge.has-card {
+            background: rgba(16, 185, 129, 0.2) !important;
+            color: #34d399 !important;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .card-uid-badge.no-card {
+            background: rgba(239, 68, 68, 0.15) !important;
+            color: #f87171 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        /* STAT CARDS */
+        .staff-stat {
+            background: #111827 !important;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 16px !important;
+            padding: 18px 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
             transition: transform 0.3s ease;
-            color: #606070 !important;
-            margin-left: auto;
+            text-align: center;
         }
-        .sidebar .nav-link.active .fa-chevron-down {
+        .staff-stat:hover { transform: translateY(-4px); }
+        .staff-stat .number {
+            font-size: 32px;
+            font-weight: 700;
+            color: #ffd700 !important;
+        }
+        .staff-stat .label {
+            font-size: 13px;
+            color: #6b7280 !important;
+        }
+        
+        /* BUTTONS - VIEW ONLY */
+        .btn-print-id {
+            background: rgba(59, 130, 246, 0.2) !important;
+            color: #93c5fd !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-print-id:hover {
+            background: rgba(59, 130, 246, 0.3) !important;
+            color: #93c5fd !important;
+        }
+        
+        .btn-view {
+            background: rgba(139, 92, 246, 0.2) !important;
+            color: #a78bfa !important;
+            border: 1px solid rgba(139, 92, 246, 0.3) !important;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-view:hover {
+            background: rgba(139, 92, 246, 0.3) !important;
+            color: #a78bfa !important;
+        }
+        
+        .staff-actions {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        
+        .staff-id-badge {
+            background: rgba(255, 215, 0, 0.1);
+            color: #ffd700;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            border: 1px solid rgba(255, 215, 0, 0.15);
+        }
+        
+        /* SEARCH */
+        .search-box { max-width: 380px; }
+        .search-box .form-control {
+            background: #1a1a2e !important;
+            border: 1px solid #2a2a4a !important;
+            color: #e0e0e0 !important;
+            border-radius: 10px 0 0 10px;
+            padding: 7px 14px;
+            font-size: 13px;
+            height: 36px;
+        }
+        .search-box .form-control::placeholder { color: #606070 !important; }
+        .search-box .form-control:focus {
+            border-color: #2a5a9a !important;
+            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
+        }
+        .search-box .btn {
+            background: #1a3a6a !important;
+            border: 1px solid #1a3a6a !important;
             color: white !important;
+            border-radius: 0 10px 10px 0;
+            padding: 7px 14px;
+            height: 36px;
         }
-        .sidebar .nav-link[aria-expanded="true"] .fa-chevron-down {
-            transform: rotate(180deg);
+        .search-box .btn:hover { background: #2a5a9a !important; }
+        .search-box .btn-outline-secondary {
+            background: transparent !important;
+            border-color: #2a2a4a !important;
+            color: #808090 !important;
+            border-radius: 10px !important;
+            height: 36px;
+            padding: 7px 12px !important;
+            font-size: 12px !important;
         }
-        .sidebar .nav-link.active .badge {
-            background: rgba(255,255,255,0.2) !important;
+        .search-box .btn-outline-secondary:hover {
+            background: #2a2a4a !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* PAGINATION */
+        .pagination-container {
+            background: #111827 !important;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 12px !important;
+            padding: 10px 18px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+            margin-top: 12px;
+        }
+        .pagination .page-link {
+            border-radius: 8px;
+            margin: 0 2px;
+            border: none;
+            color: #9090a0 !important;
+            background: transparent !important;
+            font-weight: 500;
+            padding: 5px 12px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+        .pagination .page-link:hover {
+            background: #2a2a4a !important;
+            color: #e0e0e0 !important;
+        }
+        .pagination .page-item.active .page-link {
+            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             color: white !important;
+            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
-        .sidebar-footer {
-            padding: 10px 0 20px 0;
-            border-top: 1px solid #1a2a4a !important;
-            margin-top: auto;
+        .pagination .page-item.disabled .page-link {
+            color: #4a4a5a !important;
         }
-        .sidebar-footer .border-top {
-            border-color: #1a2a4a !important;
-        }
-        .sidebar-footer .text-muted {
-            color: #606070 !important;
-        }
+        .page-info { color: #808090 !important; font-size: 12px; }
+        .page-info strong { color: #93c5fd !important; }
         
-        /* ============================================================
-           MAIN CONTENT
-           ============================================================ */
-        .main-content {
-            margin-left: 260px;
-            padding: 20px 30px;
-            min-height: calc(100vh - 56px);
+        .per-page-selector select {
+            background: #1a1a2e !important;
+            border: 1px solid #2a2a4a !important;
+            color: #e0e0e0 !important;
+            border-radius: 6px;
+            padding: 3px 6px;
+            font-size: 12px;
         }
-        
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
-        @media (max-width: 768px) {
-            .sidebar {
-                position: fixed;
-                top: 56px;
-                bottom: 0;
-                left: -280px;
-                width: 280px;
-                transition: left 0.3s ease;
-                z-index: 999;
-            }
-            .sidebar.show { left: 0; }
-            .main-content {
-                margin-left: 0;
-                padding: 15px;
-            }
+        .per-page-selector select:focus {
+            border-color: #2a5a9a !important;
+            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
         }
+        .per-page-selector label { color: #808090 !important; font-size: 12px; margin: 0; }
         
-        /* ============================================================
-           DARK CARDS
-           ============================================================ */
+        /* ALERTS */
+        .alert-danger {
+            background: rgba(239, 68, 68, 0.15) !important;
+            border-color: #ef4444 !important;
+            color: #fca5a5 !important;
+        }
+        .btn-close { filter: invert(1) !important; }
+        
+        /* MISC */
+        .border-bottom { border-bottom-color: #1a2a4a !important; }
+        .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
+        .text-muted { color: #6b7280 !important; }
+        
         .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
             border-radius: 16px !important;
             box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+            margin-bottom: 20px;
         }
-        .card-header {
-            background: #111827 !important;
-            border-bottom: 1px solid #1a2a4a !important;
-        }
-        .card-header h5 { color: #e0e0e0 !important; }
-        .card-body { background: #111827 !important; }
+        .card .card-body { background: transparent !important; }
+        .card h5 { color: #9ca3af !important; }
         
-        /* ============================================================
-           DARK STAT CARDS
-           ============================================================ */
-        .stat-card {
-            background: #111827 !important;
-            border: 1px solid #1a2a4a !important;
-            border-radius: 16px !important;
-            padding: 18px 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            transition: transform 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            position: relative;
-            overflow: hidden;
-        }
-        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
-        .stat-icon {
-            width: 48px; height: 48px; border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 20px; color: white; flex-shrink: 0;
-        }
-        .stat-number { font-size: 24px; font-weight: 700; color: #e0e0e0; margin: 0; }
-        .stat-label { font-size: 12px; color: #808090; margin: 0; }
-        .stat-card .text-danger { color: #f87171 !important; }
-        .stat-card .text-success { color: #34d399 !important; }
-        
-        /* ============================================================
-           DARK ROOM CARDS
-           ============================================================ */
-        .room-card {
-            background: #111827 !important;
-            border: 1px solid #1a2a4a !important;
-            border-radius: 16px !important;
-            padding: 18px 20px;
-            border-left: 4px solid #10b981;
-            transition: all 0.3s ease;
-            height: 100%;
-        }
-        .room-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
-        .room-card .room-title {
+        .section-header h5 {
+            margin: 0;
+            color: #ffd700 !important;
             font-weight: 700;
-            color: #93c5fd !important;
-            font-size: 18px;
-            margin-bottom: 2px;
-        }
-        .room-card .room-capacity { font-size: 12px; color: #808090; }
-        .room-card .room-count { font-size: 24px; font-weight: 700; }
-        .room-card .room-count.full { color: #f87171; }
-        .room-card .room-count.available { color: #34d399; }
-        .room-card .room-count.partial { color: #fbbf24; }
-        .room-card .occupant-item {
-            padding: 4px 8px;
-            margin: 2px 0;
-            background: #1a2a4a !important;
-            border-radius: 6px;
-            font-size: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: #e0e0e0;
-        }
-        .room-card .room-empty { color: #606070; font-size: 13px; text-align: center; padding: 10px 0; }
-        .room-card .room-full-badge {
-            background: #7a2a2a;
-            color: #f87171;
-            padding: 2px 10px;
-            border-radius: 20px;
-            font-size: 10px;
-            font-weight: 600;
         }
         
-        /* ============================================================
-           DARK ALERT ITEMS
-           ============================================================ */
-        .alert-item {
-            background: #111827 !important;
-            border-radius: 12px;
-            padding: 15px 20px;
-            margin-bottom: 10px;
-            border-left: 4px solid #f59e0b;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.3);
-            transition: all 0.3s ease;
-        }
-        .alert-item:hover { transform: translateX(4px); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .alert-item.critical {
-            border-left-color: #ef4444;
-            background: #1a0a0a !important;
-        }
-        .alert-item .alert-uid { font-family: monospace; font-weight: 700; color: #93c5fd; font-size: 14px; }
-        .alert-item .alert-reason { font-size: 13px; color: #b0b0c0; }
-        .alert-item .alert-meta { font-size: 12px; color: #606070; }
-        .alert-item .alert-user { font-weight: 600; color: #93c5fd; }
-        .alert-item .fw-bold { color: #e0e0e0 !important; }
-        
-        .btn-resolve {
-            background: #10b981 !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 8px;
-            padding: 5px 15px;
-            font-size: 12px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        .btn-resolve:hover { background: #059669 !important; color: white !important; }
-        
-        /* ============================================================
-           DARK ANNOUNCEMENTS
-           ============================================================ */
-        .announcement-item {
-            padding: 10px 0;
-            border-bottom: 1px solid #1a2a4a;
-        }
-        .announcement-item:last-child { border-bottom: none; }
-        .announcement-item .title { font-weight: 600; color: #e0e0e0; }
-        .announcement-item .content { font-size: 13px; color: #b0b0c0; }
-        .announcement-item .meta { font-size: 11px; color: #606070; }
-        
-        /* ============================================================
-           DARK WARNING BAR
-           ============================================================ */
-        .warning-bar {
-            background: #1a0a0a !important;
-            border: 1px solid #5a2a2a !important;
-            border-radius: 12px;
-            padding: 12px 20px;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 10px;
-            animation: slideDown 0.5s ease;
-        }
-        .warning-bar.danger {
-            background: #2a0a0a !important;
-            border-color: #7a2a2a !important;
-        }
-        .warning-bar .warning-text { font-weight: 600; color: #f87171; }
-        .warning-bar .warning-count {
-            background: #ef4444;
-            color: white;
-            padding: 2px 12px;
-            border-radius: 20px;
-            font-weight: 700;
-            font-size: 14px;
-        }
-        
-        /* ============================================================
-           VIEW ONLY BADGE
-           ============================================================ */
-        .view-only-badge {
-            background: #4a3a1a !important;
-            color: #fbbf24 !important;
-            padding: 3px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-        
-        /* ============================================================
-           DARK BADGES
-           ============================================================ */
-        .badge-granted { background: #065f46 !important; color: #34d399 !important; }
-        .badge-denied { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-entry { background: #1a3a6a !important; color: #93c5fd !important; }
-        .badge-exit { background: #2a2a4a !important; color: #808090 !important; }
-        .badge-room { background: #4a3a1a !important; color: #fbbf24 !important; }
-        .badge-priority-high { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-priority-medium { background: #4a3a1a !important; color: #fbbf24 !important; }
-        .badge-priority-low { background: #065f46 !important; color: #34d399 !important; }
-        .badge-visitor { background: #1a2a5a !important; color: #93c5fd !important; }
-        .badge-resident { background: #065f46 !important; color: #34d399 !important; }
-        .badge-staff { background: #4a3a1a !important; color: #fbbf24 !important; }
-        .badge-pending { background: #4a3a1a !important; color: #fbbf24 !important; }
-        .badge-resolved { background: #065f46 !important; color: #34d399 !important; }
-        .badge-unauthorized { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-success { background: #065f46 !important; color: #34d399 !important; }
-        .badge-danger { background: #7a2a2a !important; color: #f87171 !important; }
-        .badge-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
-        .badge-secondary { background: #1a2a4a !important; color: #808090 !important; }
-        .badge-primary { background: #1a3a6a !important; color: #93c5fd !important; }
-        .badge-light { background: #2a2a4a !important; color: #b0b0c0 !important; }
-        
-        /* ============================================================
-           MISC
-           ============================================================ */
-        .text-muted { color: #808090 !important; }
-        .text-danger { color: #f87171 !important; }
-        .text-success { color: #34d399 !important; }
-        .text-warning { color: #fbbf24 !important; }
-        .text-primary { color: #93c5fd !important; }
-        .bg-light { background: #1a2a4a !important; }
-        .bg-success { background: #065f46 !important; color: #34d399 !important; }
-        .bg-danger { background: #7a2a2a !important; color: #f87171 !important; }
-        .bg-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
-        .bg-secondary { background: #1a2a4a !important; color: #808090 !important; }
-        .bg-primary { background: #1a3a6a !important; color: #93c5fd !important; }
-        
-        .h1, .h2, .h3, .h4, .h5, h1, h2, h3, h4, h5 { color: #e0e0e0 !important; }
-        .fw-bold { color: #e0e0e0 !important; }
-        .fw-medium { color: #e0e0e0 !important; }
-        a { color: #93c5fd !important; text-decoration: none; }
-        a:hover { color: #bfdbfe !important; }
-        .status-dot.inside { background: #34d399 !important; }
-        .border-bottom { border-bottom-color: #1a2a4a !important; }
-        .border-top { border-top-color: #1a2a4a !important; }
-        .border { border-color: #1a2a4a !important; }
-        hr { border-color: #1a2a4a !important; }
-        
-        /* ============================================================
-           ANIMATIONS
-           ============================================================ */
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulseBadge {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-        }
-        @keyframes pulseRed {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(0.9); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-        @keyframes pulse {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(0.8); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-        .pulse-badge { animation: pulseBadge 1s infinite; display: inline-block; }
-        .pulse-red { animation: pulseRed 1.5s infinite; display: inline-block; }
         .live-indicator {
             display: inline-block;
             width: 8px;
@@ -669,37 +497,73 @@ if (isset($_SESSION['staff_id'])) {
             border-radius: 50%;
             background: #34d399;
             animation: pulse 1.5s infinite;
+            margin-right: 4px;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0e1a; }
+        ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
+        
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
+            .sidebar {
+                padding-top: 70px !important;
+                position: fixed;
+                top: 60px;
+                bottom: 0;
+                left: -280px;
+                width: 280px;
+                transition: left 0.3s ease;
+                z-index: 999;
+                min-height: calc(100vh - 60px) !important;
+            }
+            .sidebar.show { left: 0; }
+            .staff-card { padding: 15px; }
+            .staff-card .name { font-size: 16px; }
+            .staff-avatar { width: 60px; height: 60px; font-size: 24px; }
+        }
+        
+        @media (max-width: 576px) {
+            .staff-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            .staff-actions .btn {
+                width: 100%;
+                text-align: center;
+            }
         }
     </style>
 </head>
-<body class="<?php echo $darkModeClass; ?>">
+<body>
     
-    <!-- ===== NAVBAR ===== -->
-    <?php include __DIR__ . '/includes/navbar_staff.php'; ?>
+    <?php include '../includes/navbar.php'; ?>
     
     <div class="container-fluid">
         <div class="row">
-            <!-- ===== SIDEBAR ===== -->
-            <?php include __DIR__ . '/includes/sidebar_staff.php'; ?>
+            <?php include '../includes/sidebar.php'; ?>
             
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                
+                <!-- HEADER -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2" style="color:#e0e0e0 !important;">
-                        <i class="fas fa-eye me-2" style="color: #fbbf24;"></i>
-                        Staff Dashboard
-                        <?php if ($stats['pending_alerts'] > 0): ?>
-                            <span class="badge bg-danger ms-2 pulse-badge">
-                                <i class="fas fa-exclamation-circle me-1"></i>
-                                <?php echo $stats['pending_alerts']; ?>
-                            </span>
-                        <?php endif; ?>
+                    <h1 class="h2">
+                        <i class="fas fa-user-tie me-2" style="color: #ffd700;"></i>
+                        Staff View
+                        <span class="badge bg-secondary ms-2"><?php echo $totalStaff; ?> total</span>
                     </h1>
                     <div>
-                        <span class="view-only-badge me-2">
-                            <i class="fas fa-eye me-1"></i> View Only
-                        </span>
                         <span class="badge bg-success me-2">
-                            <span class="live-indicator me-1"></span> Live
+                            <span class="live-indicator"></span> Live
                         </span>
                         <span class="badge bg-secondary" id="lastUpdate">Updated: <?php echo date('h:i A'); ?></span>
                         <button class="btn btn-sm btn-outline-secondary ms-2" onclick="location.reload()">
@@ -708,300 +572,276 @@ if (isset($_SESSION['staff_id'])) {
                     </div>
                 </div>
 
-                <!-- Welcome Card -->
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col-md-8">
-                                <h4 style="color:#93c5fd; font-weight:700;">Welcome back, <?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Staff'); ?>! 👋</h4>
-                                <p class="text-muted mb-0">
-                                    <i class="fas fa-user-tie me-1"></i>
-                                    <?php echo htmlspecialchars($staffInfo['staff_id_number'] ?? 'N/A'); ?>
-                                    <span class="mx-2">|</span>
-                                    <i class="fas fa-building me-1"></i>
-                                    <?php echo htmlspecialchars($staffInfo['department'] ?? 'Dormitory Staff'); ?>
-                                    <span class="mx-2">|</span>
-                                    <i class="fas fa-eye me-1"></i>
-                                    <span class="text-warning">View Only Access</span>
-                                </p>
-                            </div>
-                            <div class="col-md-4 text-end">
-                                <span class="badge bg-primary"><i class="fas fa-clock me-1"></i> <?php echo date('h:i A'); ?></span>
-                                <span class="badge bg-secondary ms-1"><i class="fas fa-calendar-day me-1"></i> <?php echo date('M d, Y'); ?></span>
-                            </div>
-                        </div>
+                <?php if (!empty($error)): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-circle me-2"></i> <?php echo $error; ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
-                </div>
-
-                <!-- Warning Bar -->
-                <?php if ($stats['critical_alerts'] > 0): ?>
-                <div class="warning-bar danger">
-                    <div class="d-flex align-items-center">
-                        <span class="warning-icon pulse-red" style="font-size:24px; margin-right:10px;">🚨</span>
-                        <div>
-                            <span class="warning-text">
-                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                CRITICAL ALERT!
-                            </span>
-                            <span class="text-muted ms-2">
-                                <?php echo $stats['critical_alerts']; ?> unauthorized access <?php echo $stats['critical_alerts'] > 1 ? 'attempts' : 'attempt'; ?> detected
-                            </span>
-                        </div>
-                    </div>
-                    <div>
-                        <span class="warning-count"><?php echo $stats['critical_alerts']; ?></span>
-                        <span class="text-muted ms-2">pending</span>
-                        <a href="alerts.php" class="btn btn-sm btn-danger ms-2">
-                            <i class="fas fa-eye me-1"></i> View Alerts
-                        </a>
-                    </div>
-                </div>
-                <?php elseif ($stats['pending_alerts'] > 0): ?>
-                <div class="warning-bar">
-                    <div class="d-flex align-items-center">
-                        <span class="warning-icon" style="font-size:24px; margin-right:10px;">⚠️</span>
-                        <div>
-                            <span class="warning-text">
-                                <i class="fas fa-bell me-1"></i>
-                                New Alerts
-                            </span>
-                            <span class="text-muted ms-2">
-                                <?php echo $stats['pending_alerts']; ?> pending alert<?php echo $stats['pending_alerts'] > 1 ? 's' : ''; ?> need your attention
-                            </span>
-                        </div>
-                    </div>
-                    <div>
-                        <span class="warning-count"><?php echo $stats['pending_alerts']; ?></span>
-                        <span class="text-muted ms-2">pending</span>
-                        <a href="alerts.php" class="btn btn-sm btn-warning ms-2">
-                            <i class="fas fa-eye me-1"></i> View Alerts
-                        </a>
-                    </div>
-                </div>
                 <?php endif; ?>
 
-                <!-- Stats Cards -->
+                <!-- STATISTICS -->
                 <div class="row g-3 mb-4">
-                    <div class="col-6 col-sm-6 col-xl-2">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #667eea;"><i class="fas fa-users"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['total_residents']; ?></div>
-                                <div class="stat-label">Residents</div>
-                            </div>
+                    <div class="col-4 col-sm-4 col-xl-3">
+                        <div class="staff-stat">
+                            <div class="number"><?php echo $totalStaff; ?></div>
+                            <div class="label">Total Staff</div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #10b981;"><i class="fas fa-id-card"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['active_cards']; ?></div>
-                                <div class="stat-label">Active Cards</div>
-                            </div>
+                    <div class="col-4 col-sm-4 col-xl-3">
+                        <div class="staff-stat">
+                            <div class="number"><?php echo $hasCardCount; ?></div>
+                            <div class="label">With Card</div>
                         </div>
                     </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-sign-in-alt"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['today_access']; ?></div>
-                                <div class="stat-label">Today's Access</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: <?php echo $stats['unauthorized_today'] > 0 ? '#ef4444' : '#6b7280'; ?>;">
-                                <i class="fas <?php echo $stats['unauthorized_today'] > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle'; ?>"></i>
-                            </div>
-                            <div>
-                                <div class="stat-number <?php echo $stats['unauthorized_today'] > 0 ? 'text-danger' : ''; ?>">
-                                    <?php echo $stats['unauthorized_today']; ?>
-                                </div>
-                                <div class="stat-label">Unauthorized Today</div>
-                            </div>
-                            <?php if ($stats['unauthorized_today'] > 0): ?>
-                                <span class="badge bg-danger pulse-badge">🚨</span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-people-arrows"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['current_occupancy']; ?></div>
-                                <div class="stat-label">Occupancy</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-sm-6 col-xl-2">
-                        <div class="stat-card">
-                            <div class="stat-icon" style="background: #3b82f6;"><i class="fas fa-user-clock"></i></div>
-                            <div>
-                                <div class="stat-number"><?php echo $stats['total_visitors']; ?></div>
-                                <div class="stat-label">Visitors Today</div>
-                            </div>
-                            <?php if ($stats['pending_alerts'] > 0): ?>
-                                <span class="badge bg-warning pulse-badge">
-                                    <?php echo $stats['pending_alerts']; ?>
-                                </span>
-                            <?php endif; ?>
+                    <div class="col-4 col-sm-4 col-xl-3">
+                        <div class="staff-stat">
+                            <div class="number"><?php echo $noCardCount; ?></div>
+                            <div class="label">No Card</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Rooms -->
-                <div class="row g-3 mb-4">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5><i class="fas fa-bed me-2"></i>Room Occupancy <span class="text-muted small">(Max 7 per room)</span></h5>
-                                <span class="text-muted small">
-                                    <?php 
-                                        $totalOccupied = 0;
-                                        $totalCapacity = 5 * 7;
-                                        foreach ($roomData as $room) {
-                                            $totalOccupied += $room['count'];
-                                        }
-                                        echo $totalOccupied . ' / ' . $totalCapacity . ' occupied';
-                                    ?>
-                                </span>
-                            </div>
-                            <div class="card-body">
-                                <div class="row g-3">
-                                    <?php foreach ($roomData as $room): 
-                                        $count = $room['count'];
-                                        $isFull = $count >= 7;
-                                        $isPartial = $count > 0 && $count < 7;
-                                        $isEmpty = $count == 0;
-                                        $statusClass = $isFull ? 'full' : ($isPartial ? 'partial' : 'available');
-                                    ?>
-                                    <div class="col-md-6 col-lg-4">
-                                        <div class="room-card">
-                                            <div class="d-flex justify-content-between align-items-start">
-                                                <div>
-                                                    <div class="room-title">
-                                                        Room <?php echo $room['room_number']; ?>
-                                                        <?php if ($isFull): ?>
-                                                            <span class="room-full-badge ms-1"><i class="fas fa-exclamation-triangle me-1"></i>FULL</span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                    <div class="room-capacity">
-                                                        <span class="room-count <?php echo $statusClass; ?>"><?php echo $count; ?></span>
-                                                        / 7 residents
-                                                        <span class="badge <?php echo $isFull ? 'bg-danger' : ($isPartial ? 'bg-warning' : 'bg-success'); ?> ms-1">
-                                                            <?php echo $isFull ? 'Full' : ($isPartial ? 'Partial' : 'Available'); ?>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div class="text-end">
-                                                    <span class="badge bg-light text-dark"><?php echo 7 - $count; ?> slots</span>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr>
-                                            
-                                            <div class="room-occupants">
-                                                <?php if ($isEmpty): ?>
-                                                    <div class="room-empty">
-                                                        <i class="fas fa-bed fa-2x d-block mb-1"></i>
-                                                        No occupants
-                                                    </div>
-                                                <?php else: ?>
-                                                    <?php foreach ($room['occupants'] as $occupant): ?>
-                                                        <div class="occupant-item">
-                                                            <span>
-                                                                <span class="status-dot inside" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#34d399; margin-right:6px;"></span>
-                                                                <?php echo htmlspecialchars($occupant['full_name']); ?>
-                                                                <span class="text-muted small ms-1">
-                                                                    (<?php echo htmlspecialchars($occupant['student_id'] ?? 'N/A'); ?>)
-                                                                </span>
-                                                            </span>
-                                                            <span class="text-muted small">
-                                                                <i class="fas fa-clock me-1"></i>
-                                                                <?php echo $occupant['last_entry'] ? date('h:i A', strtotime($occupant['last_entry'])) : 'N/A'; ?>
-                                                            </span>
-                                                        </div>
-                                                    <?php endforeach; ?>
-                                                <?php endif; ?>
-                                            </div>
+                <!-- SEARCH -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <form method="GET" action="" class="search-box d-flex">
+                            <input type="text" 
+                                   class="form-control" 
+                                   name="search" 
+                                   placeholder="Search staff by name, ID, email, department..." 
+                                   value="<?php echo htmlspecialchars($search); ?>">
+                            <button type="submit" class="btn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <?php if (!empty($search)): ?>
+                                <a href="staff-view.php" class="btn btn-outline-secondary ms-2">
+                                    <i class="fas fa-times"></i> Clear
+                                </a>
+                            <?php endif; ?>
+                        </form>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <span class="text-muted small">
+                            <i class="fas fa-users me-1"></i>
+                            Showing <?php echo count($staffList); ?> of <?php echo $totalStaff; ?> staff
+                        </span>
+                    </div>
+                </div>
+
+                <!-- STAFF LIST -->
+                <div class="section-header mb-3">
+                    <h5><i class="fas fa-list me-2"></i>Staff List</h5>
+                </div>
+
+                <?php if (empty($staffList)): ?>
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No staff members found</h5>
+                            <?php if (!empty($search)): ?>
+                                <p class="text-muted small">Try adjusting your search criteria</p>
+                                <a href="staff-view.php" class="btn btn-outline-secondary btn-sm">Clear Search</a>
+                            <?php else: ?>
+                                <p class="text-muted small">No staff records available</p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="row g-4">
+                        <?php foreach ($staffList as $staff): 
+                            $name = $staff['full_name'] ?? 'Staff';
+                            $initials = '';
+                            $parts = explode(' ', $name);
+                            foreach ($parts as $p) {
+                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                            }
+                            $initials = substr($initials, 0, 2) ?: 'ST';
+                            
+                            $photoPath = $staff['avatar'] ?? '';
+                            $hasPhoto = false;
+                            $fullPhotoPath = '';
+                            
+                            if (!empty($photoPath)) {
+                                if (strpos($photoPath, 'uploads/') === 0) {
+                                    $fullPhotoPath = '../../' . $photoPath;
+                                } else {
+                                    $fullPhotoPath = '../../uploads/staff_photos/' . $photoPath;
+                                }
+                                if (file_exists($fullPhotoPath)) {
+                                    $hasPhoto = true;
+                                }
+                            }
+                        ?>
+                            <div class="col-md-4 col-lg-3">
+                                <div class="staff-card">
+                                    <!-- Staff Avatar -->
+                                    <div class="staff-avatar-wrapper">
+                                        <div class="staff-avatar">
+                                            <?php if ($hasPhoto): ?>
+                                                <img src="<?php echo $fullPhotoPath; ?>" 
+                                                     alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
+                                                     onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
+                                                <span class="has-photo-badge">
+                                                    <i class="fas fa-check-circle"></i>
+                                                </span>
+                                            <?php else: ?>
+                                                <div class="no-photo"><?php echo $initials; ?></div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
-                                    <?php endforeach; ?>
+                                    
+                                    <div class="name"><?php echo htmlspecialchars($staff['full_name']); ?></div>
+                                    <div class="department"><?php echo htmlspecialchars($staff['department'] ?? 'Staff'); ?></div>
+                                    <div class="staff-id">
+                                        <span class="staff-id-badge">
+                                            <?php echo htmlspecialchars($staff['staff_id_number']); ?>
+                                        </span>
+                                    </div>
+                                    
+                                    <!-- Card UID -->
+                                    <div class="mt-2">
+                                        <?php if (!empty($staff['card_uid'])): ?>
+                                            <span class="card-uid-badge has-card">
+                                                <i class="fas fa-id-card me-1"></i>
+                                                <?php echo htmlspecialchars($staff['card_uid']); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="card-uid-badge no-card">
+                                                <i class="fas fa-times-circle me-1"></i>
+                                                No Card
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    
+                                    <div class="mt-1">
+                                        <span class="text-muted small">
+                                            <i class="fas fa-envelope me-1"></i>
+                                            <?php echo htmlspecialchars($staff['email']); ?>
+                                        </span>
+                                    </div>
+                                    
+                                    <!-- Staff Actions - VIEW ONLY -->
+                                    <div class="staff-actions">
+                                        <?php if (!empty($staff['card_uid'])): ?>
+                                            <a href="print-staff-id.php?uid=<?php echo $staff['card_uid']; ?>" 
+                                               target="_blank" 
+                                               class="btn-print-id">
+                                                <i class="fas fa-print me-1"></i> Print ID
+                                            </a>
+                                        <?php endif; ?>
+                                        
+                                        <a href="view-staff.php?id=<?php echo $staff['staff_id']; ?>" 
+                                           class="btn-view">
+                                            <i class="fas fa-eye me-1"></i> View
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <!-- PAGINATION -->
+                    <?php if ($totalPages > 1 || $totalStaff > 0): ?>
+                    <div class="pagination-container">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <div class="page-info">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalStaff); ?> of <?php echo $totalStaff; ?> staff
+                                    <span class="mx-1 text-muted">|</span>
+                                    <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
+                                    <!-- Per Page Selector -->
+                                    <div class="per-page-selector d-flex align-items-center gap-1">
+                                        <label>Show:</label>
+                                        <select onchange="changePerPage(this.value)">
+                                            <?php foreach ($perPageOptions as $option): ?>
+                                                <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
+                                                    <?php echo $option; ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Pagination -->
+                                    <nav aria-label="Page navigation">
+                                        <ul class="pagination justify-content-end mb-0">
+                                            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                                <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <i class="fas fa-angle-double-left"></i>
+                                                </a>
+                                            </li>
+                                            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                                <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <i class="fas fa-angle-left"></i>
+                                                </a>
+                                            </li>
+                                            
+                                            <?php
+                                            $startPage = max(1, $page - 2);
+                                            $endPage = min($totalPages, $page + 2);
+                                            if ($startPage > 1) {
+                                                echo '<li class="page-item"><span class="page-link">...</span></li>';
+                                            }
+                                            for ($i = $startPage; $i <= $endPage; $i++):
+                                            ?>
+                                                <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
+                                                    <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                        <?php echo $i; ?>
+                                                    </a>
+                                                </li>
+                                            <?php endfor; ?>
+                                            <?php if ($endPage < $totalPages): ?>
+                                                <li class="page-item"><span class="page-link">...</span></li>
+                                            <?php endif; ?>
+                                            
+                                            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                                <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <i class="fas fa-angle-right"></i>
+                                                </a>
+                                            </li>
+                                            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                                <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <i class="fas fa-angle-double-right"></i>
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </nav>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                    <?php endif; ?>
+                <?php endif; ?>
 
-                <!-- Announcements -->
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5><i class="fas fa-bullhorn me-2"></i>Announcements</h5>
-                                <a href="announcements.php" class="btn btn-sm btn-outline-primary">View All</a>
-                            </div>
-                            <div class="card-body">
-                                <?php if (empty($announcements)): ?>
-                                    <div class="text-center text-muted py-3">
-                                        <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
-                                        No announcements
-                                    </div>
-                                <?php else: ?>
-                                    <div class="row">
-                                        <?php foreach ($announcements as $announcement): 
-                                            $priority = $announcement['priority'] ?? 'medium';
-                                            $priorityBadge = 'badge-priority-' . $priority;
-                                        ?>
-                                        <div class="col-md-4">
-                                            <div class="announcement-item">
-                                                <div class="d-flex justify-content-between align-items-start">
-                                                    <span class="title"><?php echo htmlspecialchars($announcement['title']); ?></span>
-                                                    <span class="badge <?php echo $priorityBadge; ?>">
-                                                        <?php echo ucfirst($priority); ?>
-                                                    </span>
-                                                </div>
-                                                <div class="content">
-                                                    <?php echo htmlspecialchars(substr($announcement['content'] ?? '', 0, 80)); ?>
-                                                    <?php if (strlen($announcement['content'] ?? '') > 80): ?>...<?php endif; ?>
-                                                </div>
-                                                <div class="meta mt-1">
-                                                    <i class="far fa-calendar-alt me-1"></i>
-                                                    <?php echo date('M d, Y', strtotime($announcement['created_at'])); ?>
-                                                    <?php if (!empty($announcement['admin_name'])): ?>
-                                                        <span class="mx-1">•</span>
-                                                        <i class="far fa-user me-1"></i>
-                                                        <?php echo htmlspecialchars($announcement['admin_name']); ?>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Footer -->
+                <!-- FOOTER -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
-                    <i class="fas fa-eye me-1"></i> View Only Access
-                    <span class="mx-2">|</span>
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
                     <span id="serverTime">Server Time: <?php echo date('F d, Y h:i A'); ?></span>
+                    <span class="mx-2">|</span>
+                    <span><?php echo $hasCardCount; ?> with card, <?php echo $noCardCount; ?> without card</span>
                 </footer>
             </main>
         </div>
     </div>
 
+    <?php include '../includes/footer.php'; ?>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
+        // CHANGE PER PAGE
+        function changePerPage(value) {
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('per_page', value);
+            urlParams.set('page', 1);
+            window.location.href = '?' + urlParams.toString();
+        }
+        
         // UPDATE TIME
-        // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
             const timeString = now.toLocaleTimeString('en-US', { 
@@ -1013,17 +853,24 @@ if (isset($_SESSION['staff_id'])) {
             if (updateElement) {
                 updateElement.textContent = 'Updated: ' + timeString;
             }
+            const serverTimeElement = document.getElementById('serverTime');
+            if (serverTimeElement) {
+                const dateString = now.toLocaleDateString('en-US', { 
+                    month: 'long', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                });
+                serverTimeElement.textContent = 'Server Time: ' + dateString + ' ' + timeString;
+            }
         }
 
         setInterval(updateLastUpdateTime, 10000);
         document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
         
-        // ============================================================
-        // SIDEBAR TOGGLE (mobile)
-        // ============================================================
+        // SIDEBAR TOGGLE
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
     </script>
-</body> 
+</body>
 </html>
