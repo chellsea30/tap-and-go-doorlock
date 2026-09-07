@@ -368,7 +368,7 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
 }
 
 // ============================================================
-// HANDLE PORTAL REGISTRATION (STAFF PORTAL LOGIN)
+// HANDLE PORTAL REGISTRATION (STAFF PORTAL LOGIN) - FIXED
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_portal'])) {
     $staff_id = (int)$_POST['staff_id'];
@@ -382,7 +382,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_portal'])) {
     } elseif ($portal_password !== $portal_confirm) {
         $error = 'Passwords do not match.';
     } else {
-        $check = $conn->prepare("SELECT staff_id, password_hash FROM staff_users WHERE staff_id = ?");
+        // ✅ FIXED: Include full_name and email in SELECT
+        $check = $conn->prepare("SELECT staff_id, full_name, email, password_hash FROM staff_users WHERE staff_id = ?");
         $check->bind_param("i", $staff_id);
         $check->execute();
         $result = $check->get_result();
@@ -401,10 +402,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_portal'])) {
                 
                 if ($stmt->execute()) {
                     $success = "✅ Portal account registered successfully!<br>";
-                    $success .= "<strong>Staff:</strong> " . $staffData['full_name'] . "<br>";
-                    $success .= "<strong>Email:</strong> " . $staffData['email'] . "<br>";
+                    // ✅ FIXED: Use isset() to check if keys exist
+                    if (isset($staffData['full_name'])) {
+                        $success .= "<strong>Staff:</strong> " . htmlspecialchars($staffData['full_name']) . "<br>";
+                    }
+                    if (isset($staffData['email'])) {
+                        $success .= "<strong>Email:</strong> " . htmlspecialchars($staffData['email']) . "<br>";
+                    }
                     $success .= "<small><i class='fas fa-info-circle me-1'></i>Staff can now login to the staff portal.</small>";
                     logAudit($_SESSION['admin_id'], 'Register Staff Portal', "Registered portal account for staff ID: $staff_id");
+                    header('Location: staff-info.php?portal_registered=1');
+                    exit();
                 } else {
                     $error = "Failed to register portal account: " . $stmt->error;
                 }
