@@ -5,6 +5,7 @@
  * PURE DARK MODE - No white backgrounds
  * WITH CUSTOM STATISTICS (Inside/Outside/Visitors)
  * WITH COURSE & YEAR LEVEL PIE CHART (CSS-BASED)
+ * WITH RESIDENTS OUTSIDE SECTION
  */
 
 // Start session
@@ -287,6 +288,40 @@ for ($i = 1; $i <= 5; $i++) {
 }
 
 // ============================================================
+// GET RESIDENTS OUTSIDE (for the new section)
+// ============================================================
+$outsideResidents = [];
+$result = $conn->query("
+    SELECT 
+        u.user_id,
+        u.full_name,
+        u.student_id,
+        u.room_number,
+        u.profile_photo,
+        rp.course,
+        rp.year_level,
+        al.timestamp as last_exit,
+        al.card_uid
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    LEFT JOIN access_logs al ON u.user_id = al.user_id 
+        AND al.timestamp = (
+            SELECT MAX(timestamp) 
+            FROM access_logs al2 
+            WHERE al2.user_id = u.user_id
+        )
+    WHERE u.status = 'active'
+    AND u.room_number IS NOT NULL
+    AND al.access_type = 'exit'
+    ORDER BY al.timestamp DESC
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $outsideResidents[] = $row;
+    }
+}
+
+// ============================================================
 // GET RECENT ANNOUNCEMENTS
 // ============================================================
 $announcements = [];
@@ -327,7 +362,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
             background: #0a0e1a !important;
             color: #e0e0e0 !important;
             min-height: 100vh;
-            padding-top: 70px !important; /* FIX: Add padding for fixed navbar */
+            padding-top: 70px !important;
         }
         
         /* ============================================================
@@ -342,7 +377,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
             margin-top: 0 !important;
         }
         
-        /* If navbar is fixed-top, ensure content doesn't hide behind it */
         .navbar.fixed-top + .container-fluid,
         .navbar.fixed-top ~ .container-fluid {
             padding-top: 20px !important;
@@ -372,7 +406,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
-            padding-top: 80px !important; /* FIX: Add padding for fixed navbar */
+            padding-top: 80px !important;
             min-height: calc(100vh - 70px) !important;
         }
         .sidebar .nav-link {
@@ -711,6 +745,58 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         }
         
         /* ============================================================
+           OUTSIDE RESIDENTS TABLE
+           ============================================================ */
+        .table-dark {
+            background: #111827 !important;
+            border-color: #1a2a4a !important;
+        }
+        .table-dark thead th {
+            color: #808090 !important;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #1a2a4a !important;
+            padding: 10px 12px;
+        }
+        .table-dark tbody td {
+            color: #e0e0e0 !important;
+            border-bottom: 1px solid #1a2a4a !important;
+            padding: 10px 12px;
+            vertical-align: middle;
+        }
+        .table-dark tbody tr:hover {
+            background: #1a2a4a !important;
+        }
+        .profile-img-placeholder {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+        .badge-room {
+            background: #4a3a1a !important;
+            color: #fbbf24 !important;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+        .badge-denied {
+            background: #7a2a2a !important;
+            color: #f87171 !important;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+        
+        /* ============================================================
            BORDER & DIVIDERS
            ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
@@ -814,6 +900,17 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 left: 20px;
                 width: 100px;
                 height: 100px;
+            }
+            
+            .table-dark thead th,
+            .table-dark tbody td {
+                font-size: 11px;
+                padding: 6px 8px;
+            }
+            .profile-img-placeholder {
+                width: 24px;
+                height: 24px;
+                font-size: 9px;
             }
         }
     </style>
@@ -1146,7 +1243,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 <?php endif; ?>
 
                 <!-- ============================================================
-                ROOMS 1-5
+                ROOMS 1-5 - OCCUPANCY
                 ============================================================ -->
                 <div class="row g-3 mb-4">
                     <div class="col-12">
@@ -1232,7 +1329,113 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 </div>
 
                 <!-- ============================================================
-                ANNOUNCEMENTS ONLY (NO ACCESS LOGS)
+                RESIDENTS OUTSIDE / EXITED SECTION
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5>
+                                    <i class="fas fa-door-closed me-2" style="color: #f87171;"></i>
+                                    Residents Outside 
+                                    <span class="badge bg-danger ms-2"><?php echo count($outsideResidents); ?></span>
+                                </h5>
+                                <span class="text-muted small">
+                                    <i class="fas fa-clock me-1"></i>
+                                    Last exit recorded
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($outsideResidents)): ?>
+                                    <div class="text-center text-muted py-4">
+                                        <i class="fas fa-check-circle fa-2x d-block mb-2 text-success"></i>
+                                        <p class="mb-0">All residents are currently inside their rooms.</p>
+                                        <small class="text-muted">No residents have exited yet today.</small>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-dark table-hover" style="background: #111827 !important; border-color: #1a2a4a !important;">
+                                            <thead>
+                                                <tr style="border-color: #1a2a4a !important;">
+                                                    <th style="color: #808090; font-size: 12px;">#</th>
+                                                    <th style="color: #808090; font-size: 12px;">Resident</th>
+                                                    <th style="color: #808090; font-size: 12px;">Room</th>
+                                                    <th style="color: #808090; font-size: 12px;">Course / Year</th>
+                                                    <th style="color: #808090; font-size: 12px;">Last Exit</th>
+                                                    <th style="color: #808090; font-size: 12px;">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php $counter = 1; foreach ($outsideResidents as $resident): ?>
+                                                <tr style="border-color: #1a2a4a !important;">
+                                                    <td style="color: #808090; font-size: 13px;"><?php echo $counter++; ?></td>
+                                                    <td>
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <?php 
+                                                            // Get initials
+                                                            $parts = explode(' ', $resident['full_name']);
+                                                            $initials = '';
+                                                            foreach ($parts as $p) {
+                                                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                                                            }
+                                                            $initials = substr($initials, 0, 2) ?: '?';
+                                                            ?>
+                                                            <div class="profile-img-placeholder" style="background: #7a2a2a !important;">
+                                                                <?php echo $initials; ?>
+                                                            </div>
+                                                            <div>
+                                                                <div style="color: #e0e0e0; font-weight: 500; font-size: 14px;">
+                                                                    <?php echo htmlspecialchars($resident['full_name']); ?>
+                                                                </div>
+                                                                <div style="color: #606070; font-size: 11px;">
+                                                                    <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge badge-room">
+                                                            <i class="fas fa-door-open me-1"></i>
+                                                            Room <?php echo htmlspecialchars($resident['room_number']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td style="color: #b0b0c0; font-size: 13px;">
+                                                        <?php echo htmlspecialchars($resident['course'] ?? 'N/A'); ?>
+                                                        <span class="text-muted small">
+                                                            (<?php echo htmlspecialchars($resident['year_level'] ?? 'N/A'); ?>)
+                                                        </span>
+                                                    </td>
+                                                    <td style="color: #b0b0c0; font-size: 13px;">
+                                                        <i class="far fa-clock me-1 text-warning"></i>
+                                                        <?php echo $resident['last_exit'] ? date('M d, h:i A', strtotime($resident['last_exit'])) : 'N/A'; ?>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge badge-denied">
+                                                            <i class="fas fa-door-closed me-1"></i>
+                                                            Outside
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <div class="text-muted small mt-2">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Showing <?php echo count($outsideResidents); ?> resident(s) currently outside
+                                        <span class="mx-1">|</span>
+                                        <i class="fas fa-sync-alt me-1"></i>
+                                        Auto-updates every 10 seconds
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                ANNOUNCEMENTS
                 ============================================================ -->
                 <div class="row">
                     <div class="col-md-12">
@@ -1287,7 +1490,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 <!-- ============================================================
                 COURSE DISTRIBUTION PIE CHART (CSS-BASED)
                 ============================================================ -->
-                <div class="row g-3 mb-4">
+                <div class="row g-3 mb-4 mt-3">
                     <div class="col-md-12">
                         <div class="card">
                             <div class="card-header">
