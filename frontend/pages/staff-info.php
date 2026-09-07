@@ -2,7 +2,7 @@
 /**
  * Tap-and-Go Doorlock - Staff Management
  * DARK MODE - WITH CARD UID - WITH PROFILE PHOTO - WITH PRINT ID
- * SEPARATE SECTION: Staff List + Staff Card Registration
+ * WITH EDIT, DELETE, ADD, AND PORTAL REGISTRATION
  */
 
 session_start();
@@ -36,7 +36,28 @@ function getNextStaffId($conn) {
 }
 
 // ============================================================
-// HANDLE ADD STAFF (WITHOUT CARD)
+// GET STAFF DATA FOR EDIT
+// ============================================================
+$editStaff = null;
+$editMode = false;
+
+if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
+    $edit_id = (int)$_GET['edit'];
+    $stmt = $conn->prepare("SELECT * FROM staff_users WHERE staff_id = ?");
+    $stmt->bind_param("i", $edit_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $editStaff = $result->fetch_assoc();
+    $stmt->close();
+    if ($editStaff) {
+        $editMode = true;
+    } else {
+        $error = "Staff not found.";
+    }
+}
+
+// ============================================================
+// HANDLE ADD STAFF
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
     $full_name = trim($_POST['full_name'] ?? '');
@@ -55,16 +76,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
             $staff_id_number = getNextStaffId($conn);
             
             $stmt = $conn->prepare("
-                INSERT INTO staff_users (staff_id_number, full_name, email, department, created_at)
-                VALUES (?, ?, ?, ?, NOW())
+                INSERT INTO staff_users (staff_id_number, full_name, email, department, password_hash, created_at)
+                VALUES (?, ?, ?, ?, NULL, NOW())
             ");
             $stmt->bind_param("ssss", $staff_id_number, $full_name, $email, $department);
             
             if ($stmt->execute()) {
-                $new_id = $stmt->insert_id;
                 $success = "✅ Staff added successfully! Staff ID: $staff_id_number";
                 logAudit($_SESSION['admin_id'], 'Add Staff', "Added staff: $full_name ($staff_id_number)");
-                header('Location: staff.php?success=1');
+                header('Location: staff-info.php?added=1');
                 exit();
             } else {
                 $error = "Failed to add staff: " . $stmt->error;
@@ -76,7 +96,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
 }
 
 // ============================================================
-// HANDLE REGISTER CARD FOR STAFF (SEPARATE FORM)
+// HANDLE UPDATE STAFF (EDIT)
+// ============================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_staff'])) {
+    $staff_id = (int)$_POST['staff_id'];
+    $full_name = trim($_POST['full_name'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $department = trim($_POST['department'] ?? 'Staff');
+    
+    if (empty($full_name) || empty($email)) {
+        $error = 'Please fill in all required fields (Name and Email).';
+    } else {
+        $check = $conn->prepare("SELECT staff_id FROM staff_users WHERE email = ? AND staff_id != ?");
+        $check->bind_param("si", $email, $staff_id);
+        $check->execute();
+        if ($check->get_result()->num_rows > 0) {
+            $error = 'Email already exists in the system.';
+        } else {
+            $stmt = $conn->prepare("
+                UPDATE staff_users 
+                SET full_name = ?, email = ?, department = ?, updated_at = NOW()
+                WHERE staff_id = ?
+            ");
+            $stmt->bind_param("sssi", $full_name, $email, $department, $staff_id);
+            
+            if ($stmt->execute()) {
+                $success = "✅ Staff updated successfully!";
+                logAudit($_SESSION['admin_id'], 'Update Staff', "Updated staff: $full_name (ID: $staff_id)");
+                header('Location: staff-info.php?updated=1');
+                exit();
+            } else {
+                $error = "Failed to update staff: " . $stmt->error;
+            }
+            $stmt->close();
+        }
+        $check->close();
+    }
+}
+
+// ============================================================
+// HANDLE REGISTER CARD FOR STAFF
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_card'])) {
     $staff_id = (int)$_POST['staff_id'];
@@ -85,7 +144,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_card'])) {
     if (empty($card_uid)) {
         $error = 'Please enter a Card UID.';
     } else {
-        // Check if card is already used
         $check = $conn->prepare("
             SELECT card_uid FROM rfid_cards 
             WHERE card_uid = ? AND status = 'active'
@@ -95,7 +153,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_card'])) {
         if ($check->get_result()->num_rows > 0) {
             $error = 'Card UID is already assigned to someone else.';
         } else {
-            // Check if staff already has a card
             $staffCheck = $conn->prepare("SELECT card_uid FROM staff_users WHERE staff_id = ?");
             $staffCheck->bind_param("i", $staff_id);
             $staffCheck->execute();
@@ -106,12 +163,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_card'])) {
             if (!empty($staffData['card_uid'])) {
                 $error = 'This staff already has a card. Please remove the existing card first.';
             } else {
-                // Update staff with card UID
                 $stmt = $conn->prepare("UPDATE staff_users SET card_uid = ? WHERE staff_id = ?");
                 $stmt->bind_param("si", $card_uid, $staff_id);
                 
                 if ($stmt->execute()) {
-                    // Insert into rfid_cards
                     $rfidStmt = $conn->prepare("
                         INSERT INTO rfid_cards (card_uid, user_id, card_type, issued_date, expiry_date, status)
                         VALUES (?, ?, 'staff', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'active')
@@ -120,9 +175,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_card'])) {
                     $rfidStmt->execute();
                     $rfidStmt->close();
                     
-                    $success = "✅ Card UID registered successfully for staff!";
+                    $success = "✅ Card UID registered successfully!";
                     logAudit($_SESSION['admin_id'], 'Register Staff Card', "Registered card $card_uid for staff ID: $staff_id");
-                    header('Location: staff.php?card_registered=1');
+                    header('Location: staff-info.php?card_registered=1');
                     exit();
                 } else {
                     $error = "Failed to register card: " . $stmt->error;
@@ -150,7 +205,7 @@ if (isset($_GET['remove_card']) && is_numeric($_GET['remove_card'])) {
         
         $success = "✅ Card UID removed successfully!";
         logAudit($_SESSION['admin_id'], 'Remove Staff Card', "Removed card for staff ID: $staff_id");
-        header('Location: staff.php?card_removed=1');
+        header('Location: staff-info.php?card_removed=1');
         exit();
     } else {
         $error = "Failed to remove card: " . $stmt->error;
@@ -171,11 +226,6 @@ if (isset($_GET['set_password']) && is_numeric($_GET['set_password'])) {
             $new_password .= $chars[rand(0, strlen($chars) - 1)];
         }
         $password_hash = password_hash($new_password, PASSWORD_DEFAULT);
-        
-        $tableCheck = $conn->query("SHOW COLUMNS FROM staff_users LIKE 'password_hash'");
-        if (!$tableCheck || $tableCheck->num_rows == 0) {
-            $conn->query("ALTER TABLE staff_users ADD COLUMN password_hash VARCHAR(255) NULL AFTER email");
-        }
         
         $stmt = $conn->prepare("UPDATE staff_users SET password_hash = ? WHERE staff_id = ?");
         $stmt->bind_param("si", $password_hash, $staff_id);
@@ -228,12 +278,59 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
         }
         $success = "Staff deleted successfully!";
         logAudit($_SESSION['admin_id'], 'Delete Staff', "Deleted staff ID: $delete_id");
-        header('Location: staff.php?deleted=1');
+        header('Location: staff-info.php?deleted=1');
         exit();
     } else {
         $error = "Failed to delete staff.";
     }
     $stmt->close();
+}
+
+// ============================================================
+// HANDLE PORTAL REGISTRATION (STAFF PORTAL LOGIN)
+// ============================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_portal'])) {
+    $staff_id = (int)$_POST['staff_id'];
+    $portal_password = $_POST['portal_password'] ?? '';
+    $portal_confirm = $_POST['portal_confirm'] ?? '';
+    
+    if (empty($staff_id) || empty($portal_password) || empty($portal_confirm)) {
+        $error = 'Please fill in all fields.';
+    } elseif (strlen($portal_password) < 8) {
+        $error = 'Password must be at least 8 characters long.';
+    } elseif ($portal_password !== $portal_confirm) {
+        $error = 'Passwords do not match.';
+    } else {
+        $check = $conn->prepare("SELECT staff_id, password_hash FROM staff_users WHERE staff_id = ?");
+        $check->bind_param("i", $staff_id);
+        $check->execute();
+        $result = $check->get_result();
+        $staffData = $result->fetch_assoc();
+        $check->close();
+        
+        if (!$staffData) {
+            $error = 'Staff not found.';
+        } else {
+            if (!empty($staffData['password_hash']) && $staffData['password_hash'] != '') {
+                $error = 'This staff already has a portal account. You can reset the password instead.';
+            } else {
+                $password_hash = password_hash($portal_password, PASSWORD_DEFAULT);
+                $stmt = $conn->prepare("UPDATE staff_users SET password_hash = ? WHERE staff_id = ?");
+                $stmt->bind_param("si", $password_hash, $staff_id);
+                
+                if ($stmt->execute()) {
+                    $success = "✅ Portal account registered successfully!<br>";
+                    $success .= "<strong>Staff:</strong> " . $staffData['full_name'] . "<br>";
+                    $success .= "<strong>Email:</strong> " . $staffData['email'] . "<br>";
+                    $success .= "<small><i class='fas fa-info-circle me-1'></i>Staff can now login to the staff portal.</small>";
+                    logAudit($_SESSION['admin_id'], 'Register Staff Portal', "Registered portal account for staff ID: $staff_id");
+                } else {
+                    $error = "Failed to register portal account: " . $stmt->error;
+                }
+                $stmt->close();
+            }
+        }
+    }
 }
 
 // ============================================================
@@ -283,8 +380,8 @@ if ($result) {
 $totalStaff = count($staffList);
 $hasCardCount = 0;
 $noCardCount = 0;
-$managementCount = 0;
-$staffCount = 0;
+$hasPortalCount = 0;
+$noPortalCount = 0;
 
 foreach ($staffList as $staff) {
     if (!empty($staff['card_uid'])) {
@@ -292,10 +389,10 @@ foreach ($staffList as $staff) {
     } else {
         $noCardCount++;
     }
-    if (strpos($staff['department'] ?? '', 'Management') !== false) {
-        $managementCount++;
+    if (!empty($staff['password_hash']) && $staff['password_hash'] != '') {
+        $hasPortalCount++;
     } else {
-        $staffCount++;
+        $noPortalCount++;
     }
 }
 
@@ -306,6 +403,14 @@ $staffWithoutCard = [];
 foreach ($staffList as $staff) {
     if (empty($staff['card_uid'])) {
         $staffWithoutCard[] = $staff;
+    }
+}
+
+// Get staff without portal account
+$staffWithoutPortal = [];
+foreach ($staffList as $staff) {
+    if (empty($staff['password_hash']) || $staff['password_hash'] == '') {
+        $staffWithoutPortal[] = $staff;
     }
 }
 ?>
@@ -482,6 +587,25 @@ foreach ($staffList as $staff) {
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
         
+        /* PORTAL BADGE */
+        .portal-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .portal-badge.has-portal {
+            background: rgba(16, 185, 129, 0.2) !important;
+            color: #34d399 !important;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .portal-badge.no-portal {
+            background: rgba(239, 68, 68, 0.15) !important;
+            color: #f87171 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
         /* STAT CARDS */
         .staff-stat {
             background: #111827 !important;
@@ -653,6 +777,20 @@ foreach ($staffList as $staff) {
             color: #6ee7b7 !important;
         }
         
+        .btn-danger-custom {
+            background: #dc3545 !important;
+            border: none;
+            color: white !important;
+            padding: 6px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+        .btn-danger-custom:hover {
+            background: #c82333 !important;
+            color: white !important;
+        }
+        
         .staff-actions {
             display: flex;
             justify-content: center;
@@ -767,6 +905,22 @@ foreach ($staffList as $staff) {
             margin-bottom: 20px;
         }
         
+        /* PORTAL REGISTRATION SECTION */
+        .portal-registration-section {
+            background: #111827 !important;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 16px !important;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+        }
+        .portal-registration-section h5 {
+            color: #ffd700 !important;
+            font-weight: 700;
+            border-bottom: 2px solid #ffd700;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
         /* ALERTS */
         .alert-success {
             background: rgba(16, 185, 129, 0.15) !important;
@@ -777,6 +931,11 @@ foreach ($staffList as $staff) {
             background: rgba(239, 68, 68, 0.15) !important;
             border-color: #ef4444 !important;
             color: #fca5a5 !important;
+        }
+        .alert-info {
+            background: rgba(59, 130, 246, 0.15) !important;
+            border-color: #3b82f6 !important;
+            color: #93c5fd !important;
         }
         .btn-close { filter: invert(1) !important; }
         
@@ -923,8 +1082,8 @@ foreach ($staffList as $staff) {
                     </div>
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="staff-stat">
-                            <div class="number"><?php echo $managementCount; ?></div>
-                            <div class="label">Management</div>
+                            <div class="number"><?php echo $hasPortalCount; ?></div>
+                            <div class="label">Portal Access</div>
                         </div>
                     </div>
                 </div>
@@ -975,6 +1134,8 @@ foreach ($staffList as $staff) {
                                     $hasPhoto = true;
                                 }
                             }
+                            
+                            $hasPortal = !empty($staff['password_hash']) && $staff['password_hash'] != '';
                         ?>
                             <div class="col-md-4 col-lg-3">
                                 <div class="staff-card">
@@ -1017,15 +1178,15 @@ foreach ($staffList as $staff) {
                                         <?php endif; ?>
                                     </div>
                                     
-                                    <!-- Password Status -->
+                                    <!-- Portal Status -->
                                     <div class="mt-1">
-                                        <?php if (!empty($staff['password_hash']) && $staff['password_hash'] != ''): ?>
-                                            <span class="has-password small">
-                                                <i class="fas fa-check-circle me-1"></i> Password Set
+                                        <?php if ($hasPortal): ?>
+                                            <span class="portal-badge has-portal">
+                                                <i class="fas fa-check-circle me-1"></i> Portal Active
                                             </span>
                                         <?php else: ?>
-                                            <span class="no-password small">
-                                                <i class="fas fa-exclamation-triangle me-1"></i> No Password
+                                            <span class="portal-badge no-portal">
+                                                <i class="fas fa-times-circle me-1"></i> No Portal
                                             </span>
                                         <?php endif; ?>
                                     </div>
@@ -1047,121 +1208,13 @@ foreach ($staffList as $staff) {
                                             </a>
                                         <?php endif; ?>
                                         
-                                        <?php if (empty($staff['card_uid'])): ?>
-                                            <button type="button" 
-                                                    class="btn btn-card"
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#cardModal<?php echo $staff['staff_id']; ?>">
-                                                <i class="fas fa-id-card me-1"></i> Register Card
-                                            </button>
-                                        <?php else: ?>
-                                            <a href="?remove_card=<?php echo $staff['staff_id']; ?>" 
-                                               class="btn btn-card-remove"
-                                               onclick="return confirm('Remove card from <?php echo $staff['full_name']; ?>?')">
-                                                <i class="fas fa-times me-1"></i> Remove
-                                            </a>
-                                        <?php endif; ?>
-                                        
-                                        <?php if (empty($staff['password_hash']) || $staff['password_hash'] == ''): ?>
-                                            <a href="?set_password=<?php echo $staff['staff_id']; ?>" 
-                                               class="btn btn-password"
-                                               onclick="return confirm('Set password for <?php echo $staff['full_name']; ?>?')">
-                                                <i class="fas fa-key me-1"></i> Set PW
-                                            </a>
-                                        <?php else: ?>
-                                            <a href="?set_password=<?php echo $staff['staff_id']; ?>" 
-                                               class="btn btn-password-success"
-                                               onclick="return confirm('Reset password for <?php echo $staff['full_name']; ?>?')">
-                                                <i class="fas fa-sync-alt me-1"></i> Reset
-                                            </a>
-                                        <?php endif; ?>
-                                        
-                                        <a href="edit-staff.php?id=<?php echo $staff['staff_id']; ?>" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-edit"></i>
+                                        <a href="?edit=<?php echo $staff['staff_id']; ?>" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i> Edit
                                         </a>
+                                        
                                         <a href="?delete=<?php echo $staff['staff_id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this staff?')">
                                             <i class="fas fa-trash"></i>
                                         </a>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- CARD REGISTRATION MODAL -->
-                            <div class="modal fade" id="cardModal<?php echo $staff['staff_id']; ?>" tabindex="-1">
-                                <div class="modal-dialog modal-dialog-centered">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">
-                                                <i class="fas fa-id-card me-2"></i>
-                                                Register Card - <?php echo htmlspecialchars($staff['full_name']); ?>
-                                            </h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <div class="mb-3 text-center">
-                                                <div style="width:80px;height:80px;border-radius:50%;margin:0 auto;overflow:hidden;border:3px solid #1a2a4a;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:white;">
-                                                    <?php if ($hasPhoto): ?>
-                                                        <img src="<?php echo $fullPhotoPath; ?>" 
-                                                             alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
-                                                             style="width:100%;height:100%;object-fit:cover;"
-                                                             onerror="this.style.display='none'; this.parentElement.textContent='<?php echo $initials; ?>';">
-                                                    <?php else: ?>
-                                                        <?php echo $initials; ?>
-                                                    <?php endif; ?>
-                                                </div>
-                                                <div class="mt-2">
-                                                    <strong><?php echo htmlspecialchars($staff['full_name']); ?></strong>
-                                                </div>
-                                                <div class="text-muted small">
-                                                    <?php echo htmlspecialchars($staff['staff_id_number']); ?>
-                                                </div>
-                                                <div class="mt-2">
-                                                    <span class="card-uid-badge no-card">
-                                                        <i class="fas fa-times-circle me-1"></i>
-                                                        No Card Assigned
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr>
-                                            
-                                            <form method="POST" action="">
-                                                <input type="hidden" name="staff_id" value="<?php echo $staff['staff_id']; ?>">
-                                                <input type="hidden" name="register_card" value="1">
-                                                
-                                                <?php if (!empty($availableCards)): ?>
-                                                    <div class="mb-2">
-                                                        <label class="form-label">Available Cards (Click to auto-fill)</label>
-                                                        <div class="available-card-list" id="availableCardList<?php echo $staff['staff_id']; ?>">
-                                                            <?php foreach ($availableCards as $card): ?>
-                                                                <span class="card-item-mini" data-uid="<?php echo $card['card_uid']; ?>" onclick="selectCard(this, 'cardUid<?php echo $staff['staff_id']; ?>')">
-                                                                    <?php echo $card['card_uid']; ?>
-                                                                </span>
-                                                            <?php endforeach; ?>
-                                                        </div>
-                                                        <small class="text-muted">Click a card above to auto-fill the UID</small>
-                                                    </div>
-                                                <?php else: ?>
-                                                    <div class="alert alert-warning">
-                                                        <i class="fas fa-info-circle me-1"></i>
-                                                        No available cards in inventory.
-                                                    </div>
-                                                <?php endif; ?>
-                                                
-                                                <div class="mb-2">
-                                                    <label class="form-label">Card UID <span class="text-danger">*</span></label>
-                                                    <input type="text" class="form-control" name="card_uid" id="cardUid<?php echo $staff['staff_id']; ?>" placeholder="Enter card UID" required>
-                                                    <div class="form-text text-muted small">
-                                                        <i class="fas fa-info-circle me-1"></i>
-                                                        Enter UID or click an available card above
-                                                    </div>
-                                                </div>
-                                                
-                                                <button type="submit" class="btn btn-success-custom w-100">
-                                                    <i class="fas fa-save me-1"></i> Register Card
-                                                </button>
-                                            </form>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1235,6 +1288,114 @@ foreach ($staffList as $staff) {
                     <?php endif; ?>
                 </div>
 
+                <!-- ============================================================
+                STAFF PORTAL REGISTRATION SECTION
+                ============================================================ -->
+                <div class="portal-registration-section mt-4">
+                    <h5><i class="fas fa-user-lock me-2"></i>Staff Portal Registration</h5>
+                    <p class="text-muted small">Create portal login account for staff members who don't have one yet.</p>
+                    
+                    <?php if (empty($staffWithoutPortal)): ?>
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            All staff members already have portal accounts!
+                        </div>
+                    <?php else: ?>
+                        <form method="POST" action="" class="row g-3 align-items-end">
+                            <input type="hidden" name="register_portal" value="1">
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">Select Staff <span class="text-danger">*</span></label>
+                                <select class="form-select" name="staff_id" required>
+                                    <option value="">-- Select Staff --</option>
+                                    <?php foreach ($staffWithoutPortal as $staff): ?>
+                                        <option value="<?php echo $staff['staff_id']; ?>">
+                                            <?php echo htmlspecialchars($staff['full_name']); ?> 
+                                            (<?php echo htmlspecialchars($staff['staff_id_number']); ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">Password <span class="text-danger">*</span></label>
+                                <input type="password" class="form-control" name="portal_password" placeholder="Enter password" required>
+                                <div class="form-text text-muted small">Minimum 8 characters</div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">Confirm Password <span class="text-danger">*</span></label>
+                                <input type="password" class="form-control" name="portal_confirm" placeholder="Confirm password" required>
+                            </div>
+                            
+                            <div class="col-md-12">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-user-plus me-1"></i> Register Portal Account
+                                </button>
+                            </div>
+                        </form>
+                    <?php endif; ?>
+                </div>
+
+                <!-- ============================================================
+                EDIT STAFF MODAL
+                ============================================================ -->
+                <?php if ($editMode && $editStaff): ?>
+                <div class="modal fade show d-block" id="editModal" tabindex="-1" style="display:block;background:rgba(0,0,0,0.7);">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-edit me-2"></i>
+                                    Edit Staff
+                                </h5>
+                                <a href="staff-info.php" class="btn-close"></a>
+                            </div>
+                            <div class="modal-body">
+                                <form method="POST" action="">
+                                    <input type="hidden" name="update_staff" value="1">
+                                    <input type="hidden" name="staff_id" value="<?php echo $editStaff['staff_id']; ?>">
+                                    
+                                    <div class="mb-2">
+                                        <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" name="full_name" value="<?php echo htmlspecialchars($editStaff['full_name']); ?>" required>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                                        <input type="email" class="form-control" name="email" value="<?php echo htmlspecialchars($editStaff['email']); ?>" required>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label">Department</label>
+                                        <input type="text" class="form-control" name="department" value="<?php echo htmlspecialchars($editStaff['department'] ?? 'Staff'); ?>">
+                                    </div>
+                                    
+                                    <div class="mb-2">
+                                        <label class="form-label">Staff ID</label>
+                                        <div class="form-control" style="background:#0d1220 !important;color:#6b7280 !important;">
+                                            <?php echo htmlspecialchars($editStaff['staff_id_number']); ?>
+                                        </div>
+                                    </div>
+                                    
+                                    <?php if (!empty($editStaff['card_uid'])): ?>
+                                        <div class="mb-2">
+                                            <label class="form-label">Card UID</label>
+                                            <div class="form-control" style="background:#0d1220 !important;color:#34d399 !important;">
+                                                <i class="fas fa-id-card me-1"></i>
+                                                <?php echo htmlspecialchars($editStaff['card_uid']); ?>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <button type="submit" class="btn btn-primary w-100">
+                                        <i class="fas fa-save me-1"></i> Update Staff
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <!-- FOOTER -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
@@ -1242,6 +1403,8 @@ foreach ($staffList as $staff) {
                     <span id="serverTime">Server Time: <?php echo date('F d, Y h:i A'); ?></span>
                     <span class="mx-2">|</span>
                     <span><?php echo $hasCardCount; ?> with card, <?php echo $noCardCount; ?> without card</span>
+                    <span class="mx-2">|</span>
+                    <span><?php echo $hasPortalCount; ?> portal access</span>
                 </footer>
             </main>
         </div>
@@ -1278,7 +1441,7 @@ foreach ($staffList as $staff) {
                         
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-1"></i>
-                            Staff will be added without a card. You can register a card using the form below.
+                            Staff will be added without a card and portal account. You can register them using the forms below.
                         </div>
                         
                         <button type="submit" class="btn btn-primary w-100">
