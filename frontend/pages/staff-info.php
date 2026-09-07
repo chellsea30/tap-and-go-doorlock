@@ -2,8 +2,7 @@
 /**
  * Tap-and-Go Doorlock - Staff Management
  * DARK MODE - WITH CARD UID - WITH PROFILE PHOTO - WITH PRINT ID
- * COMBINED: Staff Info + Staff Card Management
- * SEPARATE: Card Registration Form
+ * SEPARATE SECTION: Staff List + Staff Card Registration
  */
 
 session_start();
@@ -301,6 +300,14 @@ foreach ($staffList as $staff) {
 }
 
 $nextStaffId = getNextStaffId($conn);
+
+// Get staff without card for the card registration section
+$staffWithoutCard = [];
+foreach ($staffList as $staff) {
+    if (empty($staff['card_uid'])) {
+        $staffWithoutCard[] = $staff;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -744,6 +751,22 @@ $nextStaffId = getNextStaffId($conn);
             box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15);
         }
         
+        /* STAFF CARD REGISTRATION SECTION */
+        .card-registration-section {
+            background: #111827 !important;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 16px !important;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+        }
+        .card-registration-section h5 {
+            color: #ffd700 !important;
+            font-weight: 700;
+            border-bottom: 2px solid #ffd700;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
         /* ALERTS */
         .alert-success {
             background: rgba(16, 185, 129, 0.15) !important;
@@ -906,7 +929,9 @@ $nextStaffId = getNextStaffId($conn);
                     </div>
                 </div>
 
-                <!-- STAFF LIST -->
+                <!-- ============================================================
+                STAFF LIST
+                ============================================================ -->
                 <div class="section-header mb-3">
                     <h5><i class="fas fa-list me-2"></i>Staff List</h5>
                     <small class="text-muted ms-2">
@@ -1022,14 +1047,14 @@ $nextStaffId = getNextStaffId($conn);
                                             </a>
                                         <?php endif; ?>
                                         
-                                        <button type="button" 
-                                                class="btn btn-card"
-                                                data-bs-toggle="modal" 
-                                                data-bs-target="#cardModal<?php echo $staff['staff_id']; ?>">
-                                            <i class="fas fa-id-card me-1"></i> Card
-                                        </button>
-                                        
-                                        <?php if (!empty($staff['card_uid'])): ?>
+                                        <?php if (empty($staff['card_uid'])): ?>
+                                            <button type="button" 
+                                                    class="btn btn-card"
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#cardModal<?php echo $staff['staff_id']; ?>">
+                                                <i class="fas fa-id-card me-1"></i> Register Card
+                                            </button>
+                                        <?php else: ?>
                                             <a href="?remove_card=<?php echo $staff['staff_id']; ?>" 
                                                class="btn btn-card-remove"
                                                onclick="return confirm('Remove card from <?php echo $staff['full_name']; ?>?')">
@@ -1061,18 +1086,14 @@ $nextStaffId = getNextStaffId($conn);
                                 </div>
                             </div>
 
-                            <!-- CARD UID MODAL - SEPARATE CARD REGISTRATION -->
+                            <!-- CARD REGISTRATION MODAL -->
                             <div class="modal fade" id="cardModal<?php echo $staff['staff_id']; ?>" tabindex="-1">
                                 <div class="modal-dialog modal-dialog-centered">
                                     <div class="modal-content">
                                         <div class="modal-header">
                                             <h5 class="modal-title">
                                                 <i class="fas fa-id-card me-2"></i>
-                                                <?php if (!empty($staff['card_uid'])): ?>
-                                                    Update Card - <?php echo htmlspecialchars($staff['full_name']); ?>
-                                                <?php else: ?>
-                                                    Register Card - <?php echo htmlspecialchars($staff['full_name']); ?>
-                                                <?php endif; ?>
+                                                Register Card - <?php echo htmlspecialchars($staff['full_name']); ?>
                                             </h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                         </div>
@@ -1094,21 +1115,12 @@ $nextStaffId = getNextStaffId($conn);
                                                 <div class="text-muted small">
                                                     <?php echo htmlspecialchars($staff['staff_id_number']); ?>
                                                 </div>
-                                                <?php if (!empty($staff['card_uid'])): ?>
-                                                    <div class="mt-2">
-                                                        <span class="card-uid-badge has-card">
-                                                            <i class="fas fa-id-card me-1"></i>
-                                                            <?php echo htmlspecialchars($staff['card_uid']); ?>
-                                                        </span>
-                                                    </div>
-                                                <?php else: ?>
-                                                    <div class="mt-2">
-                                                        <span class="card-uid-badge no-card">
-                                                            <i class="fas fa-times-circle me-1"></i>
-                                                            No Card Assigned
-                                                        </span>
-                                                    </div>
-                                                <?php endif; ?>
+                                                <div class="mt-2">
+                                                    <span class="card-uid-badge no-card">
+                                                        <i class="fas fa-times-circle me-1"></i>
+                                                        No Card Assigned
+                                                    </span>
+                                                </div>
                                             </div>
                                             
                                             <hr>
@@ -1116,13 +1128,6 @@ $nextStaffId = getNextStaffId($conn);
                                             <form method="POST" action="">
                                                 <input type="hidden" name="staff_id" value="<?php echo $staff['staff_id']; ?>">
                                                 <input type="hidden" name="register_card" value="1">
-                                                
-                                                <?php if (!empty($staff['card_uid'])): ?>
-                                                    <div class="alert alert-warning">
-                                                        <i class="fas fa-info-circle me-1"></i>
-                                                        This staff already has a card. Assigning a new card will replace the existing one.
-                                                    </div>
-                                                <?php endif; ?>
                                                 
                                                 <?php if (!empty($availableCards)): ?>
                                                     <div class="mb-2">
@@ -1153,12 +1158,7 @@ $nextStaffId = getNextStaffId($conn);
                                                 </div>
                                                 
                                                 <button type="submit" class="btn btn-success-custom w-100">
-                                                    <i class="fas fa-save me-1"></i> 
-                                                    <?php if (!empty($staff['card_uid'])): ?>
-                                                        Update Card
-                                                    <?php else: ?>
-                                                        Register Card
-                                                    <?php endif; ?>
+                                                    <i class="fas fa-save me-1"></i> Register Card
                                                 </button>
                                             </form>
                                         </div>
@@ -1168,6 +1168,72 @@ $nextStaffId = getNextStaffId($conn);
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
+
+                <!-- ============================================================
+                STAFF CARD REGISTRATION SECTION (BELOW STAFF LIST)
+                ============================================================ -->
+                <div class="card-registration-section mt-4">
+                    <h5><i class="fas fa-id-card me-2"></i>Staff Card Registration</h5>
+                    <p class="text-muted small">Register an RFID card to a staff member who doesn't have one yet.</p>
+                    
+                    <?php if (empty($staffWithoutCard)): ?>
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            All staff members already have cards assigned!
+                        </div>
+                    <?php else: ?>
+                        <form method="POST" action="" class="row g-3 align-items-end">
+                            <input type="hidden" name="register_card" value="1">
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">Select Staff <span class="text-danger">*</span></label>
+                                <select class="form-select" name="staff_id" required>
+                                    <option value="">-- Select Staff --</option>
+                                    <?php foreach ($staffWithoutCard as $staff): ?>
+                                        <option value="<?php echo $staff['staff_id']; ?>">
+                                            <?php echo htmlspecialchars($staff['full_name']); ?> 
+                                            (<?php echo htmlspecialchars($staff['staff_id_number']); ?>)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <?php if (!empty($availableCards)): ?>
+                                <div class="col-md-4">
+                                    <label class="form-label">Available Cards (Click to auto-fill)</label>
+                                    <div class="available-card-list" id="availableCardListRegister">
+                                        <?php foreach ($availableCards as $card): ?>
+                                            <span class="card-item-mini" data-uid="<?php echo $card['card_uid']; ?>" onclick="selectCard(this, 'cardUidRegister')">
+                                                <?php echo $card['card_uid']; ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <small class="text-muted">Click a card above to auto-fill the UID</small>
+                                </div>
+                            <?php else: ?>
+                                <div class="col-md-4">
+                                    <label class="form-label">Available Cards</label>
+                                    <div class="alert alert-warning mb-0">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                        No available cards in inventory.
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <div class="col-md-4">
+                                <label class="form-label">Card UID <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="card_uid" id="cardUidRegister" placeholder="Enter card UID" required>
+                                <div class="form-text text-muted small">Enter UID or click an available card above</div>
+                            </div>
+                            
+                            <div class="col-md-12">
+                                <button type="submit" class="btn btn-success-custom">
+                                    <i class="fas fa-id-card me-1"></i> Register Card
+                                </button>
+                            </div>
+                        </form>
+                    <?php endif; ?>
+                </div>
 
                 <!-- FOOTER -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
@@ -1212,7 +1278,7 @@ $nextStaffId = getNextStaffId($conn);
                         
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-1"></i>
-                            Staff will be added without a card. You can register a card later using the "Card" button.
+                            Staff will be added without a card. You can register a card using the form below.
                         </div>
                         
                         <button type="submit" class="btn btn-primary w-100">
