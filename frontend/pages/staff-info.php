@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Staff Management
  * DARK MODE - WITH CARD UID - WITH PROFILE PHOTO - WITH PRINT ID
  * COMBINED: Staff Info + Staff Card Management
+ * SEPARATE: Card Registration Form
  */
 
 session_start();
@@ -36,13 +37,12 @@ function getNextStaffId($conn) {
 }
 
 // ============================================================
-// HANDLE ADD STAFF WITH CARD UID
+// HANDLE ADD STAFF (WITHOUT CARD)
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
     $full_name = trim($_POST['full_name'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $department = trim($_POST['department'] ?? 'Staff');
-    $card_uid = strtoupper(trim($_POST['card_uid'] ?? ''));
     
     if (empty($full_name) || empty($email)) {
         $error = 'Please fill in all required fields (Name and Email).';
@@ -53,105 +53,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
         if ($check->get_result()->num_rows > 0) {
             $error = 'Email already exists in the system.';
         } else {
-            if (!empty($card_uid)) {
-                $cardCheck = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE card_uid = ? AND status = 'active'");
-                $cardCheck->bind_param("s", $card_uid);
-                $cardCheck->execute();
-                if ($cardCheck->get_result()->num_rows > 0) {
-                    $error = 'Card UID is already assigned to someone else.';
-                }
-                $cardCheck->close();
-            }
+            $staff_id_number = getNextStaffId($conn);
             
-            if (empty($error)) {
-                $staff_id_number = getNextStaffId($conn);
-                
-                $stmt = $conn->prepare("
-                    INSERT INTO staff_users (staff_id_number, full_name, email, department, card_uid, created_at)
-                    VALUES (?, ?, ?, ?, ?, NOW())
-                ");
-                $stmt->bind_param("sssss", $staff_id_number, $full_name, $email, $department, $card_uid);
-                
-                if ($stmt->execute()) {
-                    $new_id = $stmt->insert_id;
-                    
-                    if (!empty($card_uid)) {
-                        $rfidStmt = $conn->prepare("
-                            INSERT INTO rfid_cards (card_uid, user_id, card_type, issued_date, expiry_date, status)
-                            VALUES (?, ?, 'staff', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'active')
-                        ");
-                        $rfidStmt->bind_param("si", $card_uid, $new_id);
-                        $rfidStmt->execute();
-                        $rfidStmt->close();
-                    }
-                    
-                    $success = "✅ Staff added successfully!";
-                    logAudit($_SESSION['admin_id'], 'Add Staff', "Added staff: $full_name ($staff_id_number)");
-                    header('Location: staff.php?success=1');
-                    exit();
-                } else {
-                    $error = "Failed to add staff: " . $stmt->error;
-                }
-                $stmt->close();
+            $stmt = $conn->prepare("
+                INSERT INTO staff_users (staff_id_number, full_name, email, department, created_at)
+                VALUES (?, ?, ?, ?, NOW())
+            ");
+            $stmt->bind_param("ssss", $staff_id_number, $full_name, $email, $department);
+            
+            if ($stmt->execute()) {
+                $new_id = $stmt->insert_id;
+                $success = "✅ Staff added successfully! Staff ID: $staff_id_number";
+                logAudit($_SESSION['admin_id'], 'Add Staff', "Added staff: $full_name ($staff_id_number)");
+                header('Location: staff.php?success=1');
+                exit();
+            } else {
+                $error = "Failed to add staff: " . $stmt->error;
             }
+            $stmt->close();
         }
         $check->close();
     }
 }
 
 // ============================================================
-// HANDLE UPDATE STAFF CARD UID
+// HANDLE REGISTER CARD FOR STAFF (SEPARATE FORM)
 // ============================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_card'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_card'])) {
     $staff_id = (int)$_POST['staff_id'];
     $card_uid = strtoupper(trim($_POST['card_uid'] ?? ''));
     
     if (empty($card_uid)) {
         $error = 'Please enter a Card UID.';
     } else {
+        // Check if card is already used
         $check = $conn->prepare("
-            SELECT user_id FROM rfid_cards 
-            WHERE card_uid = ? AND user_id != ? AND status = 'active'
+            SELECT card_uid FROM rfid_cards 
+            WHERE card_uid = ? AND status = 'active'
         ");
-        $check->bind_param("si", $card_uid, $staff_id);
+        $check->bind_param("s", $card_uid);
         $check->execute();
         if ($check->get_result()->num_rows > 0) {
             $error = 'Card UID is already assigned to someone else.';
         } else {
-            $stmt = $conn->prepare("UPDATE staff_users SET card_uid = ? WHERE staff_id = ?");
-            $stmt->bind_param("si", $card_uid, $staff_id);
+            // Check if staff already has a card
+            $staffCheck = $conn->prepare("SELECT card_uid FROM staff_users WHERE staff_id = ?");
+            $staffCheck->bind_param("i", $staff_id);
+            $staffCheck->execute();
+            $staffResult = $staffCheck->get_result();
+            $staffData = $staffResult->fetch_assoc();
+            $staffCheck->close();
             
-            if ($stmt->execute()) {
-                $cardCheck = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE user_id = ? AND card_type = 'staff'");
-                $cardCheck->bind_param("i", $staff_id);
-                $cardCheck->execute();
-                $exists = $cardCheck->get_result()->num_rows > 0;
-                $cardCheck->close();
+            if (!empty($staffData['card_uid'])) {
+                $error = 'This staff already has a card. Please remove the existing card first.';
+            } else {
+                // Update staff with card UID
+                $stmt = $conn->prepare("UPDATE staff_users SET card_uid = ? WHERE staff_id = ?");
+                $stmt->bind_param("si", $card_uid, $staff_id);
                 
-                if ($exists) {
-                    $rfidStmt = $conn->prepare("
-                        UPDATE rfid_cards SET card_uid = ?, status = 'active' 
-                        WHERE user_id = ? AND card_type = 'staff'
-                    ");
-                    $rfidStmt->bind_param("si", $card_uid, $staff_id);
-                } else {
+                if ($stmt->execute()) {
+                    // Insert into rfid_cards
                     $rfidStmt = $conn->prepare("
                         INSERT INTO rfid_cards (card_uid, user_id, card_type, issued_date, expiry_date, status)
                         VALUES (?, ?, 'staff', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'active')
                     ");
                     $rfidStmt->bind_param("si", $card_uid, $staff_id);
+                    $rfidStmt->execute();
+                    $rfidStmt->close();
+                    
+                    $success = "✅ Card UID registered successfully for staff!";
+                    logAudit($_SESSION['admin_id'], 'Register Staff Card', "Registered card $card_uid for staff ID: $staff_id");
+                    header('Location: staff.php?card_registered=1');
+                    exit();
+                } else {
+                    $error = "Failed to register card: " . $stmt->error;
                 }
-                $rfidStmt->execute();
-                $rfidStmt->close();
-                
-                $success = "✅ Card UID updated successfully!";
-                logAudit($_SESSION['admin_id'], 'Update Staff Card', "Updated card for staff ID: $staff_id to $card_uid");
-                header('Location: staff.php?card_updated=1');
-                exit();
-            } else {
-                $error = "Failed to update card: " . $stmt->error;
+                $stmt->close();
             }
-            $stmt->close();
         }
         $check->close();
     }
@@ -654,6 +632,20 @@ $nextStaffId = getNextStaffId($conn);
             color: #e5e7eb !important;
         }
         
+        .btn-success-custom {
+            background: #065f46 !important;
+            border: none !important;
+            color: #34d399 !important;
+            padding: 8px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .btn-success-custom:hover {
+            background: #0a7a5a !important;
+            color: #6ee7b7 !important;
+        }
+        
         .staff-actions {
             display: flex;
             justify-content: center;
@@ -1069,14 +1061,18 @@ $nextStaffId = getNextStaffId($conn);
                                 </div>
                             </div>
 
-                            <!-- CARD UID MODAL -->
+                            <!-- CARD UID MODAL - SEPARATE CARD REGISTRATION -->
                             <div class="modal fade" id="cardModal<?php echo $staff['staff_id']; ?>" tabindex="-1">
                                 <div class="modal-dialog modal-dialog-centered">
                                     <div class="modal-content">
                                         <div class="modal-header">
                                             <h5 class="modal-title">
                                                 <i class="fas fa-id-card me-2"></i>
-                                                Staff Card - <?php echo htmlspecialchars($staff['full_name']); ?>
+                                                <?php if (!empty($staff['card_uid'])): ?>
+                                                    Update Card - <?php echo htmlspecialchars($staff['full_name']); ?>
+                                                <?php else: ?>
+                                                    Register Card - <?php echo htmlspecialchars($staff['full_name']); ?>
+                                                <?php endif; ?>
                                             </h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                         </div>
@@ -1098,24 +1094,35 @@ $nextStaffId = getNextStaffId($conn);
                                                 <div class="text-muted small">
                                                     <?php echo htmlspecialchars($staff['staff_id_number']); ?>
                                                 </div>
+                                                <?php if (!empty($staff['card_uid'])): ?>
+                                                    <div class="mt-2">
+                                                        <span class="card-uid-badge has-card">
+                                                            <i class="fas fa-id-card me-1"></i>
+                                                            <?php echo htmlspecialchars($staff['card_uid']); ?>
+                                                        </span>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <div class="mt-2">
+                                                        <span class="card-uid-badge no-card">
+                                                            <i class="fas fa-times-circle me-1"></i>
+                                                            No Card Assigned
+                                                        </span>
+                                                    </div>
+                                                <?php endif; ?>
                                             </div>
                                             
                                             <hr>
                                             
                                             <form method="POST" action="">
                                                 <input type="hidden" name="staff_id" value="<?php echo $staff['staff_id']; ?>">
-                                                <input type="hidden" name="update_card" value="1">
+                                                <input type="hidden" name="register_card" value="1">
                                                 
-                                                <div class="mb-2">
-                                                    <label class="form-label">Current Card UID</label>
-                                                    <div class="form-control" style="background:#0d1220 !important;border:1px solid #1a2a4a !important;border-radius:10px;padding:10px 14px;color:#e5e7eb !important;">
-                                                        <?php if (!empty($staff['card_uid'])): ?>
-                                                            <span class="text-success"><i class="fas fa-check-circle me-1"></i> <?php echo htmlspecialchars($staff['card_uid']); ?></span>
-                                                        <?php else: ?>
-                                                            <span class="text-danger"><i class="fas fa-times-circle me-1"></i> No card assigned</span>
-                                                        <?php endif; ?>
+                                                <?php if (!empty($staff['card_uid'])): ?>
+                                                    <div class="alert alert-warning">
+                                                        <i class="fas fa-info-circle me-1"></i>
+                                                        This staff already has a card. Assigning a new card will replace the existing one.
                                                     </div>
-                                                </div>
+                                                <?php endif; ?>
                                                 
                                                 <?php if (!empty($availableCards)): ?>
                                                     <div class="mb-2">
@@ -1137,16 +1144,21 @@ $nextStaffId = getNextStaffId($conn);
                                                 <?php endif; ?>
                                                 
                                                 <div class="mb-2">
-                                                    <label class="form-label">New Card UID</label>
-                                                    <input type="text" class="form-control" name="card_uid" id="cardUid<?php echo $staff['staff_id']; ?>" placeholder="Enter new card UID">
+                                                    <label class="form-label">Card UID <span class="text-danger">*</span></label>
+                                                    <input type="text" class="form-control" name="card_uid" id="cardUid<?php echo $staff['staff_id']; ?>" placeholder="Enter card UID" required>
                                                     <div class="form-text text-muted small">
                                                         <i class="fas fa-info-circle me-1"></i>
                                                         Enter UID or click an available card above
                                                     </div>
                                                 </div>
                                                 
-                                                <button type="submit" class="btn btn-primary w-100">
-                                                    <i class="fas fa-save me-1"></i> Update Card
+                                                <button type="submit" class="btn btn-success-custom w-100">
+                                                    <i class="fas fa-save me-1"></i> 
+                                                    <?php if (!empty($staff['card_uid'])): ?>
+                                                        Update Card
+                                                    <?php else: ?>
+                                                        Register Card
+                                                    <?php endif; ?>
                                                 </button>
                                             </form>
                                         </div>
@@ -1198,27 +1210,9 @@ $nextStaffId = getNextStaffId($conn);
                             <input type="text" class="form-control" name="department" placeholder="e.g., Security, Admin, Maintenance">
                         </div>
                         
-                        <?php if (!empty($availableCards)): ?>
-                            <div class="mb-2">
-                                <label class="form-label">Available Cards (Click to auto-fill)</label>
-                                <div class="available-card-list" id="availableCardListAdd">
-                                    <?php foreach ($availableCards as $card): ?>
-                                        <span class="card-item-mini" data-uid="<?php echo $card['card_uid']; ?>" onclick="selectCard(this, 'cardUidAdd')">
-                                            <?php echo $card['card_uid']; ?>
-                                        </span>
-                                    <?php endforeach; ?>
-                                </div>
-                                <small class="text-muted">Click a card above to auto-fill the UID</small>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <div class="mb-2">
-                            <label class="form-label">Card UID</label>
-                            <input type="text" class="form-control" name="card_uid" id="cardUidAdd" placeholder="Enter card UID (optional)">
-                            <div class="form-text text-muted small">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Leave empty to add staff without card, or assign a card above
-                            </div>
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Staff will be added without a card. You can register a card later using the "Card" button.
                         </div>
                         
                         <button type="submit" class="btn btn-primary w-100">
