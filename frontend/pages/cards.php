@@ -8,7 +8,7 @@
  * WITH PROFILE PHOTO SUPPORT
  * WITH PRINT ID BUTTON
  * WITH DECRYPTION FOR VISITOR DATA
- * SEPARATE TABS: RESIDENT CARDS | VISITOR CARDS
+ * SEPARATE TABS: RESIDENT CARDS | VISITOR CARDS | STAFF CARDS
  */
 
 session_start();
@@ -133,7 +133,7 @@ if ($page < 1) $page = 1;
 $offset = ($page - 1) * $perPage;
 
 // ============================================================
-// GET RESIDENT CARDS WITH USER INFO - WITH DECRYPTION
+// GET RESIDENT CARDS WITH USER INFO
 // ============================================================
 $residentCards = [];
 $query = "
@@ -213,22 +213,21 @@ if ($result2) {
 }
 
 // ============================================================
-// GET STAFF CARDS
+// GET STAFF CARDS - FIXED (using staff_users table)
 // ============================================================
 $staffCards = [];
 $query3 = "
     SELECT 
         c.*,
-        u.full_name as user_name,
-        u.student_id,
-        u.room_number,
-        u.profile_photo,
-        rp.course,
-        rp.year_level,
-        rp.gender
+        su.full_name as user_name,
+        su.staff_id_number as student_id,
+        su.department as course,
+        su.avatar as profile_photo,
+        NULL as room_number,
+        NULL as year_level,
+        NULL as gender
     FROM rfid_cards c
-    LEFT JOIN users u ON c.user_id = u.user_id
-    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    LEFT JOIN staff_users su ON c.user_id = su.staff_id
     WHERE c.card_type = 'staff'
 ";
 
@@ -236,7 +235,7 @@ if (!empty($statusFilter)) {
     $query3 .= " AND c.status = '$statusFilter'";
 }
 if (!empty($searchFilter)) {
-    $query3 .= " AND (u.full_name LIKE '%$searchFilter%' OR c.card_uid LIKE '%$searchFilter%' OR u.student_id LIKE '%$searchFilter%')";
+    $query3 .= " AND (su.full_name LIKE '%$searchFilter%' OR c.card_uid LIKE '%$searchFilter%' OR su.staff_id_number LIKE '%$searchFilter%')";
 }
 
 $query3 .= " ORDER BY c.status = 'active' DESC, c.created_at DESC LIMIT $perPage OFFSET $offset";
@@ -1429,7 +1428,7 @@ if (isset($_SESSION['admin_id'])) {
                     </div>
 
                     <!-- ==========================================================
-                    STAFF CARDS TAB
+                    STAFF CARDS TAB - FIXED
                     ========================================================== -->
                     <div class="tab-pane fade <?php echo $activeTab == 'staff' ? 'show active' : ''; ?>" 
                          id="staff-tab" role="tabpanel">
@@ -1462,21 +1461,44 @@ if (isset($_SESSION['admin_id'])) {
                                             
                                             $display_name = $card['user_name'] ?? 'Unassigned';
                                             
+                                            // Get profile photo (from staff_users avatar)
+                                            $profile_photo = $card['profile_photo'] ?? null;
+                                            $has_profile_photo = false;
+                                            $profile_photo_path = null;
+                                            
+                                            if (!empty($profile_photo)) {
+                                                if (strpos($profile_photo, 'uploads/') === 0) {
+                                                    $full_path = '../../' . $profile_photo;
+                                                } else {
+                                                    $full_path = '../../uploads/staff_photos/' . $profile_photo;
+                                                }
+                                                
+                                                if (file_exists($full_path)) {
+                                                    $has_profile_photo = true;
+                                                    $profile_photo_path = $full_path;
+                                                }
+                                            }
+                                            
                                             // Get initials
                                             $parts = explode(' ', $display_name);
                                             $initials = '';
                                             foreach ($parts as $p) {
                                                 if (!empty($p)) $initials .= strtoupper($p[0]);
                                             }
-                                            $initials = substr($initials, 0, 2) ?: '?';
+                                            $initials = substr($initials, 0, 2) ?: 'ST';
                                         ?>
                                             <div class="col-md-6 col-lg-4">
                                                 <div class="card-item <?php echo $card['status']; ?>">
                                                     <div class="d-flex justify-content-between align-items-start">
                                                         <div class="d-flex align-items-center gap-2">
-                                                            <div class="profile-img-placeholder" style="background: #4a3a1a !important;">
-                                                                <?php echo $initials; ?>
-                                                            </div>
+                                                            <?php if ($has_profile_photo && !empty($card['user_name'])): ?>
+                                                                <img src="<?php echo $profile_photo_path; ?>" 
+                                                                     alt="<?php echo htmlspecialchars($display_name); ?>" 
+                                                                     class="profile-img"
+                                                                     onerror="this.onerror=null; this.parentNode.innerHTML='<div class=\'profile-img-placeholder\'>'+'<?php echo $initials; ?>'+'</div>'">
+                                                            <?php else: ?>
+                                                                <div class="profile-img-placeholder" style="background: #4a3a1a !important;"><?php echo $initials; ?></div>
+                                                            <?php endif; ?>
                                                             
                                                             <div>
                                                                 <div class="name">
@@ -1488,6 +1510,10 @@ if (isset($_SESSION['admin_id'])) {
                                                                 <div class="detail">
                                                                     <i class="fas fa-id-card me-1"></i>
                                                                     <?php echo htmlspecialchars($card['student_id'] ?? 'N/A'); ?>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-building me-1"></i>
+                                                                    <?php echo htmlspecialchars($card['course'] ?? 'N/A'); ?>
                                                                 </div>
                                                                 <div class="detail">
                                                                     <i class="fas fa-id-card me-1"></i>
