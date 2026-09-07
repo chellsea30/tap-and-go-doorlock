@@ -2,7 +2,7 @@
 /**
  * Tap-and-Go Doorlock - Staff Management
  * DARK MODE - WITH CARD UID - WITH PROFILE PHOTO - WITH PRINT ID
- * WITH EDIT, DELETE, ADD, AND PORTAL REGISTRATION
+ * WITH EDIT, DELETE, ADD, PORTAL REGISTRATION, AND PHOTO UPLOAD
  */
 
 session_start();
@@ -135,6 +135,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_staff'])) {
 }
 
 // ============================================================
+// HANDLE PHOTO UPLOAD
+// ============================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo'])) {
+    $staff_id = (int)$_POST['staff_id'];
+    
+    if (isset($_FILES['staff_photo']) && $_FILES['staff_photo']['error'] === UPLOAD_ERR_OK) {
+        $file = $_FILES['staff_photo'];
+        $file_name = $file['name'];
+        $file_tmp = $file['tmp_name'];
+        $file_size = $file['size'];
+        $file_error = $file['error'];
+        
+        // Validate file type
+        $allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        $file_type = mime_content_type($file_tmp);
+        
+        if (!in_array($file_type, $allowed)) {
+            $error = 'Only JPG, PNG, GIF, and WEBP images are allowed.';
+        } elseif ($file_size > 5 * 1024 * 1024) { // 5MB max
+            $error = 'File size too large. Maximum 5MB allowed.';
+        } else {
+            // Create upload directory if not exists
+            $upload_dir = '../../uploads/staff_photos/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+            
+            // Generate unique filename
+            $ext = pathinfo($file_name, PATHINFO_EXTENSION);
+            $new_filename = 'staff_' . $staff_id . '_' . time() . '.' . $ext;
+            $upload_path = $upload_dir . $new_filename;
+            
+            // Move uploaded file
+            if (move_uploaded_file($file_tmp, $upload_path)) {
+                // Delete old photo if exists
+                $stmt = $conn->prepare("SELECT avatar FROM staff_users WHERE staff_id = ?");
+                $stmt->bind_param("i", $staff_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $row = $result->fetch_assoc();
+                $stmt->close();
+                
+                if (!empty($row['avatar'])) {
+                    $old_file = '../../' . $row['avatar'];
+                    if (file_exists($old_file) && is_file($old_file)) {
+                        unlink($old_file);
+                    }
+                }
+                
+                // Update database with new photo path
+                $photo_path = 'uploads/staff_photos/' . $new_filename;
+                $stmt = $conn->prepare("UPDATE staff_users SET avatar = ? WHERE staff_id = ?");
+                $stmt->bind_param("si", $photo_path, $staff_id);
+                
+                if ($stmt->execute()) {
+                    $success = "✅ Profile photo uploaded successfully!";
+                    logAudit($_SESSION['admin_id'], 'Upload Staff Photo', "Uploaded photo for staff ID: $staff_id");
+                    header('Location: staff-info.php?photo_uploaded=1');
+                    exit();
+                } else {
+                    $error = "Failed to update database: " . $stmt->error;
+                }
+                $stmt->close();
+            } else {
+                $error = "Failed to upload file.";
+            }
+        }
+    } else {
+        $error = "Please select a file to upload.";
+    }
+}
+
+// ============================================================
 // HANDLE REGISTER CARD FOR STAFF
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_card'])) {
@@ -260,12 +333,20 @@ if (isset($_GET['set_password']) && is_numeric($_GET['set_password'])) {
 if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
     $delete_id = (int)$_GET['delete'];
     
-    $getCard = $conn->prepare("SELECT card_uid FROM staff_users WHERE staff_id = ?");
+    $getCard = $conn->prepare("SELECT card_uid, avatar FROM staff_users WHERE staff_id = ?");
     $getCard->bind_param("i", $delete_id);
     $getCard->execute();
     $cardResult = $getCard->get_result();
     $staffData = $cardResult->fetch_assoc();
     $getCard->close();
+    
+    // Delete avatar file
+    if (!empty($staffData['avatar'])) {
+        $avatar_path = '../../' . $staffData['avatar'];
+        if (file_exists($avatar_path) && is_file($avatar_path)) {
+            unlink($avatar_path);
+        }
+    }
     
     $stmt = $conn->prepare("DELETE FROM staff_users WHERE staff_id = ?");
     $stmt->bind_param("i", $delete_id);
@@ -382,6 +463,7 @@ $hasCardCount = 0;
 $noCardCount = 0;
 $hasPortalCount = 0;
 $noPortalCount = 0;
+$hasPhotoCount = 0;
 
 foreach ($staffList as $staff) {
     if (!empty($staff['card_uid'])) {
@@ -393,6 +475,9 @@ foreach ($staffList as $staff) {
         $hasPortalCount++;
     } else {
         $noPortalCount++;
+    }
+    if (!empty($staff['avatar'])) {
+        $hasPhotoCount++;
     }
 }
 
@@ -549,8 +634,8 @@ foreach ($staffList as $staff) {
         }
         .staff-avatar .has-photo-badge {
             position: absolute;
-            top: -5px;
-            right: -5px;
+            bottom: -2px;
+            right: -2px;
             background: #10b981;
             color: white;
             border-radius: 50%;
@@ -791,6 +876,23 @@ foreach ($staffList as $staff) {
             color: white !important;
         }
         
+        .btn-upload-photo {
+            background: rgba(59, 130, 246, 0.2) !important;
+            color: #93c5fd !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .btn-upload-photo:hover {
+            background: rgba(59, 130, 246, 0.3) !important;
+            color: #93c5fd !important;
+        }
+        
         .staff-actions {
             display: flex;
             justify-content: center;
@@ -921,6 +1023,40 @@ foreach ($staffList as $staff) {
             margin-bottom: 20px;
         }
         
+        /* PHOTO UPLOAD MODAL */
+        .photo-upload-modal .modal-content {
+            background: #131926 !important;
+            border-radius: 16px;
+            border: 1px solid #1a2a4a;
+        }
+        .photo-upload-modal .modal-header {
+            border-bottom: 1px solid #1a2a4a;
+        }
+        .photo-upload-modal .modal-footer {
+            border-top: 1px solid #1a2a4a;
+        }
+        .photo-upload-modal .modal-title {
+            color: #ffd700 !important;
+        }
+        .photo-upload-modal .form-control {
+            background: #0d1220 !important;
+            border: 1px solid #1a2a4a !important;
+            color: #e5e7eb !important;
+        }
+        .photo-upload-modal .form-control:focus {
+            border-color: #ffd700 !important;
+            box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15) !important;
+        }
+        .photo-preview-upload {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #1a2a4a;
+            margin: 0 auto 15px;
+            display: block;
+        }
+        
         /* ALERTS */
         .alert-success {
             background: rgba(16, 185, 129, 0.15) !important;
@@ -1030,6 +1166,7 @@ foreach ($staffList as $staff) {
                         <i class="fas fa-user-tie me-2" style="color: #ffd700;"></i>
                         Staff Management
                         <span class="badge bg-secondary ms-2"><?php echo $totalStaff; ?> total</span>
+                        <span class="badge bg-info ms-2"><?php echo $hasPhotoCount; ?> with photo</span>
                     </h1>
                     <div>
                         <span class="badge bg-success me-2">
@@ -1147,7 +1284,7 @@ foreach ($staffList as $staff) {
                                                      alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
                                                      onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
                                                 <span class="has-photo-badge">
-                                                    <i class="fas fa-check-circle"></i>
+                                                    <i class="fas fa-camera"></i>
                                                 </span>
                                             <?php else: ?>
                                                 <div class="no-photo"><?php echo $initials; ?></div>
@@ -1200,6 +1337,13 @@ foreach ($staffList as $staff) {
                                     
                                     <!-- Staff Actions -->
                                     <div class="staff-actions">
+                                        <button type="button" 
+                                                class="btn-upload-photo"
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#photoModal<?php echo $staff['staff_id']; ?>">
+                                            <i class="fas fa-camera me-1"></i> Photo
+                                        </button>
+                                        
                                         <?php if (!empty($staff['card_uid'])): ?>
                                             <a href="print-staff-id.php?uid=<?php echo $staff['card_uid']; ?>" 
                                                target="_blank" 
@@ -1209,12 +1353,63 @@ foreach ($staffList as $staff) {
                                         <?php endif; ?>
                                         
                                         <a href="?edit=<?php echo $staff['staff_id']; ?>" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-edit"></i> Edit
+                                            <i class="fas fa-edit"></i>
                                         </a>
                                         
                                         <a href="?delete=<?php echo $staff['staff_id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this staff?')">
                                             <i class="fas fa-trash"></i>
                                         </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PHOTO UPLOAD MODAL -->
+                            <div class="modal fade photo-upload-modal" id="photoModal<?php echo $staff['staff_id']; ?>" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">
+                                                <i class="fas fa-camera me-2"></i>
+                                                Upload Photo - <?php echo htmlspecialchars($staff['full_name']); ?>
+                                            </h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="" enctype="multipart/form-data">
+                                            <div class="modal-body">
+                                                <input type="hidden" name="staff_id" value="<?php echo $staff['staff_id']; ?>">
+                                                <input type="hidden" name="upload_photo" value="1">
+                                                
+                                                <div class="text-center mb-3">
+                                                    <?php if ($hasPhoto): ?>
+                                                        <img src="<?php echo $fullPhotoPath; ?>" 
+                                                             alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
+                                                             class="photo-preview-upload"
+                                                             onerror="this.style.display='none';">
+                                                        <p class="text-muted small">Current photo</p>
+                                                    <?php else: ?>
+                                                        <div class="photo-preview-upload" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea,#764ba2);font-size:48px;color:white;">
+                                                            <?php echo $initials; ?>
+                                                        </div>
+                                                        <p class="text-muted small">No photo yet</p>
+                                                    <?php endif; ?>
+                                                </div>
+                                                
+                                                <div class="mb-2">
+                                                    <label class="form-label">Select Photo <span class="text-danger">*</span></label>
+                                                    <input type="file" class="form-control" name="staff_photo" accept="image/*" required>
+                                                    <div class="form-text text-muted small">
+                                                        <i class="fas fa-info-circle me-1"></i>
+                                                        JPG, PNG, GIF, WEBP only. Max 5MB.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <button type="submit" class="btn btn-primary">
+                                                    <i class="fas fa-upload me-1"></i> Upload Photo
+                                                </button>
+                                            </div>
+                                        </form>
                                     </div>
                                 </div>
                             </div>
@@ -1405,6 +1600,8 @@ foreach ($staffList as $staff) {
                     <span><?php echo $hasCardCount; ?> with card, <?php echo $noCardCount; ?> without card</span>
                     <span class="mx-2">|</span>
                     <span><?php echo $hasPortalCount; ?> portal access</span>
+                    <span class="mx-2">|</span>
+                    <span><?php echo $hasPhotoCount; ?> with photo</span>
                 </footer>
             </main>
         </div>
@@ -1505,6 +1702,22 @@ foreach ($staffList as $staff) {
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
+        
+        // ============================================================
+        // PHOTO UPLOAD - AUTO CLOSE MODAL AFTER SUCCESS
+        // ============================================================
+        <?php if (isset($_GET['photo_uploaded']) && $_GET['photo_uploaded'] == 1): ?>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Close any open modals
+            const modals = document.querySelectorAll('.modal.show');
+            modals.forEach(modal => {
+                const instance = bootstrap.Modal.getInstance(modal);
+                if (instance) {
+                    instance.hide();
+                }
+            });
+        });
+        <?php endif; ?>
     </script>
 </body>
 </html>
