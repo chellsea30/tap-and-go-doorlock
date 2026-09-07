@@ -8,6 +8,7 @@
  * WITH PROFILE PHOTO SUPPORT
  * WITH PRINT ID BUTTON
  * WITH DECRYPTION FOR VISITOR DATA
+ * SEPARATE TABS: RESIDENT CARDS | VISITOR CARDS
  */
 
 session_start();
@@ -97,6 +98,7 @@ if (isset($_GET['delete']) && !empty($_GET['delete'])) {
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 $searchFilter = isset($_GET['search']) ? trim($_GET['search']) : '';
 $typeFilter = isset($_GET['type']) ? $_GET['type'] : '';
+$activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'resident';
 
 // ============================================================
 // GET TOTAL CARDS FOR PAGINATION
@@ -131,9 +133,9 @@ if ($page < 1) $page = 1;
 $offset = ($page - 1) * $perPage;
 
 // ============================================================
-// GET CARDS WITH USER INFO - WITH DECRYPTION
+// GET RESIDENT CARDS WITH USER INFO - WITH DECRYPTION
 // ============================================================
-$cards = [];
+$residentCards = [];
 $query = "
     SELECT 
         c.*,
@@ -147,17 +149,14 @@ $query = "
     FROM rfid_cards c
     LEFT JOIN users u ON c.user_id = u.user_id
     LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE 1=1
+    WHERE c.card_type = 'resident'
 ";
 
 if (!empty($statusFilter)) {
     $query .= " AND c.status = '$statusFilter'";
 }
-if (!empty($typeFilter)) {
-    $query .= " AND c.card_type = '$typeFilter'";
-}
 if (!empty($searchFilter)) {
-    $query .= " AND (u.full_name LIKE '%$searchFilter%' OR c.card_uid LIKE '%$searchFilter%' OR u.student_id LIKE '%$searchFilter%' OR c.visitor_name LIKE '%$searchFilter%')";
+    $query .= " AND (u.full_name LIKE '%$searchFilter%' OR c.card_uid LIKE '%$searchFilter%' OR u.student_id LIKE '%$searchFilter%')";
 }
 
 $query .= " ORDER BY c.status = 'active' DESC, c.created_at DESC LIMIT $perPage OFFSET $offset";
@@ -165,15 +164,87 @@ $query .= " ORDER BY c.status = 'active' DESC, c.created_at DESC LIMIT $perPage 
 $result = $conn->query($query);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
+        $residentCards[] = $row;
+    }
+}
+
+// ============================================================
+// GET VISITOR CARDS WITH DECRYPTION
+// ============================================================
+$visitorCards = [];
+$query2 = "
+    SELECT 
+        c.*,
+        u.full_name as user_name,
+        u.student_id,
+        u.room_number,
+        u.profile_photo,
+        rp.course,
+        rp.year_level,
+        rp.gender
+    FROM rfid_cards c
+    LEFT JOIN users u ON c.user_id = u.user_id
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    WHERE c.card_type = 'visitor'
+";
+
+if (!empty($statusFilter)) {
+    $query2 .= " AND c.status = '$statusFilter'";
+}
+if (!empty($searchFilter)) {
+    $query2 .= " AND (u.full_name LIKE '%$searchFilter%' OR c.card_uid LIKE '%$searchFilter%' OR u.student_id LIKE '%$searchFilter%' OR c.visitor_name LIKE '%$searchFilter%')";
+}
+
+$query2 .= " ORDER BY c.status = 'active' DESC, c.created_at DESC LIMIT $perPage OFFSET $offset";
+
+$result2 = $conn->query($query2);
+if ($result2) {
+    while ($row = $result2->fetch_assoc()) {
         // ============================================================
         // ✅ DECRYPT VISITOR DATA FOR DISPLAY
         // ============================================================
-        if ($row['card_type'] == 'visitor' && $row['is_encrypted'] == 1) {
+        if ($row['is_encrypted'] == 1) {
             $row['visitor_name'] = safeDecryptData($row['visitor_name'] ?? '');
             $row['visitor_phone'] = safeDecryptData($row['visitor_phone'] ?? '');
             $row['purpose_of_visit'] = safeDecryptData($row['purpose_of_visit'] ?? '');
         }
-        $cards[] = $row;
+        $visitorCards[] = $row;
+    }
+}
+
+// ============================================================
+// GET STAFF CARDS
+// ============================================================
+$staffCards = [];
+$query3 = "
+    SELECT 
+        c.*,
+        u.full_name as user_name,
+        u.student_id,
+        u.room_number,
+        u.profile_photo,
+        rp.course,
+        rp.year_level,
+        rp.gender
+    FROM rfid_cards c
+    LEFT JOIN users u ON c.user_id = u.user_id
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    WHERE c.card_type = 'staff'
+";
+
+if (!empty($statusFilter)) {
+    $query3 .= " AND c.status = '$statusFilter'";
+}
+if (!empty($searchFilter)) {
+    $query3 .= " AND (u.full_name LIKE '%$searchFilter%' OR c.card_uid LIKE '%$searchFilter%' OR u.student_id LIKE '%$searchFilter%')";
+}
+
+$query3 .= " ORDER BY c.status = 'active' DESC, c.created_at DESC LIMIT $perPage OFFSET $offset";
+
+$result3 = $conn->query($query3);
+if ($result3) {
+    while ($row = $result3->fetch_assoc()) {
+        $staffCards[] = $row;
     }
 }
 
@@ -531,6 +602,41 @@ if (isset($_SESSION['admin_id'])) {
         }
         
         /* ============================================================
+           DARK TABS
+           ============================================================ */
+        .nav-tabs {
+            border-bottom: 2px solid #1a2a4a !important;
+        }
+        .nav-tabs .nav-link {
+            color: #808090 !important;
+            background: transparent !important;
+            border: none !important;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px 8px 0 0 !important;
+            transition: all 0.3s ease;
+        }
+        .nav-tabs .nav-link:hover {
+            color: #e0e0e0 !important;
+            background: rgba(255,255,255,0.05) !important;
+        }
+        .nav-tabs .nav-link.active {
+            color: #ffd700 !important;
+            background: transparent !important;
+            border-bottom: 3px solid #ffd700 !important;
+        }
+        .nav-tabs .nav-link .badge {
+            font-size: 10px;
+            margin-left: 6px;
+            padding: 2px 8px;
+            border-radius: 20px;
+        }
+        .tab-content {
+            padding-top: 15px;
+        }
+        
+        /* ============================================================
            DARK BUTTONS
            ============================================================ */
         .btn-primary {
@@ -738,6 +844,22 @@ if (isset($_SESSION['admin_id'])) {
         }
         
         /* ============================================================
+           TAB COUNTER BADGES
+           ============================================================ */
+        .tab-badge-resident {
+            background: #065f46 !important;
+            color: #6ee7b7 !important;
+        }
+        .tab-badge-visitor {
+            background: #1a3a6a !important;
+            color: #93c5fd !important;
+        }
+        .tab-badge-staff {
+            background: #4a3a1a !important;
+            color: #fbbf24 !important;
+        }
+        
+        /* ============================================================
            BORDER & MISC
            ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
@@ -790,6 +912,10 @@ if (isset($_SESSION['admin_id'])) {
                 height: 32px;
                 font-size: 11px;
             }
+            .nav-tabs .nav-link {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
         }
         
         /* ============================================================
@@ -818,6 +944,8 @@ if (isset($_SESSION['admin_id'])) {
             .stat-card { background: #f8f9fa !important; border: 1px solid #ddd !important; }
             .card-item { background: #f8f9fa !important; border: 1px solid #ddd !important; }
             body { background: #fff !important; color: #000 !important; }
+            .nav-tabs .nav-link { color: #333 !important; }
+            .nav-tabs .nav-link.active { color: #1a3a6a !important; border-bottom-color: #1a3a6a !important; }
         }
     </style>
 </head>
@@ -962,15 +1090,6 @@ if (isset($_SESSION['admin_id'])) {
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Card Type</label>
-                            <select class="form-select" name="type">
-                                <option value="">All Types</option>
-                                <option value="resident" <?php echo $typeFilter == 'resident' ? 'selected' : ''; ?>>Resident</option>
-                                <option value="staff" <?php echo $typeFilter == 'staff' ? 'selected' : ''; ?>>Staff</option>
-                                <option value="visitor" <?php echo $typeFilter == 'visitor' ? 'selected' : ''; ?>>Visitor</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label">Search</label>
                             <input type="text" class="form-control" name="search" placeholder="Name, UID, or Student ID" value="<?php echo htmlspecialchars($searchFilter); ?>">
                         </div>
@@ -979,208 +1098,454 @@ if (isset($_SESSION['admin_id'])) {
                                 <i class="fas fa-filter me-1"></i> Apply
                             </button>
                         </div>
-                        <!-- Hidden fields to preserve pagination -->
                         <input type="hidden" name="per_page" value="<?php echo $perPage; ?>">
                         <input type="hidden" name="page" value="1">
+                        <input type="hidden" name="tab" value="<?php echo $activeTab; ?>">
                     </form>
                 </div>
 
                 <!-- ============================================================
-                CARDS LIST
+                TABS: RESIDENT | VISITOR | STAFF
                 ============================================================ -->
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5><i class="fas fa-list me-2"></i>Card List</h5>
-                        <span class="text-muted small">
-                            <?php if ($totalCards > 0): ?>
-                                Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalCards); ?> of <?php echo $totalCards; ?> cards
-                            <?php else: ?>
-                                0 cards
-                            <?php endif; ?>
-                        </span>
-                    </div>
-                    <div class="card-body">
-                        <?php if (empty($cards)): ?>
-                            <p class="text-muted text-center py-3">
-                                <i class="fas fa-id-card fa-2x d-block mb-2"></i>
-                                No RFID cards found
-                            </p>
-                        <?php else: ?>
-                            <div class="row g-2">
-                                <?php foreach ($cards as $card): 
-                                    $days_left = 0;
-                                    $expiring_soon = false;
-                                    if ($card['expiry_date']) {
-                                        $days_left = ceil((strtotime($card['expiry_date']) - time()) / 86400);
-                                        $expiring_soon = $days_left >= 0 && $days_left <= 3 && $card['status'] == 'active';
-                                    }
-                                    
-                                    // Determine display name
-                                    if ($card['card_type'] == 'visitor' && !empty($card['visitor_name'])) {
-                                        $display_name = $card['visitor_name'];
-                                    } else {
-                                        $display_name = $card['user_name'] ?? 'Unassigned';
-                                    }
-                                    
-                                    // For visitors: tenant is the user they are visiting
-                                    if ($card['card_type'] == 'visitor') {
-                                        $tenant_name = $card['user_name'] ?? 'Unknown Tenant';
-                                    } else {
-                                        $tenant_name = null;
-                                    }
-                                    
-                                    // Get profile photo
-                                    $profile_photo = $card['profile_photo'] ?? null;
-                                    $has_profile_photo = false;
-                                    $profile_photo_path = null;
-                                    
-                                    if (!empty($profile_photo)) {
-                                        if (strpos($profile_photo, 'uploads/') === 0) {
-                                            $full_path = '../../' . $profile_photo;
-                                        } else {
-                                            $full_path = '../../uploads/resident_photos/' . $profile_photo;
-                                        }
-                                        
-                                        if (file_exists($full_path)) {
-                                            $has_profile_photo = true;
-                                            $profile_photo_path = $full_path;
-                                        }
-                                    }
-                                    
-                                    // Get initials
-                                    $parts = explode(' ', $display_name);
-                                    $initials = '';
-                                    foreach ($parts as $p) {
-                                        if (!empty($p)) $initials .= strtoupper($p[0]);
-                                    }
-                                    $initials = substr($initials, 0, 2) ?: '?';
-                                ?>
-                                    <div class="col-md-6 col-lg-4">
-                                        <div class="card-item <?php echo $card['status']; ?>">
-                                            <div class="d-flex justify-content-between align-items-start">
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <!-- Profile Photo / Avatar -->
-                                                    <?php if ($has_profile_photo && !empty($card['user_name']) && $card['card_type'] != 'visitor'): ?>
-                                                        <img src="<?php echo $profile_photo_path; ?>" 
-                                                             alt="<?php echo htmlspecialchars($display_name); ?>" 
-                                                             class="profile-img"
-                                                             onerror="this.onerror=null; this.parentNode.innerHTML='<div class=\'profile-img-placeholder\'>'+'<?php echo $initials; ?>'+'</div>'">
-                                                    <?php else: ?>
-                                                        <div class="profile-img-placeholder"><?php echo $initials; ?></div>
-                                                    <?php endif; ?>
-                                                    
-                                                    <div>
-                                                        <div class="name">
-                                                            <?php echo htmlspecialchars($display_name); ?>
-                                                            <?php if ($card['card_type'] == 'visitor' && $card['is_encrypted'] == 1): ?>
-                                                                <span class="encryption-badge ms-1">
-                                                                    <i class="fas fa-lock"></i>
-                                                                </span>
-                                                            <?php endif; ?>
-                                                            <span class="status-badge status-<?php echo $card['status']; ?> ms-1">
-                                                                <?php echo ucfirst($card['status']); ?>
-                                                            </span>
-                                                        </div>
-                                                        <div class="detail">
-                                                            <i class="fas fa-tag me-1"></i>
-                                                            <?php echo ucfirst($card['card_type']); ?>
-                                                            <?php if (!empty($card['room_number'])): ?>
-                                                                <span class="mx-1">•</span>
-                                                                <i class="fas fa-door-open me-1"></i>
-                                                                Room <?php echo htmlspecialchars($card['room_number']); ?>
-                                                            <?php endif; ?>
-                                                            <?php if ($card['card_type'] == 'visitor' && $tenant_name): ?>
-                                                                <span class="mx-1">•</span>
-                                                                <i class="fas fa-user me-1"></i>
-                                                                <strong>Visiting:</strong> <?php echo htmlspecialchars($tenant_name); ?>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                        <div class="detail">
-                                                            <i class="fas fa-phone me-1"></i>
-                                                            <?php 
-                                                                if ($card['card_type'] == 'visitor') {
-                                                                    echo htmlspecialchars($card['visitor_phone'] ?? 'N/A');
-                                                                } else {
-                                                                    echo htmlspecialchars($card['student_id'] ?? 'N/A');
-                                                                }
-                                                            ?>
-                                                            <?php if (!empty($card['course']) && $card['card_type'] != 'visitor'): ?>
-                                                                <span class="mx-1">•</span>
-                                                                <?php echo htmlspecialchars($card['course']); ?>
-                                                            <?php endif; ?>
-                                                            <?php if (!empty($card['year_level']) && $card['card_type'] != 'visitor'): ?>
-                                                                <span class="mx-1">•</span>
-                                                                Year <?php echo htmlspecialchars($card['year_level']); ?>
-                                                            <?php endif; ?>
-                                                            <?php if ($card['card_type'] == 'visitor' && !empty($card['purpose_of_visit'])): ?>
-                                                                <span class="mx-1">•</span>
-                                                                <i class="fas fa-info-circle me-1"></i>
-                                                                <?php echo htmlspecialchars($card['purpose_of_visit']); ?>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                        <div class="detail">
-                                                            <i class="fas fa-id-card me-1"></i>
-                                                            <span class="uid"><?php echo htmlspecialchars($card['card_uid']); ?></span>
-                                                            <span class="mx-1">|</span>
-                                                            <i class="far fa-calendar-alt me-1"></i>
-                                                            Issued: <?php echo date('M d, Y', strtotime($card['issued_date'])); ?>
-                                                            <?php if ($card['expiry_date']): ?>
-                                                                <span class="mx-1">|</span>
-                                                                <i class="fas fa-hourglass-end me-1"></i>
-                                                                Expires: <?php echo date('M d, Y', strtotime($card['expiry_date'])); ?>
-                                                                <?php 
-                                                                    if ($days_left < 0 && $card['status'] != 'expired'): 
-                                                                ?>
-                                                                    <span class="badge badge-expired ms-1">EXPIRED</span>
-                                                                <?php elseif ($expiring_soon): ?>
-                                                                    <span class="badge badge-expiring-soon ms-1">
-                                                                        <?php echo $days_left; ?> day<?php echo $days_left > 1 ? 's' : ''; ?>
-                                                                    </span>
-                                                                <?php elseif ($card['status'] == 'expired'): ?>
-                                                                    <span class="badge badge-expired ms-1">EXPIRED</span>
-                                                                <?php endif; ?>
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link <?php echo $activeTab == 'resident' ? 'active' : ''; ?>" 
+                           href="?tab=resident<?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                            <i class="fas fa-user me-1"></i> Residents
+                            <span class="badge tab-badge-resident"><?php echo $stats['resident']; ?></span>
+                        </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link <?php echo $activeTab == 'visitor' ? 'active' : ''; ?>" 
+                           href="?tab=visitor<?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                            <i class="fas fa-user-friends me-1"></i> Visitors
+                            <span class="badge tab-badge-visitor"><?php echo $stats['visitor']; ?></span>
+                        </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <a class="nav-link <?php echo $activeTab == 'staff' ? 'active' : ''; ?>" 
+                           href="?tab=staff<?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                            <i class="fas fa-user-tie me-1"></i> Staff
+                            <span class="badge tab-badge-staff"><?php echo $stats['staff']; ?></span>
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- ============================================================
+                TAB CONTENT
+                ============================================================ -->
+                <div class="tab-content">
+                    
+                    <!-- ==========================================================
+                    RESIDENT CARDS TAB
+                    ========================================================== -->
+                    <div class="tab-pane fade <?php echo $activeTab == 'resident' ? 'show active' : ''; ?>" 
+                         id="resident-tab" role="tabpanel">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5><i class="fas fa-user me-2"></i>Resident Cards</h5>
+                                <span class="text-muted small">
+                                    <?php if (count($residentCards) > 0): ?>
+                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, count($residentCards)); ?> of <?php echo count($residentCards); ?> resident cards
+                                    <?php else: ?>
+                                        0 resident cards
+                                    <?php endif; ?>
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($residentCards)): ?>
+                                    <p class="text-muted text-center py-3">
+                                        <i class="fas fa-id-card fa-2x d-block mb-2"></i>
+                                        No resident RFID cards found
+                                    </p>
+                                <?php else: ?>
+                                    <div class="row g-2">
+                                        <?php foreach ($residentCards as $card): 
+                                            $days_left = 0;
+                                            $expiring_soon = false;
+                                            if ($card['expiry_date']) {
+                                                $days_left = ceil((strtotime($card['expiry_date']) - time()) / 86400);
+                                                $expiring_soon = $days_left >= 0 && $days_left <= 3 && $card['status'] == 'active';
+                                            }
+                                            
+                                            $display_name = $card['user_name'] ?? 'Unassigned';
+                                            
+                                            // Get profile photo
+                                            $profile_photo = $card['profile_photo'] ?? null;
+                                            $has_profile_photo = false;
+                                            $profile_photo_path = null;
+                                            
+                                            if (!empty($profile_photo)) {
+                                                if (strpos($profile_photo, 'uploads/') === 0) {
+                                                    $full_path = '../../' . $profile_photo;
+                                                } else {
+                                                    $full_path = '../../uploads/resident_photos/' . $profile_photo;
+                                                }
+                                                
+                                                if (file_exists($full_path)) {
+                                                    $has_profile_photo = true;
+                                                    $profile_photo_path = $full_path;
+                                                }
+                                            }
+                                            
+                                            // Get initials
+                                            $parts = explode(' ', $display_name);
+                                            $initials = '';
+                                            foreach ($parts as $p) {
+                                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                                            }
+                                            $initials = substr($initials, 0, 2) ?: '?';
+                                        ?>
+                                            <div class="col-md-6 col-lg-4">
+                                                <div class="card-item <?php echo $card['status']; ?>">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <?php if ($has_profile_photo && !empty($card['user_name'])): ?>
+                                                                <img src="<?php echo $profile_photo_path; ?>" 
+                                                                     alt="<?php echo htmlspecialchars($display_name); ?>" 
+                                                                     class="profile-img"
+                                                                     onerror="this.onerror=null; this.parentNode.innerHTML='<div class=\'profile-img-placeholder\'>'+'<?php echo $initials; ?>'+'</div>'">
                                                             <?php else: ?>
-                                                                <span class="badge badge-secondary ms-1">No expiry</span>
+                                                                <div class="profile-img-placeholder"><?php echo $initials; ?></div>
                                                             <?php endif; ?>
+                                                            
+                                                            <div>
+                                                                <div class="name">
+                                                                    <?php echo htmlspecialchars($display_name); ?>
+                                                                    <span class="status-badge status-<?php echo $card['status']; ?> ms-1">
+                                                                        <?php echo ucfirst($card['status']); ?>
+                                                                    </span>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-id-card me-1"></i>
+                                                                    <?php echo htmlspecialchars($card['student_id'] ?? 'N/A'); ?>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-door-open me-1"></i>
+                                                                    Room <?php echo htmlspecialchars($card['room_number'] ?? 'N/A'); ?>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-graduation-cap me-1"></i>
+                                                                    <?php echo htmlspecialchars($card['course'] ?? 'N/A'); ?>
+                                                                    <span class="text-muted small">
+                                                                        (<?php echo htmlspecialchars($card['year_level'] ?? 'N/A'); ?>)
+                                                                    </span>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-id-card me-1"></i>
+                                                                    <span class="uid"><?php echo htmlspecialchars($card['card_uid']); ?></span>
+                                                                    <span class="mx-1">|</span>
+                                                                    <i class="far fa-calendar-alt me-1"></i>
+                                                                    Issued: <?php echo date('M d, Y', strtotime($card['issued_date'])); ?>
+                                                                    <?php if ($card['expiry_date']): ?>
+                                                                        <span class="mx-1">|</span>
+                                                                        <i class="fas fa-hourglass-end me-1"></i>
+                                                                        Expires: <?php echo date('M d, Y', strtotime($card['expiry_date'])); ?>
+                                                                        <?php if ($expiring_soon): ?>
+                                                                            <span class="badge badge-expiring-soon ms-1">
+                                                                                <?php echo $days_left; ?> day<?php echo $days_left > 1 ? 's' : ''; ?>
+                                                                            </span>
+                                                                        <?php endif; ?>
+                                                                    <?php else: ?>
+                                                                        <span class="badge badge-secondary ms-1">No expiry</span>
+                                                                    <?php endif; ?>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="d-flex flex-column gap-1">
+                                                            <?php if ($card['status'] == 'active'): ?>
+                                                                <a href="?deactivate=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
+                                                                   class="btn btn-warning btn-sm-custom"
+                                                                   onclick="return confirm('Deactivate this card?')">
+                                                                    <i class="fas fa-pause me-1"></i> Deactivate
+                                                                </a>
+                                                            <?php elseif ($card['status'] == 'deactivated' || $card['status'] == 'expired'): ?>
+                                                                <a href="?activate=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
+                                                                   class="btn btn-success btn-sm-custom"
+                                                                   onclick="return confirm('Activate this card?')">
+                                                                    <i class="fas fa-play me-1"></i> Activate
+                                                                </a>
+                                                            <?php endif; ?>
+                                                            <a href="print-card.php?uid=<?php echo $card['card_uid']; ?>" 
+                                                               target="_blank" 
+                                                               class="btn btn-info btn-sm-custom">
+                                                                <i class="fas fa-print me-1"></i> Print ID
+                                                            </a>
+                                                            <a href="?delete=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
+                                                               class="btn btn-danger btn-sm-custom"
+                                                               onclick="return confirm('Delete this card permanently?')">
+                                                                <i class="fas fa-trash me-1"></i> Delete
+                                                            </a>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div class="d-flex flex-column gap-1">
-                                                    <?php if ($card['status'] == 'active'): ?>
-                                                        <a href="?deactivate=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
-                                                           class="btn btn-warning btn-sm-custom"
-                                                           onclick="return confirm('Deactivate this card?')">
-                                                            <i class="fas fa-pause me-1"></i> Deactivate
-                                                        </a>
-                                                    <?php elseif ($card['status'] == 'deactivated' || $card['status'] == 'expired'): ?>
-                                                        <a href="?activate=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
-                                                           class="btn btn-success btn-sm-custom"
-                                                           onclick="return confirm('Activate this card?')">
-                                                            <i class="fas fa-play me-1"></i> Activate
-                                                        </a>
-                                                    <?php endif; ?>
-                                                    
-                                                    <!-- PRINT ID BUTTON -->
-                                                    <a href="print-card.php?uid=<?php echo $card['card_uid']; ?>" 
-                                                       target="_blank" 
-                                                       class="btn btn-info btn-sm-custom">
-                                                        <i class="fas fa-print me-1"></i> Print ID
-                                                    </a>
-                                                    
-                                                    <a href="?delete=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
-                                                       class="btn btn-danger btn-sm-custom"
-                                                       onclick="return confirm('Delete this card permanently?')">
-                                                        <i class="fas fa-trash me-1"></i> Delete
-                                                    </a>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ==========================================================
+                    VISITOR CARDS TAB
+                    ========================================================== -->
+                    <div class="tab-pane fade <?php echo $activeTab == 'visitor' ? 'show active' : ''; ?>" 
+                         id="visitor-tab" role="tabpanel">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5>
+                                    <i class="fas fa-user-friends me-2"></i>Visitor Cards
+                                    <span class="encryption-badge ms-2">
+                                        <i class="fas fa-lock"></i> Encrypted
+                                    </span>
+                                </h5>
+                                <span class="text-muted small">
+                                    <?php if (count($visitorCards) > 0): ?>
+                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, count($visitorCards)); ?> of <?php echo count($visitorCards); ?> visitor cards
+                                    <?php else: ?>
+                                        0 visitor cards
+                                    <?php endif; ?>
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($visitorCards)): ?>
+                                    <p class="text-muted text-center py-3">
+                                        <i class="fas fa-id-card fa-2x d-block mb-2"></i>
+                                        No visitor RFID cards found
+                                    </p>
+                                <?php else: ?>
+                                    <div class="row g-2">
+                                        <?php foreach ($visitorCards as $card): 
+                                            $days_left = 0;
+                                            $expiring_soon = false;
+                                            if ($card['expiry_date']) {
+                                                $days_left = ceil((strtotime($card['expiry_date']) - time()) / 86400);
+                                                $expiring_soon = $days_left >= 0 && $days_left <= 3 && $card['status'] == 'active';
+                                            }
+                                            
+                                            $display_name = $card['visitor_name'] ?? 'Unassigned';
+                                            $tenant_name = $card['user_name'] ?? 'Unknown Tenant';
+                                            
+                                            // Get initials
+                                            $parts = explode(' ', $display_name);
+                                            $initials = '';
+                                            foreach ($parts as $p) {
+                                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                                            }
+                                            $initials = substr($initials, 0, 2) ?: '?';
+                                        ?>
+                                            <div class="col-md-6 col-lg-4">
+                                                <div class="card-item <?php echo $card['status']; ?>">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <div class="profile-img-placeholder" style="background: #1a3a6a !important;">
+                                                                <?php echo $initials; ?>
+                                                                <?php if ($card['is_encrypted'] == 1): ?>
+                                                                    <span class="encryption-badge ms-1" style="font-size: 6px; position: absolute; bottom: -2px; right: -2px;">
+                                                                        <i class="fas fa-lock"></i>
+                                                                    </span>
+                                                                <?php endif; ?>
+                                                            </div>
+                                                            
+                                                            <div>
+                                                                <div class="name">
+                                                                    <?php echo htmlspecialchars($display_name); ?>
+                                                                    <?php if ($card['is_encrypted'] == 1): ?>
+                                                                        <span class="encryption-badge ms-1">
+                                                                            <i class="fas fa-lock"></i>
+                                                                        </span>
+                                                                    <?php endif; ?>
+                                                                    <span class="status-badge status-<?php echo $card['status']; ?> ms-1">
+                                                                        <?php echo ucfirst($card['status']); ?>
+                                                                    </span>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-phone me-1"></i>
+                                                                    <?php echo htmlspecialchars($card['visitor_phone'] ?? 'N/A'); ?>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-user me-1"></i>
+                                                                    <strong>Visiting:</strong> <?php echo htmlspecialchars($tenant_name); ?>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-info-circle me-1"></i>
+                                                                    <?php echo htmlspecialchars($card['purpose_of_visit'] ?? 'N/A'); ?>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-id-card me-1"></i>
+                                                                    <span class="uid"><?php echo htmlspecialchars($card['card_uid']); ?></span>
+                                                                    <span class="mx-1">|</span>
+                                                                    <i class="far fa-calendar-alt me-1"></i>
+                                                                    Issued: <?php echo date('M d, Y', strtotime($card['issued_date'])); ?>
+                                                                    <?php if ($card['expiry_date']): ?>
+                                                                        <span class="mx-1">|</span>
+                                                                        <i class="fas fa-hourglass-end me-1"></i>
+                                                                        Expires: <?php echo date('M d, Y', strtotime($card['expiry_date'])); ?>
+                                                                        <?php if ($expiring_soon): ?>
+                                                                            <span class="badge badge-expiring-soon ms-1">
+                                                                                <?php echo $days_left; ?> day<?php echo $days_left > 1 ? 's' : ''; ?>
+                                                                            </span>
+                                                                        <?php endif; ?>
+                                                                    <?php else: ?>
+                                                                        <span class="badge badge-secondary ms-1">No expiry</span>
+                                                                    <?php endif; ?>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="d-flex flex-column gap-1">
+                                                            <?php if ($card['status'] == 'active'): ?>
+                                                                <a href="?deactivate=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
+                                                                   class="btn btn-warning btn-sm-custom"
+                                                                   onclick="return confirm('Deactivate this card?')">
+                                                                    <i class="fas fa-pause me-1"></i> Deactivate
+                                                                </a>
+                                                            <?php elseif ($card['status'] == 'deactivated' || $card['status'] == 'expired'): ?>
+                                                                <a href="?activate=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
+                                                                   class="btn btn-success btn-sm-custom"
+                                                                   onclick="return confirm('Activate this card?')">
+                                                                    <i class="fas fa-play me-1"></i> Activate
+                                                                </a>
+                                                            <?php endif; ?>
+                                                            <a href="print-card.php?uid=<?php echo $card['card_uid']; ?>" 
+                                                               target="_blank" 
+                                                               class="btn btn-info btn-sm-custom">
+                                                                <i class="fas fa-print me-1"></i> Print ID
+                                                            </a>
+                                                            <a href="?delete=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
+                                                               class="btn btn-danger btn-sm-custom"
+                                                               onclick="return confirm('Delete this card permanently?')">
+                                                                <i class="fas fa-trash me-1"></i> Delete
+                                                            </a>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        <?php endforeach; ?>
                                     </div>
-                                <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
-                        <?php endif; ?>
+                        </div>
                     </div>
-                </div>
+
+                    <!-- ==========================================================
+                    STAFF CARDS TAB
+                    ========================================================== -->
+                    <div class="tab-pane fade <?php echo $activeTab == 'staff' ? 'show active' : ''; ?>" 
+                         id="staff-tab" role="tabpanel">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5><i class="fas fa-user-tie me-2"></i>Staff Cards</h5>
+                                <span class="text-muted small">
+                                    <?php if (count($staffCards) > 0): ?>
+                                        Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, count($staffCards)); ?> of <?php echo count($staffCards); ?> staff cards
+                                    <?php else: ?>
+                                        0 staff cards
+                                    <?php endif; ?>
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($staffCards)): ?>
+                                    <p class="text-muted text-center py-3">
+                                        <i class="fas fa-id-card fa-2x d-block mb-2"></i>
+                                        No staff RFID cards found
+                                    </p>
+                                <?php else: ?>
+                                    <div class="row g-2">
+                                        <?php foreach ($staffCards as $card): 
+                                            $days_left = 0;
+                                            $expiring_soon = false;
+                                            if ($card['expiry_date']) {
+                                                $days_left = ceil((strtotime($card['expiry_date']) - time()) / 86400);
+                                                $expiring_soon = $days_left >= 0 && $days_left <= 3 && $card['status'] == 'active';
+                                            }
+                                            
+                                            $display_name = $card['user_name'] ?? 'Unassigned';
+                                            
+                                            // Get initials
+                                            $parts = explode(' ', $display_name);
+                                            $initials = '';
+                                            foreach ($parts as $p) {
+                                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                                            }
+                                            $initials = substr($initials, 0, 2) ?: '?';
+                                        ?>
+                                            <div class="col-md-6 col-lg-4">
+                                                <div class="card-item <?php echo $card['status']; ?>">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <div class="profile-img-placeholder" style="background: #4a3a1a !important;">
+                                                                <?php echo $initials; ?>
+                                                            </div>
+                                                            
+                                                            <div>
+                                                                <div class="name">
+                                                                    <?php echo htmlspecialchars($display_name); ?>
+                                                                    <span class="status-badge status-<?php echo $card['status']; ?> ms-1">
+                                                                        <?php echo ucfirst($card['status']); ?>
+                                                                    </span>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-id-card me-1"></i>
+                                                                    <?php echo htmlspecialchars($card['student_id'] ?? 'N/A'); ?>
+                                                                </div>
+                                                                <div class="detail">
+                                                                    <i class="fas fa-id-card me-1"></i>
+                                                                    <span class="uid"><?php echo htmlspecialchars($card['card_uid']); ?></span>
+                                                                    <span class="mx-1">|</span>
+                                                                    <i class="far fa-calendar-alt me-1"></i>
+                                                                    Issued: <?php echo date('M d, Y', strtotime($card['issued_date'])); ?>
+                                                                    <?php if ($card['expiry_date']): ?>
+                                                                        <span class="mx-1">|</span>
+                                                                        <i class="fas fa-hourglass-end me-1"></i>
+                                                                        Expires: <?php echo date('M d, Y', strtotime($card['expiry_date'])); ?>
+                                                                        <?php if ($expiring_soon): ?>
+                                                                            <span class="badge badge-expiring-soon ms-1">
+                                                                                <?php echo $days_left; ?> day<?php echo $days_left > 1 ? 's' : ''; ?>
+                                                                            </span>
+                                                                        <?php endif; ?>
+                                                                    <?php else: ?>
+                                                                        <span class="badge badge-secondary ms-1">No expiry</span>
+                                                                    <?php endif; ?>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="d-flex flex-column gap-1">
+                                                            <?php if ($card['status'] == 'active'): ?>
+                                                                <a href="?deactivate=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
+                                                                   class="btn btn-warning btn-sm-custom"
+                                                                   onclick="return confirm('Deactivate this card?')">
+                                                                    <i class="fas fa-pause me-1"></i> Deactivate
+                                                                </a>
+                                                            <?php elseif ($card['status'] == 'deactivated' || $card['status'] == 'expired'): ?>
+                                                                <a href="?activate=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
+                                                                   class="btn btn-success btn-sm-custom"
+                                                                   onclick="return confirm('Activate this card?')">
+                                                                    <i class="fas fa-play me-1"></i> Activate
+                                                                </a>
+                                                            <?php endif; ?>
+                                                            <a href="print-card.php?uid=<?php echo $card['card_uid']; ?>" 
+                                                               target="_blank" 
+                                                               class="btn btn-info btn-sm-custom">
+                                                                <i class="fas fa-print me-1"></i> Print ID
+                                                            </a>
+                                                            <a href="?delete=<?php echo $card['card_uid']; ?>&<?php echo http_build_query($_GET); ?>" 
+                                                               class="btn btn-danger btn-sm-custom"
+                                                               onclick="return confirm('Delete this card permanently?')">
+                                                                <i class="fas fa-trash me-1"></i> Delete
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- end tab-content -->
 
                 <!-- ============================================================
                 PAGINATION WITH SHOW ENTRIES
@@ -1198,7 +1563,6 @@ if (isset($_SESSION['admin_id'])) {
                         </div>
                         <div class="col-md-6">
                             <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-                                <!-- Per Page Selector -->
                                 <div class="per-page-selector d-flex align-items-center gap-1">
                                     <label>Show:</label>
                                     <select onchange="changePerPage(this.value)">
@@ -1210,16 +1574,15 @@ if (isset($_SESSION['admin_id'])) {
                                     </select>
                                 </div>
                                 
-                                <!-- Pagination -->
                                 <nav aria-label="Page navigation">
                                     <ul class="pagination justify-content-end mb-0">
                                         <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=1<?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <a class="page-link" href="?page=1<?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?><?php echo '&tab=' . $activeTab; ?>">
                                                 <i class="fas fa-angle-double-left"></i>
                                             </a>
                                         </li>
                                         <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?><?php echo '&tab=' . $activeTab; ?>">
                                                 <i class="fas fa-angle-left"></i>
                                             </a>
                                         </li>
@@ -1233,7 +1596,7 @@ if (isset($_SESSION['admin_id'])) {
                                         for ($i = $startPage; $i <= $endPage; $i++):
                                         ?>
                                             <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?><?php echo '&tab=' . $activeTab; ?>">
                                                     <?php echo $i; ?>
                                                 </a>
                                             </li>
@@ -1243,12 +1606,12 @@ if (isset($_SESSION['admin_id'])) {
                                         <?php endif; ?>
                                         
                                         <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?><?php echo '&tab=' . $activeTab; ?>">
                                                 <i class="fas fa-angle-right"></i>
                                             </a>
                                         </li>
                                         <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($typeFilter) ? '&type=' . urlencode($typeFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?><?php echo '&tab=' . $activeTab; ?>">
                                                 <i class="fas fa-angle-double-right"></i>
                                             </a>
                                         </li>
@@ -1266,6 +1629,15 @@ if (isset($_SESSION['admin_id'])) {
                 <div class="text-center text-muted small mt-2">
                     <i class="fas fa-database me-1"></i>
                     Total: <?php echo $stats['total']; ?> RFID cards registered
+                    <span class="mx-1">|</span>
+                    <i class="fas fa-user me-1 text-success"></i>
+                    <?php echo $stats['resident']; ?> Residents
+                    <span class="mx-1">|</span>
+                    <i class="fas fa-user-friends me-1 text-info"></i>
+                    <?php echo $stats['visitor']; ?> Visitors
+                    <span class="mx-1">|</span>
+                    <i class="fas fa-user-tie me-1 text-warning"></i>
+                    <?php echo $stats['staff']; ?> Staff
                     <span class="mx-1">|</span>
                     <i class="fas fa-check-circle me-1 text-success"></i>
                     <?php echo $stats['active']; ?> active
