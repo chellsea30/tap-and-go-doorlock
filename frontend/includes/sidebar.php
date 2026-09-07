@@ -5,6 +5,7 @@
  * WITH RESIDENTS REPORT - PERMANENT STORAGE (NO DELETE)
  * WITH CHART REPORT - PIE CHART FOR COURSE & YEAR LEVEL
  * REPORTS MOVED TO OTHERS SUBMENU
+ * FIXED: Added staff-card.php to Staff submenu
  */
 ?>
 
@@ -566,7 +567,7 @@ SIDEBAR OVERLAY - for mobile close
                 </a>
             </li>
             
-            <!-- ===== STAFF ===== -->
+            <!-- ===== STAFF (with staff-card.php) ===== -->
             <li class="nav-item">
                 <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'active' : ''; ?>" 
                    href="#staffMenu" 
@@ -577,7 +578,7 @@ SIDEBAR OVERLAY - for mobile close
                     <i class="fas fa-chevron-down"></i>
                     <?php
                         $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM staff_users WHERE is_active = 1");
+                        $result = $conn->query("SELECT COUNT(*) as count FROM staff_users");
                         $row = $result->fetch_assoc();
                         $staffCount = $row['count'] ?? 0;
                     ?>
@@ -588,7 +589,18 @@ SIDEBAR OVERLAY - for mobile close
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-info.php' ? 'active' : ''; ?>" href="staff-info.php">
                             <i class="fas fa-address-card"></i> Staff Info
                         </a>
-                    
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-card.php' ? 'active' : ''; ?>" href="staff-card.php">
+                            <i class="fas fa-id-card"></i> Staff Cards
+                            <?php
+                                $result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE card_type = 'staff' AND status = 'active'");
+                                $row = $result->fetch_assoc();
+                                $staffCardsCount = $row['count'] ?? 0;
+                            ?>
+                            <span class="badge bg-success rounded-pill"><?php echo $staffCardsCount; ?></span>
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-logs.php' ? 'active' : ''; ?>" href="staff-logs.php">
                             <i class="fas fa-clock"></i> Access Logs
