@@ -6,6 +6,7 @@
  * WITH CUSTOM STATISTICS (Inside/Outside/Visitors)
  * WITH COURSE & YEAR LEVEL PIE CHART (CSS-BASED)
  * WITH RESIDENTS OUTSIDE SECTION
+ * FIXED: Total Registered Residents (Excluding Visitors)
  */
 
 // Start session
@@ -29,7 +30,7 @@ $conn = getDBConnection();
 // GET DASHBOARD STATISTICS
 // ============================================================
 $stats = [
-    'total_residents' => 0,          // Total registered residents
+    'total_residents' => 0,          // Total registered residents (EXCLUDING visitors)
     'active_cards' => 0,             // Total active cards
     'today_access' => 0,             // Total access today
     'unauthorized_today' => 0,       // Total unauthorized today
@@ -43,8 +44,14 @@ $stats = [
     'max_per_room' => 7
 ];
 
-// 1. Total Registered Residents (ALL registered, regardless of status)
-$result = $conn->query("SELECT COUNT(*) as count FROM users");
+// 1. Total Registered Residents (EXCLUDING visitors and deleted)
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM users 
+    WHERE status = 'active' 
+    AND room_number IS NOT NULL 
+    AND room_number != ''
+");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['total_residents'] = (int)$row['count'];
 }
@@ -93,6 +100,7 @@ $result = $conn->query("
         )
     WHERE u.status = 'active'
     AND u.room_number IS NOT NULL
+    AND u.room_number != ''
 ");
 if ($result) {
     while ($row = $result->fetch_assoc()) {
@@ -312,6 +320,7 @@ $result = $conn->query("
         )
     WHERE u.status = 'active'
     AND u.room_number IS NOT NULL
+    AND u.room_number != ''
     AND al.access_type = 'exit'
     ORDER BY al.timestamp DESC
 ");
@@ -1089,7 +1098,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 STATS CARDS (CUSTOMIZED)
                 ============================================================ -->
                 <div class="row g-3 mb-4">
-                    <!-- Total Registered Residents -->
+                    <!-- Total Registered Residents (FIXED - Excluding Visitors) -->
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #667eea;"><i class="fas fa-users"></i></div>
