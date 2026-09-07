@@ -6,7 +6,7 @@
  * WITH CUSTOM STATISTICS (Inside/Outside/Visitors)
  * WITH COURSE & YEAR LEVEL PIE CHART (CSS-BASED)
  * WITH RESIDENTS OUTSIDE SECTION
- * WITH AUTO-REFRESH (No need to reload page)
+ * FIXED: Total Registered Residents (Excluding Visitors)
  */
 
 // Start session
@@ -940,7 +940,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                     <h1 class="h2" style="color:#e0e0e0 !important;">
                         Dashboard
                         <?php if ($stats['pending_alerts'] > 0): ?>
-                            <span class="badge bg-danger ms-2 pulse-badge" id="pendingAlertBadge">
+                            <span class="badge bg-danger ms-2 pulse-badge">
                                 <i class="fas fa-exclamation-circle me-1"></i>
                                 <?php echo $stats['pending_alerts']; ?>
                             </span>
@@ -961,7 +961,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 WARNING NOTIFICATION BAR
                 ============================================================ -->
                 <?php if ($stats['critical_alerts'] > 0): ?>
-                <div class="warning-bar danger" id="criticalAlertBar">
+                <div class="warning-bar danger">
                     <div class="d-flex align-items-center">
                         <span class="warning-icon pulse-red" style="font-size:24px; margin-right:10px;">🚨</span>
                         <div>
@@ -969,13 +969,13 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 <i class="fas fa-exclamation-triangle me-1"></i>
                                 CRITICAL ALERT!
                             </span>
-                            <span class="text-muted ms-2" id="criticalAlertText">
+                            <span class="text-muted ms-2">
                                 <?php echo $stats['critical_alerts']; ?> unauthorized access <?php echo $stats['critical_alerts'] > 1 ? 'attempts' : 'attempt'; ?> detected
                             </span>
                         </div>
                     </div>
                     <div>
-                        <span class="warning-count" id="criticalAlertCount"><?php echo $stats['critical_alerts']; ?></span>
+                        <span class="warning-count"><?php echo $stats['critical_alerts']; ?></span>
                         <span class="text-muted ms-2">pending</span>
                         <a href="alerts.php" class="btn btn-sm btn-danger ms-2">
                             <i class="fas fa-eye me-1"></i> View Alerts
@@ -983,7 +983,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                     </div>
                 </div>
                 <?php elseif ($stats['pending_alerts'] > 0): ?>
-                <div class="warning-bar" id="pendingAlertBar">
+                <div class="warning-bar">
                     <div class="d-flex align-items-center">
                         <span class="warning-icon" style="font-size:24px; margin-right:10px;">⚠️</span>
                         <div>
@@ -991,13 +991,13 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 <i class="fas fa-bell me-1"></i>
                                 New Alerts
                             </span>
-                            <span class="text-muted ms-2" id="pendingAlertText">
+                            <span class="text-muted ms-2">
                                 <?php echo $stats['pending_alerts']; ?> pending alert<?php echo $stats['pending_alerts'] > 1 ? 's' : ''; ?> need your attention
                             </span>
                         </div>
                     </div>
                     <div>
-                        <span class="warning-count" id="pendingAlertCount"><?php echo $stats['pending_alerts']; ?></span>
+                        <span class="warning-count"><?php echo $stats['pending_alerts']; ?></span>
                         <span class="text-muted ms-2">pending</span>
                         <a href="alerts.php" class="btn btn-sm btn-warning ms-2">
                             <i class="fas fa-eye me-1"></i> View Alerts
@@ -1010,7 +1010,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 UNAUTHORIZED ACCESS ALERT CARD
                 ============================================================ -->
                 <?php if ($showAlert && $latestUnauthorized !== null): ?>
-                <div class="row g-3 mb-4" id="unauthorizedAlertCard">
+                <div class="row g-3 mb-4">
                     <div class="col-12">
                         <div class="card alert-card border-danger">
                             <div class="card-header bg-danger text-white">
@@ -1097,13 +1097,13 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 <!-- ============================================================
                 STATS CARDS (CUSTOMIZED)
                 ============================================================ -->
-                <div class="row g-3 mb-4" id="statsContainer">
+                <div class="row g-3 mb-4">
                     <!-- Total Registered Residents (FIXED - Excluding Visitors) -->
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #667eea;"><i class="fas fa-users"></i></div>
                             <div>
-                                <div class="stat-number" id="stat_total_residents"><?php echo $stats['total_residents']; ?></div>
+                                <div class="stat-number"><?php echo $stats['total_residents']; ?></div>
                                 <div class="stat-label">Total Registered Residents</div>
                             </div>
                         </div>
@@ -1114,7 +1114,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #10b981;"><i class="fas fa-id-card"></i></div>
                             <div>
-                                <div class="stat-number" id="stat_active_cards"><?php echo $stats['active_cards']; ?></div>
+                                <div class="stat-number"><?php echo $stats['active_cards']; ?></div>
                                 <div class="stat-label">Total Active Cards</div>
                             </div>
                         </div>
@@ -1125,7 +1125,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #f59e0b;"><i class="fas fa-sign-in-alt"></i></div>
                             <div>
-                                <div class="stat-number" id="stat_today_access"><?php echo $stats['today_access']; ?></div>
+                                <div class="stat-number"><?php echo $stats['today_access']; ?></div>
                                 <div class="stat-label">Today's Access</div>
                             </div>
                         </div>
@@ -1138,7 +1138,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 <i class="fas <?php echo $stats['unauthorized_today'] > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle'; ?>"></i>
                             </div>
                             <div>
-                                <div class="stat-number <?php echo $stats['unauthorized_today'] > 0 ? 'text-danger' : ''; ?>" id="stat_unauthorized_today">
+                                <div class="stat-number <?php echo $stats['unauthorized_today'] > 0 ? 'text-danger' : ''; ?>">
                                     <?php echo $stats['unauthorized_today']; ?>
                                 </div>
                                 <div class="stat-label">Unauthorized Today</div>
@@ -1153,13 +1153,13 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 <!-- ============================================================
                 RESIDENT & VISITOR STATUS CARDS
                 ============================================================ -->
-                <div class="row g-3 mb-4" id="statusContainer">
+                <div class="row g-3 mb-4">
                     <!-- Total Residents Inside -->
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #34d399;"><i class="fas fa-door-open"></i></div>
                             <div>
-                                <div class="stat-number text-success" id="stat_residents_inside"><?php echo $stats['residents_inside']; ?></div>
+                                <div class="stat-number text-success"><?php echo $stats['residents_inside']; ?></div>
                                 <div class="stat-label">Residents Inside Rooms</div>
                             </div>
                         </div>
@@ -1170,7 +1170,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #f87171;"><i class="fas fa-door-closed"></i></div>
                             <div>
-                                <div class="stat-number text-danger" id="stat_residents_outside"><?php echo $stats['residents_outside']; ?></div>
+                                <div class="stat-number text-danger"><?php echo $stats['residents_outside']; ?></div>
                                 <div class="stat-label">Residents Outside</div>
                             </div>
                         </div>
@@ -1181,7 +1181,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #8b5cf6;"><i class="fas fa-user-friends"></i></div>
                             <div>
-                                <div class="stat-number" id="stat_total_visitors"><?php echo $stats['total_visitors']; ?></div>
+                                <div class="stat-number"><?php echo $stats['total_visitors']; ?></div>
                                 <div class="stat-label">Total Visitors Today</div>
                             </div>
                         </div>
@@ -1192,7 +1192,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #3b82f6;"><i class="fas fa-user-check"></i></div>
                             <div>
-                                <div class="stat-number text-primary" id="stat_visitors_inside"><?php echo $stats['visitors_inside']; ?></div>
+                                <div class="stat-number text-primary"><?php echo $stats['visitors_inside']; ?></div>
                                 <div class="stat-label">Visitors Inside</div>
                             </div>
                         </div>
@@ -1212,7 +1212,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                     <i class="fas fa-eye me-1"></i> View All Alerts
                                 </a>
                             </div>
-                            <div class="card-body" id="alertsContainer">
+                            <div class="card-body">
                                 <?php foreach ($latestAlerts as $alert): 
                                     $isCritical = $alert['delivery_status'] == 'pending' && $alert['alert_type'] == 'unauthorized';
                                     $displayName = !empty($alert['display_name']) ? $alert['display_name'] : 'Unknown';
@@ -1259,7 +1259,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h5><i class="fas fa-bed me-2"></i>Room Occupancy <span class="text-muted small">(Max 7 per room)</span></h5>
-                                <span class="text-muted small" id="roomTotalOccupancy">
+                                <span class="text-muted small">
                                     <?php 
                                         $totalOccupied = 0;
                                         $totalCapacity = 5 * 7;
@@ -1271,7 +1271,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 </span>
                             </div>
                             <div class="card-body">
-                                <div class="row g-3" id="roomsContainer">
+                                <div class="row g-3">
                                     <?php foreach ($roomData as $room): 
                                         $count = $room['count'];
                                         $isFull = $count >= 7;
@@ -1279,7 +1279,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                         $isEmpty = $count == 0;
                                         $statusClass = $isFull ? 'full' : ($isPartial ? 'partial' : 'available');
                                     ?>
-                                    <div class="col-md-6 col-lg-4" data-room="<?php echo $room['room_number']; ?>">
+                                    <div class="col-md-6 col-lg-4">
                                         <div class="room-card">
                                             <div class="d-flex justify-content-between align-items-start">
                                                 <div>
@@ -1347,7 +1347,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 <h5>
                                     <i class="fas fa-door-closed me-2" style="color: #f87171;"></i>
                                     Residents Outside 
-                                    <span class="badge bg-danger ms-2" id="outsideCount"><?php echo count($outsideResidents); ?></span>
+                                    <span class="badge bg-danger ms-2"><?php echo count($outsideResidents); ?></span>
                                 </h5>
                                 <span class="text-muted small">
                                     <i class="fas fa-clock me-1"></i>
@@ -1355,7 +1355,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 </span>
                             </div>
                             <div class="card-body">
-                                <div id="outsideContainer">
                                 <?php if (empty($outsideResidents)): ?>
                                     <div class="text-center text-muted py-4">
                                         <i class="fas fa-check-circle fa-2x d-block mb-2 text-success"></i>
@@ -1439,7 +1438,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                         Auto-updates every 10 seconds
                                     </div>
                                 <?php endif; ?>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -1456,7 +1454,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 <a href="announcements.php" class="btn btn-sm btn-outline-primary">View All</a>
                             </div>
                             <div class="card-body">
-                                <div id="announcementsContainer">
                                 <?php if (empty($announcements)): ?>
                                     <div class="text-center text-muted py-3">
                                         <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
@@ -1494,7 +1491,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                         <?php endforeach; ?>
                                     </div>
                                 <?php endif; ?>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -1510,7 +1506,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 <h5><i class="fas fa-chart-pie me-2"></i>Course Distribution</h5>
                             </div>
                             <div class="card-body">
-                                <div id="coursePieContainer">
                                 <?php 
                                 // Calculate colors and totals for pie
                                 $courseColors = ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6', '#06b6d4'];
@@ -1555,7 +1550,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                     </div>
                                 </div>
                                 <?php endif; ?>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -1571,7 +1565,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 <h5><i class="fas fa-chart-pie me-2"></i>Year Level Distribution</h5>
                             </div>
                             <div class="card-body">
-                                <div id="yearPieContainer">
                                 <?php 
                                 $yearColors = ['#10b981', '#667eea', '#f59e0b', '#ef4444', '#8b5cf6'];
                                 $yearTotal = 0;
@@ -1615,7 +1608,6 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                     </div>
                                 </div>
                                 <?php endif; ?>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -1699,330 +1691,22 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         }
 
         // ============================================================
-        // AUTO-REFRESH DASHBOARD DATA (NO PAGE RELOAD)
+        // CHECK NEW ALERTS
         // ============================================================
-        
-        function refreshDashboardData() {
-            fetch('api/dashboard_data.php')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Update Statistics
-                        updateStats(data.stats);
-                        
-                        // Update Room Occupancy
-                        updateRooms(data.rooms);
-                        
-                        // Update Outside Residents
-                        updateOutsideResidents(data.outside_residents);
-                        
-                        // Update Alerts
-                        updateAlerts(data.alerts);
-                        
-                        // Update Announcements
-                        updateAnnouncements(data.announcements);
-                        
-                        // Update Last Update Time
-                        document.getElementById('lastUpdate').textContent = 'Updated: ' + data.current_time;
-                    }
-                })
-                .catch(error => {
-                    console.log('Refresh error:', error);
-                });
-        }
-
-        // Update Statistics Cards
-        function updateStats(stats) {
-            const statIds = {
-                'total_residents': 'stat_total_residents',
-                'active_cards': 'stat_active_cards',
-                'today_access': 'stat_today_access',
-                'unauthorized_today': 'stat_unauthorized_today',
-                'residents_inside': 'stat_residents_inside',
-                'residents_outside': 'stat_residents_outside',
-                'total_visitors': 'stat_total_visitors',
-                'visitors_inside': 'stat_visitors_inside'
-            };
-            
-            for (const [key, id] of Object.entries(statIds)) {
-                const element = document.getElementById(id);
-                if (element && stats[key] !== undefined) {
-                    element.textContent = stats[key];
-                }
-            }
-            
-            // Update pending alerts badge
-            const pendingBadge = document.getElementById('pendingAlertBadge');
-            if (pendingBadge && stats.pending_alerts !== undefined) {
-                pendingBadge.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i> ' + stats.pending_alerts;
-            }
-            
-            // Update critical alerts
-            const criticalCount = document.getElementById('criticalAlertCount');
-            if (criticalCount && stats.critical_alerts !== undefined) {
-                criticalCount.textContent = stats.critical_alerts;
-            }
-            
-            const criticalText = document.getElementById('criticalAlertText');
-            if (criticalText && stats.critical_alerts !== undefined) {
-                criticalText.textContent = stats.critical_alerts + ' unauthorized access ' + (stats.critical_alerts > 1 ? 'attempts' : 'attempt') + ' detected';
-            }
-            
-            // Update pending alerts text
-            const pendingAlertText = document.getElementById('pendingAlertText');
-            if (pendingAlertText && stats.pending_alerts !== undefined) {
-                pendingAlertText.textContent = stats.pending_alerts + ' pending alert' + (stats.pending_alerts > 1 ? 's' : '') + ' need your attention';
-            }
-            
-            const pendingAlertCount = document.getElementById('pendingAlertCount');
-            if (pendingAlertCount && stats.pending_alerts !== undefined) {
-                pendingAlertCount.textContent = stats.pending_alerts;
-            }
-            
-            // Update room total occupancy
-            const roomTotal = document.getElementById('roomTotalOccupancy');
-            if (roomTotal && stats.total_occupied !== undefined && stats.total_capacity !== undefined) {
-                roomTotal.textContent = stats.total_occupied + ' / ' + stats.total_capacity + ' occupied';
-            }
-        }
-
-        // Update Room Occupancy
-        function updateRooms(rooms) {
-            if (!rooms) return;
-            
-            const roomCards = document.querySelectorAll('[data-room]');
-            roomCards.forEach((card, index) => {
-                if (index < rooms.length) {
-                    const room = rooms[index];
-                    const countSpan = card.querySelector('.room-count');
-                    const slotsSpan = card.querySelector('.badge.bg-light.text-dark');
-                    const statusBadge = card.querySelector('.badge.ms-1');
-                    const occupantContainer = card.querySelector('.room-occupants');
-                    const roomTitle = card.querySelector('.room-title');
-                    
-                    if (countSpan) {
-                        countSpan.textContent = room.count;
-                        countSpan.className = 'room-count ' + (room.count >= 7 ? 'full' : (room.count > 0 ? 'partial' : 'available'));
-                    }
-                    
-                    if (slotsSpan) {
-                        slotsSpan.textContent = (7 - room.count) + ' slots';
-                    }
-                    
-                    if (statusBadge) {
-                        if (room.count >= 7) {
-                            statusBadge.className = 'badge bg-danger ms-1';
-                            statusBadge.textContent = 'Full';
-                        } else if (room.count > 0) {
-                            statusBadge.className = 'badge bg-warning ms-1';
-                            statusBadge.textContent = 'Partial';
-                        } else {
-                            statusBadge.className = 'badge bg-success ms-1';
-                            statusBadge.textContent = 'Available';
-                        }
-                    }
-                    
-                    // Update FULL badge
-                    if (roomTitle) {
-                        const existingBadge = roomTitle.querySelector('.room-full-badge');
-                        if (room.count >= 7) {
-                            if (!existingBadge) {
-                                const badge = document.createElement('span');
-                                badge.className = 'room-full-badge ms-1';
-                                badge.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>FULL';
-                                roomTitle.appendChild(badge);
-                            }
-                        } else {
-                            if (existingBadge) existingBadge.remove();
-                        }
-                    }
-                    
-                    // Update occupants
-                    if (occupantContainer) {
-                        if (room.count === 0 || !room.occupants || room.occupants.length === 0) {
-                            occupantContainer.innerHTML = `
-                                <div class="room-empty">
-                                    <i class="fas fa-bed fa-2x d-block mb-1"></i>
-                                    No occupants
-                                </div>
-                            `;
-                        } else {
-                            let html = '';
-                            room.occupants.forEach(occupant => {
-                                const lastEntry = occupant.last_entry ? new Date(occupant.last_entry).toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) : 'N/A';
-                                html += `
-                                    <div class="occupant-item">
-                                        <span>
-                                            <span class="status-dot inside" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#34d399; margin-right:6px;"></span>
-                                            ${occupant.full_name}
-                                            <span class="text-muted small ms-1">(${occupant.student_id || 'N/A'})</span>
-                                        </span>
-                                        <span class="text-muted small">
-                                            <i class="fas fa-clock me-1"></i>
-                                            ${lastEntry}
-                                        </span>
-                                    </div>
-                                `;
-                            });
-                            occupantContainer.innerHTML = html;
-                        }
-                    }
-                }
-            });
-        }
-
-        // Update Residents Outside
-        function updateOutsideResidents(outsideData) {
-            const outsideContainer = document.getElementById('outsideContainer');
-            const outsideCount = document.getElementById('outsideCount');
-            
-            if (!outsideContainer) return;
-            
-            if (outsideData && outsideData.length > 0) {
-                let html = `
-                    <div class="table-responsive">
-                        <table class="table table-dark table-hover" style="background: #111827 !important; border-color: #1a2a4a !important;">
-                            <thead>
-                                <tr style="border-color: #1a2a4a !important;">
-                                    <th style="color: #808090; font-size: 12px;">#</th>
-                                    <th style="color: #808090; font-size: 12px;">Resident</th>
-                                    <th style="color: #808090; font-size: 12px;">Room</th>
-                                    <th style="color: #808090; font-size: 12px;">Course / Year</th>
-                                    <th style="color: #808090; font-size: 12px;">Last Exit</th>
-                                    <th style="color: #808090; font-size: 12px;">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-                
-                outsideData.forEach((resident, index) => {
-                    const initials = resident.full_name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2) || '?';
-                    const lastExit = resident.last_exit ? new Date(resident.last_exit).toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ', ' + new Date(resident.last_exit).toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'}) : 'N/A';
-                    html += `
-                        <tr style="border-color: #1a2a4a !important;">
-                            <td style="color: #808090; font-size: 13px;">${index + 1}</td>
-                            <td>
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="profile-img-placeholder" style="background: #7a2a2a !important; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:white;">
-                                        ${initials}
-                                    </div>
-                                    <div>
-                                        <div style="color: #e0e0e0; font-weight: 500; font-size: 14px;">${resident.full_name}</div>
-                                        <div style="color: #606070; font-size: 11px;">${resident.student_id || 'N/A'}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge badge-room">
-                                    <i class="fas fa-door-open me-1"></i>
-                                    Room ${resident.room_number}
-                                </span>
-                            </td>
-                            <td style="color: #b0b0c0; font-size: 13px;">
-                                ${resident.course || 'N/A'}
-                                <span class="text-muted small">(${resident.year_level || 'N/A'})</span>
-                            </td>
-                            <td style="color: #b0b0c0; font-size: 13px;">
-                                <i class="far fa-clock me-1 text-warning"></i>
-                                ${lastExit}
-                            </td>
-                            <td>
-                                <span class="badge badge-denied">
-                                    <i class="fas fa-door-closed me-1"></i>
-                                    Outside
-                                </span>
-                            </td>
-                        </tr>
-                    `;
-                });
-                
-                html += `
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="text-muted small mt-2">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Showing ${outsideData.length} resident(s) currently outside
-                        <span class="mx-1">|</span>
-                        <i class="fas fa-sync-alt me-1"></i>
-                        Auto-updates every 10 seconds
-                    </div>
-                `;
-                
-                outsideContainer.innerHTML = html;
-                
-                if (outsideCount) {
-                    outsideCount.textContent = outsideData.length;
-                }
-            } else {
-                outsideContainer.innerHTML = `
-                    <div class="text-center text-muted py-4">
-                        <i class="fas fa-check-circle fa-2x d-block mb-2 text-success"></i>
-                        <p class="mb-0">All residents are currently inside their rooms.</p>
-                        <small class="text-muted">No residents have exited yet today.</small>
-                    </div>
-                `;
-                if (outsideCount) {
-                    outsideCount.textContent = '0';
-                }
-            }
-        }
-
-        // Update Alerts (placeholder - complex update)
-        function updateAlerts(alerts) {
-            // Alert updates are complex - just refresh the page if needed
-            // Or we can update the alert items
-        }
-
-        // Update Announcements (placeholder)
-        function updateAnnouncements(announcements) {
-            // Similar to alerts
-        }
-
-        // ============================================================
-        // AUTO-REFRESH EVERY 10 SECONDS
-        // ============================================================
-        // Initial refresh after page load
-        document.addEventListener('DOMContentLoaded', function() {
-            // First refresh after 3 seconds
-            setTimeout(refreshDashboardData, 3000);
-        });
-
-        // Then every 10 seconds
-        setInterval(refreshDashboardData, 10000);
-
-        // Also refresh when tab becomes visible
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden) {
-                refreshDashboardData();
-            }
-        });
-
-        // ============================================================
-        // CHECK NEW ALERTS (REALTIME)
-        // ============================================================
-        let previousAlertCount = <?php echo $stats['pending_alerts']; ?>;
-
-        function checkRealtimeAlerts() {
+        function checkNewAlerts() {
             fetch('api/check_alerts.php')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.new_alerts > 0) {
                         showToast(
-                            '🚨 New Alert Detected!',
+                            'New Alert Detected!',
                             `${data.new_alerts} new unauthorized access alert${data.new_alerts > 1 ? 's' : ''}`,
                             'warning'
                         );
-                        previousAlertCount = data.total_alerts;
-                        // Also refresh dashboard data to update counts
-                        refreshDashboardData();
                     }
                 })
                 .catch(err => {});
         }
-
-        // Check for new alerts every 5 seconds
-        setInterval(checkRealtimeAlerts, 5000);
 
         // ============================================================
         // UPDATE TIME
@@ -2038,18 +1722,32 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
             if (updateElement) {
                 updateElement.textContent = 'Updated: ' + timeString;
             }
-            const serverTimeElement = document.getElementById('serverTime');
-            if (serverTimeElement) {
-                const dateString = now.toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                });
-                serverTimeElement.textContent = 'Server Time: ' + dateString + ' ' + timeString;
-            }
         }
 
-        setInterval(updateLastUpdateTime, 10000);
+        // ============================================================
+        // AUTO REFRESH
+        // ============================================================
+        setInterval(() => {
+            updateLastUpdateTime();
+            checkNewAlerts();
+        }, 10000);
+
+        // ============================================================
+        // INITIAL LOAD
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            updateLastUpdateTime();
+            
+            <?php if ($stats['pending_alerts'] > 0): ?>
+                setTimeout(() => {
+                    showToast(
+                        '⚠️ Pending Alerts',
+                        'You have <?php echo $stats['pending_alerts']; ?> pending alert<?php echo $stats['pending_alerts'] > 1 ? 's' : ''; ?> that need your attention.',
+                        'warning'
+                    );
+                }, 1000);
+            <?php endif; ?>
+        });
         
         // ============================================================
         // SIDEBAR TOGGLE (mobile)
