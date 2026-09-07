@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Student Portal Registration
  * DARK MODE - NO WHITE BACKGROUNDS
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
+ * WITH EDIT & DELETE FUNCTIONS
  */
 
 session_start();
@@ -26,6 +27,8 @@ $success = '';
 $password_success = '';
 $studentData = [];
 $residentData = null;
+$editMode = false;
+$editStudentId = 0;
 
 // ============================================================
 // HELPER FUNCTION - SAFE ESCAPE (with type hints)
@@ -63,9 +66,68 @@ $conn->query("
 ");
 
 // ============================================================
+// HANDLE DELETE STUDENT
+// ============================================================
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $delete_id = (int)$_GET['delete'];
+    
+    // Get student name for audit log
+    $stmt = $conn->prepare("SELECT full_name FROM student_users WHERE student_id = ?");
+    $stmt->bind_param("i", $delete_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $student = $result->fetch_assoc();
+    $stmt->close();
+    
+    if ($student) {
+        $stmt = $conn->prepare("DELETE FROM student_users WHERE student_id = ?");
+        $stmt->bind_param("i", $delete_id);
+        if ($stmt->execute()) {
+            $success = "✅ Student <strong>" . safe($student['full_name']) . "</strong> deleted successfully!";
+            logAudit($_SESSION['admin_id'], 'Delete Student', "Deleted student: " . $student['full_name']);
+        } else {
+            $error = "Failed to delete student: " . $stmt->error;
+        }
+        $stmt->close();
+    }
+}
+
+// ============================================================
+// HANDLE EDIT STUDENT - LOAD DATA
+// ============================================================
+if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
+    $editStudentId = (int)$_GET['edit'];
+    $editMode = true;
+    
+    $stmt = $conn->prepare("SELECT * FROM student_users WHERE student_id = ?");
+    $stmt->bind_param("i", $editStudentId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $editData = $result->fetch_assoc();
+    $stmt->close();
+    
+    if ($editData) {
+        $studentData = [
+            'full_name' => $editData['full_name'] ?? '',
+            'student_id_number' => $editData['student_id_number'] ?? '',
+            'username' => $editData['username'] ?? '',
+            'course' => $editData['course'] ?? '',
+            'year_level' => $editData['year_level'] ?? '',
+            'phone' => $editData['phone'] ?? '',
+            'room_number' => $editData['room_number'] ?? '',
+            'email' => $editData['email'] ?? '',
+            'resident_id' => $editData['resident_id'] ?? 0
+        ];
+    } else {
+        $error = "Student not found.";
+        $editMode = false;
+    }
+}
+
+// ============================================================
 // GET RESIDENT DATA FOR AUTO-FILL
 // ============================================================
-if (isset($_GET['resident_id']) && is_numeric($_GET['resident_id'])) {
+if (isset($_GET['resident_id']) && is_numeric($_GET['resident_id']) && !$editMode) {
     $resident_id = (int)$_GET['resident_id'];
     $stmt = $conn->prepare("
         SELECT u.*, rp.course, rp.year_level
@@ -101,7 +163,7 @@ $result = $conn->query("
     FROM users u
     LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
     WHERE u.status = 'active' 
-    AND u.user_id NOT IN (SELECT resident_id FROM student_users WHERE resident_id IS NOT NULL)
+    AND u.user_id NOT IN (SELECT resident_id FROM student_users WHERE resident_id IS NOT NULL AND student_id != " . ($editMode ? $editStudentId : 0) . ")
     ORDER BY u.full_name
 ");
 if ($result) {
@@ -111,7 +173,7 @@ if ($result) {
 }
 
 // ============================================================
-// HANDLE REGISTRATION FORM SUBMISSION
+// HANDLE REGISTRATION/UPDATE FORM SUBMISSION
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     $resident_id = isset($_POST['resident_id']) ? (int)$_POST['resident_id'] : 0;
@@ -125,56 +187,125 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
     $room_number = trim($_POST['room_number'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
+    $edit_id = isset($_POST['edit_id']) ? (int)$_POST['edit_id'] : 0;
     
     if (empty($full_name) || empty($student_id_number) || empty($username) || empty($course) || empty($year_level) || empty($email)) {
         $error = 'Please fill in all required fields.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
-    } elseif (strlen($password) < 8) {
-        $error = 'Password must be at least 8 characters long.';
-    } elseif ($password !== $confirm_password) {
-        $error = 'Passwords do not match.';
     } else {
-        $check = $conn->prepare("SELECT student_id FROM student_users WHERE student_id_number = ? OR email = ? OR username = ?");
-        $check->bind_param("sss", $student_id_number, $email, $username);
+        // Check for duplicates (exclude current record if editing)
+        $checkSql = "SELECT student_id FROM student_users WHERE student_id_number = ? OR email = ? OR username = ?";
+        if ($edit_id > 0) {
+            $checkSql .= " AND student_id != ?";
+        }
+        $check = $conn->prepare($checkSql);
+        if ($edit_id > 0) {
+            $check->bind_param("sssi", $student_id_number, $email, $username, $edit_id);
+        } else {
+            $check->bind_param("sss", $student_id_number, $email, $username);
+        }
         $check->execute();
         $checkResult = $check->get_result();
         
         if ($checkResult->num_rows > 0) {
             $error = 'Student ID, Email, or Username already exists.';
         } else {
-            $password_hash = password_hash($password, PASSWORD_DEFAULT);
-            
-            $stmt = $conn->prepare("
-                INSERT INTO student_users (
-                    student_id_number, full_name, username, course, year_level, email, 
-                    password_hash, phone, room_number, resident_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->bind_param("sssssssssi", 
-                $student_id_number, $full_name, $username, $course, $year_level, $email,
-                $password_hash, $phone, $room_number, $resident_id
-            );
-            
-            if ($stmt->execute()) {
-                $student_id = $conn->insert_id;
-                logAudit($_SESSION['admin_id'], 'Student Registration', "Registered student: $full_name ($student_id_number)");
+            if ($edit_id > 0) {
+                // UPDATE existing student
+                if (!empty($password)) {
+                    // Update with new password
+                    if (strlen($password) < 8) {
+                        $error = 'Password must be at least 8 characters long.';
+                    } elseif ($password !== $confirm_password) {
+                        $error = 'Passwords do not match.';
+                    } else {
+                        $password_hash = password_hash($password, PASSWORD_DEFAULT);
+                        $stmt = $conn->prepare("
+                            UPDATE student_users SET 
+                                full_name = ?, student_id_number = ?, username = ?, 
+                                course = ?, year_level = ?, email = ?, 
+                                password_hash = ?, phone = ?, room_number = ?, 
+                                resident_id = ?, updated_at = NOW()
+                            WHERE student_id = ?
+                        ");
+                        $stmt->bind_param("sssssssssii", 
+                            $full_name, $student_id_number, $username, 
+                            $course, $year_level, $email, 
+                            $password_hash, $phone, $room_number, 
+                            $resident_id, $edit_id
+                        );
+                    }
+                } else {
+                    // Update without changing password
+                    $stmt = $conn->prepare("
+                        UPDATE student_users SET 
+                            full_name = ?, student_id_number = ?, username = ?, 
+                            course = ?, year_level = ?, email = ?, 
+                            phone = ?, room_number = ?, resident_id = ?,
+                            updated_at = NOW()
+                        WHERE student_id = ?
+                    ");
+                    $stmt->bind_param("ssssssssii", 
+                        $full_name, $student_id_number, $username, 
+                        $course, $year_level, $email, 
+                        $phone, $room_number, $resident_id, $edit_id
+                    );
+                }
                 
-                $success = "✅ Student registered successfully!<br><br>
-                            <div class='alert alert-info'>
-                                <strong>📋 Login Credentials</strong><br>
-                                <strong>Student ID:</strong> " . safe($student_id_number) . "<br>
-                                <strong>Username:</strong> " . safe($username) . "<br>
-                                <strong>Password:</strong> " . safe($password) . "<br><br>
-                                <small>📌 Student can login at the <a href='student/login.php' target='_blank'>Student Login Page</a></small>
-                            </div>";
+                if (!isset($error) && $stmt->execute()) {
+                    $success = "✅ Student <strong>" . safe($full_name) . "</strong> updated successfully!";
+                    logAudit($_SESSION['admin_id'], 'Update Student', "Updated student: $full_name ($student_id_number)");
+                    $editMode = false;
+                    $editStudentId = 0;
+                    $studentData = [];
+                    $_POST = array();
+                } elseif (!isset($error)) {
+                    $error = "Failed to update student: " . $stmt->error;
+                }
+                if (isset($stmt)) $stmt->close();
                 
-                $studentData = [];
-                $_POST = array();
             } else {
-                $error = "Failed to register student: " . $stmt->error;
+                // INSERT new student
+                if (strlen($password) < 8) {
+                    $error = 'Password must be at least 8 characters long.';
+                } elseif ($password !== $confirm_password) {
+                    $error = 'Passwords do not match.';
+                } else {
+                    $password_hash = password_hash($password, PASSWORD_DEFAULT);
+                    
+                    $stmt = $conn->prepare("
+                        INSERT INTO student_users (
+                            student_id_number, full_name, username, course, year_level, email, 
+                            password_hash, phone, room_number, resident_id
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $stmt->bind_param("sssssssssi", 
+                        $student_id_number, $full_name, $username, $course, $year_level, $email,
+                        $password_hash, $phone, $room_number, $resident_id
+                    );
+                    
+                    if ($stmt->execute()) {
+                        $student_id = $conn->insert_id;
+                        logAudit($_SESSION['admin_id'], 'Student Registration', "Registered student: $full_name ($student_id_number)");
+                        
+                        $success = "✅ Student registered successfully!<br><br>
+                                    <div class='alert alert-info'>
+                                        <strong>📋 Login Credentials</strong><br>
+                                        <strong>Student ID:</strong> " . safe($student_id_number) . "<br>
+                                        <strong>Username:</strong> " . safe($username) . "<br>
+                                        <strong>Password:</strong> " . safe($password) . "<br><br>
+                                        <small>📌 Student can login at the <a href='student/login.php' target='_blank'>Student Login Page</a></small>
+                                    </div>";
+                        
+                        $studentData = [];
+                        $_POST = array();
+                    } else {
+                        $error = "Failed to register student: " . $stmt->error;
+                    }
+                    $stmt->close();
+                }
             }
-            $stmt->close();
         }
         $check->close();
     }
@@ -196,7 +327,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_password_admin
         $error = 'Passwords do not match.';
     } else {
         $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
-        $stmt = $conn->prepare("UPDATE student_users SET password_hash = ? WHERE student_id = ?");
+        $stmt = $conn->prepare("UPDATE student_users SET password_hash = ?, updated_at = NOW() WHERE student_id = ?");
         $stmt->bind_param("si", $new_hash, $student_id);
         
         if ($stmt->execute()) {
@@ -509,6 +640,42 @@ if ($result) {
             background: rgba(255, 215, 0, 0.25) !important;
         }
         
+        .student-card .btn-edit {
+            background: rgba(59, 130, 246, 0.15) !important;
+            color: #93c5fd !important;
+            border: 1px solid rgba(59, 130, 246, 0.3) !important;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .student-card .btn-edit:hover {
+            background: rgba(59, 130, 246, 0.25) !important;
+            color: #93c5fd !important;
+        }
+        
+        .student-card .btn-delete {
+            background: rgba(239, 68, 68, 0.15) !important;
+            color: #f87171 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3) !important;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .student-card .btn-delete:hover {
+            background: rgba(239, 68, 68, 0.25) !important;
+            color: #f87171 !important;
+        }
+        
         .badge.bg-success {
             background: rgba(16, 185, 129, 0.2) !important;
             color: #6ee7b7 !important;
@@ -518,6 +685,12 @@ if ($result) {
         .badge.bg-info {
             background: rgba(59, 130, 246, 0.2) !important;
             color: #93c5fd !important;
+            font-size: 10px;
+        }
+        
+        .badge.bg-warning {
+            background: rgba(245, 158, 11, 0.2) !important;
+            color: #fbbf24 !important;
             font-size: 10px;
         }
         
@@ -613,6 +786,16 @@ if ($result) {
             margin: 15px 0 !important;
         }
         
+        .edit-badge {
+            background: rgba(59, 130, 246, 0.2) !important;
+            color: #93c5fd !important;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 600;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        
         /* ============================================================
            MODAL DARK MODE
            ============================================================ */
@@ -665,6 +848,56 @@ if ($result) {
         }
         
         /* ============================================================
+           DELETE MODAL
+           ============================================================ */
+        .delete-modal .modal-content {
+            background: #131926 !important;
+            border: 1px solid #1e2a3a;
+            border-radius: 12px;
+        }
+        
+        .delete-modal .modal-header {
+            border-bottom: 1px solid #1e2a3a;
+            padding: 12px 18px;
+        }
+        
+        .delete-modal .modal-footer {
+            border-top: 1px solid #1e2a3a;
+            padding: 12px 18px;
+        }
+        
+        .delete-modal .modal-title {
+            color: #f87171 !important;
+            font-size: 16px;
+        }
+        
+        .delete-modal .btn-secondary {
+            background: #1e2a3a !important;
+            border: none;
+            color: #e5e7eb !important;
+            font-size: 13px;
+            padding: 6px 16px;
+            border-radius: 8px;
+        }
+        
+        .delete-modal .btn-secondary:hover {
+            background: #2d3548 !important;
+        }
+        
+        .delete-modal .btn-danger-custom {
+            background: #dc3545 !important;
+            border: none;
+            color: white !important;
+            padding: 6px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        
+        .delete-modal .btn-danger-custom:hover {
+            background: #c82333 !important;
+        }
+        
+        /* ============================================================
            PAGE HEADER
            ============================================================ */
         .page-header {
@@ -679,6 +912,12 @@ if ($result) {
         }
         .page-header h1 i {
             color: #ffd700;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
         }
         
         /* ============================================================
@@ -707,6 +946,8 @@ if ($result) {
             }
             .form-section { padding: 15px; }
             .info-box .value { font-size: 12px; }
+            .student-card .name { font-size: 13px; }
+            .action-buttons { flex-direction: row; }
         }
         
         /* ============================================================
@@ -760,7 +1001,20 @@ if ($result) {
             <main class="main-content">
                 <!-- Page Header -->
                 <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
-                    <h1><i class="fas fa-user-graduate me-2"></i>Student Portal Registration</h1>
+                    <h1>
+                        <i class="fas fa-user-graduate me-2"></i>
+                        Student Portal Registration
+                        <?php if ($editMode): ?>
+                            <span class="edit-badge ms-2">
+                                <i class="fas fa-edit me-1"></i> Edit Mode
+                            </span>
+                        <?php endif; ?>
+                    </h1>
+                    <?php if ($editMode): ?>
+                        <a href="student-registration.php" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-times me-1"></i> Cancel Edit
+                        </a>
+                    <?php endif; ?>
                 </div>
 
                 <?php if (!empty($success)): ?>
@@ -788,7 +1042,10 @@ if ($result) {
                 REGISTRATION FORM
                 ============================================================ -->
                 <div class="form-section">
-                    <h5><i class="fas fa-user-plus me-2"></i>Register New Student</h5>
+                    <h5>
+                        <i class="fas <?php echo $editMode ? 'fa-edit' : 'fa-user-plus'; ?> me-2"></i>
+                        <?php echo $editMode ? 'Edit Student' : 'Register New Student'; ?>
+                    </h5>
                     
                     <div class="info-box mb-3">
                         <div class="row">
@@ -811,7 +1068,7 @@ if ($result) {
                         <div class="row g-2 mb-3">
                             <div class="col-md-12">
                                 <label class="form-label">Select Resident for Auto-Fill</label>
-                                <select class="form-select" id="residentSelect" onchange="autoFillResident()">
+                                <select class="form-select" id="residentSelect" onchange="autoFillResident()" <?php echo $editMode ? 'disabled' : ''; ?>>
                                     <option value="">-- Select Resident --</option>
                                     <?php foreach ($residentsList as $resident): ?>
                                         <option value="<?php echo safe($resident['user_id']); ?>">
@@ -820,7 +1077,7 @@ if ($result) {
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <small class="text-muted">Select a resident to auto-fill their information</small>
+                                <small class="text-muted"><?php echo $editMode ? 'Resident selection disabled in edit mode' : 'Select a resident to auto-fill their information'; ?></small>
                             </div>
                         </div>
 
@@ -866,43 +1123,66 @@ if ($result) {
                                 <label class="form-label">Room Number</label>
                                 <input type="text" class="form-control" name="room_number" value="<?php echo safe($studentData['room_number'] ?? ''); ?>">
                             </div>
-                            <input type="hidden" name="resident_id" value="<?php echo isset($_GET['resident_id']) ? (int)$_GET['resident_id'] : 0; ?>">
+                            <input type="hidden" name="resident_id" value="<?php echo isset($studentData['resident_id']) ? (int)$studentData['resident_id'] : 0; ?>">
+                            <input type="hidden" name="edit_id" value="<?php echo $editMode ? $editStudentId : 0; ?>">
 
                             <div class="col-md-12 mt-2">
                                 <hr>
-                                <h6 class="text-primary" style="font-size: 14px; margin-bottom: 8px;"><i class="fas fa-key me-2"></i>Set Password</h6>
-                                <p class="text-muted small">This password will be used by the student to login</p>
+                                <h6 class="text-primary" style="font-size: 14px; margin-bottom: 8px;">
+                                    <i class="fas fa-key me-2"></i>
+                                    <?php echo $editMode ? 'Change Password (Optional)' : 'Set Password'; ?>
+                                </h6>
+                                <p class="text-muted small">
+                                    <?php echo $editMode ? 'Leave blank to keep current password' : 'This password will be used by the student to login'; ?>
+                                </p>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Password <span class="required">*</span></label>
-                                <input type="password" class="form-control" name="password" id="password" placeholder="Enter password" required>
+                                <label class="form-label">
+                                    <?php echo $editMode ? 'New Password' : 'Password'; ?>
+                                    <?php if (!$editMode): ?><span class="required">*</span><?php endif; ?>
+                                </label>
+                                <input type="password" class="form-control" name="password" id="password" placeholder="<?php echo $editMode ? 'Enter new password (optional)' : 'Enter password'; ?>" <?php echo $editMode ? '' : 'required'; ?>>
                                 <div class="password-requirements">
                                     <i class="fas fa-info-circle me-1"></i>
                                     Minimum 8 characters with uppercase, lowercase, and number
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Confirm Password <span class="required">*</span></label>
-                                <input type="password" class="form-control" name="confirm_password" placeholder="Confirm password" required>
+                                <label class="form-label">
+                                    <?php echo $editMode ? 'Confirm New Password' : 'Confirm Password'; ?>
+                                    <?php if (!$editMode): ?><span class="required">*</span><?php endif; ?>
+                                </label>
+                                <input type="password" class="form-control" name="confirm_password" placeholder="<?php echo $editMode ? 'Confirm new password' : 'Confirm password'; ?>" <?php echo $editMode ? '' : 'required'; ?>>
                             </div>
                         </div>
                         
                         <div class="mt-3">
                             <button type="submit" name="submit" class="btn btn-submit">
-                                <i class="fas fa-save"></i> Register Student
+                                <i class="fas <?php echo $editMode ? 'fa-save' : 'fa-user-plus'; ?> me-1"></i>
+                                <?php echo $editMode ? 'Update Student' : 'Register Student'; ?>
                             </button>
-                            <button type="reset" class="btn btn-outline-secondary ms-2">
-                                <i class="fas fa-undo me-1"></i> Reset
-                            </button>
+                            <?php if ($editMode): ?>
+                                <a href="student-registration.php" class="btn btn-outline-secondary ms-2">
+                                    <i class="fas fa-times me-1"></i> Cancel
+                                </a>
+                            <?php else: ?>
+                                <button type="reset" class="btn btn-outline-secondary ms-2">
+                                    <i class="fas fa-undo me-1"></i> Reset
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </form>
                 </div>
 
                 <!-- ============================================================
-                REGISTERED STUDENTS LIST WITH PASSWORD UPDATE
+                REGISTERED STUDENTS LIST WITH EDIT & DELETE
                 ============================================================ -->
                 <div class="form-section">
-                    <h5><i class="fas fa-list me-2"></i>Registered Students</h5>
+                    <h5>
+                        <i class="fas fa-list me-2"></i>
+                        Registered Students
+                        <span class="badge bg-primary ms-2"><?php echo count($students); ?></span>
+                    </h5>
                     <?php if (empty($students)): ?>
                         <p class="text-muted text-center py-2" style="font-size: 13px;">No students registered yet</p>
                     <?php else: ?>
@@ -935,14 +1215,26 @@ if ($result) {
                                             <?php if ($student['resident_id']): ?>
                                                 <span class="badge bg-info"><i class="fas fa-user me-1"></i> Resident</span>
                                             <?php endif; ?>
-                                            <button class="btn-edit-password" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#passwordModal"
-                                                    data-student-id="<?php echo $student['student_id']; ?>"
-                                                    data-student-name="<?php echo safe($student['full_name']); ?>"
-                                                    data-student-username="<?php echo safe($student['username']); ?>">
-                                                <i class="fas fa-key me-1"></i> Reset Password
-                                            </button>
+                                            <div class="action-buttons ms-auto">
+                                                <a href="?edit=<?php echo $student['student_id']; ?>" class="btn-edit">
+                                                    <i class="fas fa-edit me-1"></i> Edit
+                                                </a>
+                                                <button class="btn-delete" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#deleteModal"
+                                                        data-student-id="<?php echo $student['student_id']; ?>"
+                                                        data-student-name="<?php echo safe($student['full_name']); ?>">
+                                                    <i class="fas fa-trash me-1"></i> Delete
+                                                </button>
+                                                <button class="btn-edit-password" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#passwordModal"
+                                                        data-student-id="<?php echo $student['student_id']; ?>"
+                                                        data-student-name="<?php echo safe($student['full_name']); ?>"
+                                                        data-student-username="<?php echo safe($student['username']); ?>">
+                                                    <i class="fas fa-key me-1"></i> Password
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -962,7 +1254,7 @@ if ($result) {
     </div>
 
     <!-- ============================================================
-    PASSWORD UPDATE MODAL - ADMIN ONLY
+    PASSWORD UPDATE MODAL
     ============================================================ -->
     <div class="modal fade password-modal" id="passwordModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
@@ -1001,6 +1293,43 @@ if ($result) {
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    DELETE CONFIRMATION MODAL
+    ============================================================ -->
+    <div class="modal fade delete-modal" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exclamation-triangle me-2" style="color: #f87171;"></i>
+                        Confirm Delete
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center py-3">
+                        <i class="fas fa-user-graduate fa-3x text-danger mb-3"></i>
+                        <h5 style="color: #e5e7eb;">Are you sure you want to delete this student?</h5>
+                        <p class="text-muted">
+                            <strong>Student:</strong> <span id="deleteStudentName" style="color: #ffd700;">-</span>
+                        </p>
+                        <p class="text-danger small">
+                            <i class="fas fa-exclamation-circle me-1"></i>
+                            This action cannot be undone!
+                        </p>
+                    </div>
+                    <input type="hidden" id="deleteStudentId">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <a href="#" id="confirmDeleteBtn" class="btn btn-danger-custom">
+                        <i class="fas fa-trash me-1"></i> Delete Permanently
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -1070,6 +1399,22 @@ if ($result) {
                 document.getElementById('modalStudentId').value = studentId;
                 document.getElementById('modalStudentName').textContent = studentName;
                 document.getElementById('modalStudentUsername').textContent = studentUsername;
+            });
+        });
+
+        // ============================================================
+        // DELETE MODAL - PASS STUDENT DATA
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const deleteModal = document.getElementById('deleteModal');
+            deleteModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const studentId = button.getAttribute('data-student-id');
+                const studentName = button.getAttribute('data-student-name');
+                
+                document.getElementById('deleteStudentId').value = studentId;
+                document.getElementById('deleteStudentName').textContent = studentName;
+                document.getElementById('confirmDeleteBtn').href = `student-registration.php?delete=${studentId}`;
             });
         });
 
