@@ -3,6 +3,8 @@
  * Tap-and-Go Doorlock - Staff Dashboard
  * VIEW ONLY - UPDATED STATISTICS (SAME AS ADMIN)
  * PURE DARK MODE - No white backgrounds
+ * WITH RESIDENTS OUTSIDE SECTION
+ * FIXED: Total Registered Residents (Excluding Visitors)
  */
 
 // Start session
@@ -21,10 +23,10 @@ if (!isset($_SESSION['staff_id']) || !isStaffSessionValid()) {
 $conn = getDBConnection();
 
 // ============================================================
-// GET DASHBOARD STATISTICS (UPDATED)
+// GET DASHBOARD STATISTICS (UPDATED - SAME AS ADMIN)
 // ============================================================
 $stats = [
-    'total_residents' => 0,          // Total registered residents
+    'total_residents' => 0,          // Total registered residents (EXCLUDING visitors)
     'active_cards' => 0,             // Total active cards
     'today_access' => 0,             // Total access today
     'unauthorized_today' => 0,       // Total unauthorized today
@@ -38,8 +40,14 @@ $stats = [
     'max_per_room' => 7
 ];
 
-// 1. Total Registered Residents (ALL registered)
-$result = $conn->query("SELECT COUNT(*) as count FROM users");
+// 1. Total Registered Residents (EXCLUDING visitors and deleted)
+$result = $conn->query("
+    SELECT COUNT(*) as count 
+    FROM users 
+    WHERE status = 'active' 
+    AND room_number IS NOT NULL 
+    AND room_number != ''
+");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['total_residents'] = (int)$row['count'];
 }
@@ -88,6 +96,7 @@ $result = $conn->query("
         )
     WHERE u.status = 'active'
     AND u.room_number IS NOT NULL
+    AND u.room_number != ''
 ");
 if ($result) {
     while ($row = $result->fetch_assoc()) {
@@ -134,6 +143,40 @@ $result = $conn->query("
 ");
 if ($result && $row = $result->fetch_assoc()) {
     $stats['critical_alerts'] = (int)$row['count'];
+}
+
+// ============================================================
+// GET COURSE & YEAR LEVEL DISTRIBUTION (FOR PIE CHART)
+// ============================================================
+$courseData = [];
+$yearLevelData = [];
+
+$result = $conn->query("
+    SELECT rp.course, COUNT(*) as count
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    WHERE u.status = 'active' AND rp.course IS NOT NULL
+    GROUP BY rp.course
+    ORDER BY count DESC
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $courseData[] = $row;
+    }
+}
+
+$result = $conn->query("
+    SELECT rp.year_level, COUNT(*) as count
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    WHERE u.status = 'active' AND rp.year_level IS NOT NULL
+    GROUP BY rp.year_level
+    ORDER BY FIELD(rp.year_level, '1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year')
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $yearLevelData[] = $row;
+    }
 }
 
 // ============================================================
@@ -246,6 +289,41 @@ for ($i = 1; $i <= 5; $i++) {
     $stmt->close();
     
     $roomData[$i]['is_full'] = $roomData[$i]['count'] >= 7;
+}
+
+// ============================================================
+// GET RESIDENTS OUTSIDE (for the new section)
+// ============================================================
+$outsideResidents = [];
+$result = $conn->query("
+    SELECT 
+        u.user_id,
+        u.full_name,
+        u.student_id,
+        u.room_number,
+        u.profile_photo,
+        rp.course,
+        rp.year_level,
+        al.timestamp as last_exit,
+        al.card_uid
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    LEFT JOIN access_logs al ON u.user_id = al.user_id 
+        AND al.timestamp = (
+            SELECT MAX(timestamp) 
+            FROM access_logs al2 
+            WHERE al2.user_id = u.user_id
+        )
+    WHERE u.status = 'active'
+    AND u.room_number IS NOT NULL
+    AND u.room_number != ''
+    AND al.access_type = 'exit'
+    ORDER BY al.timestamp DESC
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $outsideResidents[] = $row;
+    }
 }
 
 // ============================================================
@@ -614,6 +692,130 @@ if (isset($_SESSION['staff_id'])) {
         }
         
         /* ============================================================
+           PIE CHART / DONUT CHART (CSS conic-gradient)
+           ============================================================ */
+        .pie-chart-container {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        .pie-chart {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .pie-chart::after {
+            content: '';
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            width: 130px;
+            height: 130px;
+            background: #111827;
+            border-radius: 50%;
+        }
+        .pie-chart .center-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+        }
+        .pie-chart .center-text .number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffd700 !important;
+        }
+        .pie-chart .center-text .label {
+            font-size: 11px;
+            color: #6b7280;
+        }
+        .pie-legend {
+            flex: 1;
+            min-width: 200px;
+        }
+        .pie-legend .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #e0e0e0;
+        }
+        .pie-legend .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 4px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        .pie-legend .legend-count {
+            margin-left: auto;
+            font-weight: 600;
+            color: #d1d5db;
+        }
+        .pie-legend .legend-percent {
+            font-size: 11px;
+            color: #6b7280;
+            margin-left: 5px;
+        }
+        
+        /* ============================================================
+           OUTSIDE RESIDENTS TABLE
+           ============================================================ */
+        .table-dark {
+            background: #111827 !important;
+            border-color: #1a2a4a !important;
+        }
+        .table-dark thead th {
+            color: #808090 !important;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #1a2a4a !important;
+            padding: 10px 12px;
+        }
+        .table-dark tbody td {
+            color: #e0e0e0 !important;
+            border-bottom: 1px solid #1a2a4a !important;
+            padding: 10px 12px;
+            vertical-align: middle;
+        }
+        .table-dark tbody tr:hover {
+            background: #1a2a4a !important;
+        }
+        .profile-img-placeholder {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+        .badge-room {
+            background: #4a3a1a !important;
+            color: #fbbf24 !important;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+        .badge-denied {
+            background: #7a2a2a !important;
+            color: #f87171 !important;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+        
+        /* ============================================================
            DARK BADGES
            ============================================================ */
         .badge-granted { background: #065f46 !important; color: #34d399 !important; }
@@ -807,7 +1009,7 @@ if (isset($_SESSION['staff_id'])) {
 
                 <!-- ===== STATS CARDS (UPDATED - SAME AS ADMIN) ===== -->
                 <div class="row g-3 mb-4">
-                    <!-- Total Registered Residents -->
+                    <!-- Total Registered Residents (FIXED - Excluding Visitors) -->
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #667eea;"><i class="fas fa-users"></i></div>
@@ -906,7 +1108,7 @@ if (isset($_SESSION['staff_id'])) {
                     </div>
                 </div>
 
-                <!-- Latest Alerts -->
+                <!-- ===== LATEST ALERTS ===== -->
                 <?php if (!empty($latestAlerts)): ?>
                 <div class="row g-3 mb-4">
                     <div class="col-12">
@@ -956,7 +1158,7 @@ if (isset($_SESSION['staff_id'])) {
                 </div>
                 <?php endif; ?>
 
-                <!-- Rooms -->
+                <!-- ===== ROOMS 1-5 - OCCUPANCY ===== -->
                 <div class="row g-3 mb-4">
                     <div class="col-12">
                         <div class="card">
@@ -1040,7 +1242,232 @@ if (isset($_SESSION['staff_id'])) {
                     </div>
                 </div>
 
-                <!-- Announcements -->
+                <!-- ============================================================
+                RESIDENTS OUTSIDE / EXITED SECTION
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5>
+                                    <i class="fas fa-door-closed me-2" style="color: #f87171;"></i>
+                                    Residents Outside 
+                                    <span class="badge bg-danger ms-2"><?php echo count($outsideResidents); ?></span>
+                                </h5>
+                                <span class="text-muted small">
+                                    <i class="fas fa-clock me-1"></i>
+                                    Last exit recorded
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <?php if (empty($outsideResidents)): ?>
+                                    <div class="text-center text-muted py-4">
+                                        <i class="fas fa-check-circle fa-2x d-block mb-2 text-success"></i>
+                                        <p class="mb-0">All residents are currently inside their rooms.</p>
+                                        <small class="text-muted">No residents have exited yet today.</small>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="table table-dark table-hover" style="background: #111827 !important; border-color: #1a2a4a !important;">
+                                            <thead>
+                                                <tr style="border-color: #1a2a4a !important;">
+                                                    <th style="color: #808090; font-size: 12px;">#</th>
+                                                    <th style="color: #808090; font-size: 12px;">Resident</th>
+                                                    <th style="color: #808090; font-size: 12px;">Room</th>
+                                                    <th style="color: #808090; font-size: 12px;">Course / Year</th>
+                                                    <th style="color: #808090; font-size: 12px;">Last Exit</th>
+                                                    <th style="color: #808090; font-size: 12px;">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php $counter = 1; foreach ($outsideResidents as $resident): ?>
+                                                <tr style="border-color: #1a2a4a !important;">
+                                                    <td style="color: #808090; font-size: 13px;"><?php echo $counter++; ?></td>
+                                                    <td>
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <?php 
+                                                            // Get initials
+                                                            $parts = explode(' ', $resident['full_name']);
+                                                            $initials = '';
+                                                            foreach ($parts as $p) {
+                                                                if (!empty($p)) $initials .= strtoupper($p[0]);
+                                                            }
+                                                            $initials = substr($initials, 0, 2) ?: '?';
+                                                            ?>
+                                                            <div class="profile-img-placeholder" style="background: #7a2a2a !important;">
+                                                                <?php echo $initials; ?>
+                                                            </div>
+                                                            <div>
+                                                                <div style="color: #e0e0e0; font-weight: 500; font-size: 14px;">
+                                                                    <?php echo htmlspecialchars($resident['full_name']); ?>
+                                                                </div>
+                                                                <div style="color: #606070; font-size: 11px;">
+                                                                    <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge badge-room">
+                                                            <i class="fas fa-door-open me-1"></i>
+                                                            Room <?php echo htmlspecialchars($resident['room_number']); ?>
+                                                        </span>
+                                                    </td>
+                                                    <td style="color: #b0b0c0; font-size: 13px;">
+                                                        <?php echo htmlspecialchars($resident['course'] ?? 'N/A'); ?>
+                                                        <span class="text-muted small">
+                                                            (<?php echo htmlspecialchars($resident['year_level'] ?? 'N/A'); ?>)
+                                                        </span>
+                                                    </td>
+                                                    <td style="color: #b0b0c0; font-size: 13px;">
+                                                        <i class="far fa-clock me-1 text-warning"></i>
+                                                        <?php echo $resident['last_exit'] ? date('M d, h:i A', strtotime($resident['last_exit'])) : 'N/A'; ?>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge badge-denied">
+                                                            <i class="fas fa-door-closed me-1"></i>
+                                                            Outside
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <div class="text-muted small mt-2">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Showing <?php echo count($outsideResidents); ?> resident(s) currently outside
+                                        <span class="mx-1">|</span>
+                                        <i class="fas fa-sync-alt me-1"></i>
+                                        Auto-updates every 10 seconds
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                COURSE DISTRIBUTION PIE CHART (CSS-BASED)
+                ============================================================ -->
+                <div class="row g-3 mb-4 mt-3">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-pie me-2"></i>Course Distribution</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php 
+                                // Calculate colors and totals for pie
+                                $courseColors = ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#3b82f6', '#06b6d4'];
+                                $courseTotal = 0;
+                                foreach ($courseData as $c) { $courseTotal += $c['count']; }
+                                
+                                if (empty($courseData) || $courseTotal == 0): ?>
+                                    <div class="text-center text-muted py-3">
+                                        <i class="fas fa-chart-pie fa-2x mb-2 d-block"></i>
+                                        No data available for courses
+                                    </div>
+                                <?php else: 
+                                    $courseGradient = '';
+                                    $currentPercent = 0;
+                                    foreach ($courseData as $index => $c) {
+                                        $percent = ($c['count'] / $courseTotal) * 100;
+                                        $color = $courseColors[$index % count($courseColors)];
+                                        $courseGradient .= $color . ' ' . $currentPercent . '% ' . ($currentPercent + $percent) . '%, ';
+                                        $currentPercent += $percent;
+                                    }
+                                    $courseGradient = rtrim($courseGradient, ', ');
+                                ?>
+                                <div class="pie-chart-container">
+                                    <div class="pie-chart" style="background: conic-gradient(<?php echo $courseGradient; ?>);">
+                                        <div class="center-text">
+                                            <div class="number"><?php echo $courseTotal; ?></div>
+                                            <div class="label">Residents</div>
+                                        </div>
+                                    </div>
+                                    <div class="pie-legend">
+                                        <?php foreach ($courseData as $index => $c): 
+                                            $color = $courseColors[$index % count($courseColors)];
+                                            $percent = round(($c['count'] / $courseTotal) * 100, 1);
+                                        ?>
+                                        <div class="legend-item">
+                                            <span class="legend-dot" style="background: <?php echo $color; ?>;"></span>
+                                            <span><?php echo htmlspecialchars($c['course']); ?></span>
+                                            <span class="legend-count"><?php echo $c['count']; ?></span>
+                                            <span class="legend-percent">(<?php echo $percent; ?>%)</span>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                YEAR LEVEL DISTRIBUTION PIE CHART (CSS-BASED)
+                ============================================================ -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-chart-pie me-2"></i>Year Level Distribution</h5>
+                            </div>
+                            <div class="card-body">
+                                <?php 
+                                $yearColors = ['#10b981', '#667eea', '#f59e0b', '#ef4444', '#8b5cf6'];
+                                $yearTotal = 0;
+                                foreach ($yearLevelData as $y) { $yearTotal += $y['count']; }
+                                
+                                if (empty($yearLevelData) || $yearTotal == 0): ?>
+                                    <div class="text-center text-muted py-3">
+                                        <i class="fas fa-chart-pie fa-2x mb-2 d-block"></i>
+                                        No data available for year levels
+                                    </div>
+                                <?php else: 
+                                    $yearGradient = '';
+                                    $currentPercent = 0;
+                                    foreach ($yearLevelData as $index => $y) {
+                                        $percent = ($y['count'] / $yearTotal) * 100;
+                                        $color = $yearColors[$index % count($yearColors)];
+                                        $yearGradient .= $color . ' ' . $currentPercent . '% ' . ($currentPercent + $percent) . '%, ';
+                                        $currentPercent += $percent;
+                                    }
+                                    $yearGradient = rtrim($yearGradient, ', ');
+                                ?>
+                                <div class="pie-chart-container">
+                                    <div class="pie-chart" style="background: conic-gradient(<?php echo $yearGradient; ?>);">
+                                        <div class="center-text">
+                                            <div class="number"><?php echo $yearTotal; ?></div>
+                                            <div class="label">Residents</div>
+                                        </div>
+                                    </div>
+                                    <div class="pie-legend">
+                                        <?php foreach ($yearLevelData as $index => $y): 
+                                            $color = $yearColors[$index % count($yearColors)];
+                                            $percent = round(($y['count'] / $yearTotal) * 100, 1);
+                                        ?>
+                                        <div class="legend-item">
+                                            <span class="legend-dot" style="background: <?php echo $color; ?>;"></span>
+                                            <span><?php echo htmlspecialchars($y['year_level']); ?></span>
+                                            <span class="legend-count"><?php echo $y['count']; ?></span>
+                                            <span class="legend-percent">(<?php echo $percent; ?>%)</span>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                ANNOUNCEMENTS
+                ============================================================ -->
                 <div class="row">
                     <div class="col-md-12">
                         <div class="card">
