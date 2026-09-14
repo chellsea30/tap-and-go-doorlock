@@ -7,6 +7,8 @@
  * WITH COURSE & YEAR LEVEL PIE CHART (CSS-BASED)
  * WITH RESIDENTS OUTSIDE SECTION
  * FIXED: Total Registered Residents (Excluding Visitors)
+ * UPDATED: 13 Rooms, 8 Slots Each
+ * UPDATED: Outside Residents now shows Room Number
  */
 
 // Start session
@@ -27,6 +29,12 @@ include '../includes/header.php';
 $conn = getDBConnection();
 
 // ============================================================
+// ✅ ROOM CONFIGURATION - 13 ROOMS, 8 SLOTS EACH
+// ============================================================
+$totalRooms = 13;   // ✅ 13 rooms
+$maxPerRoom = 8;    // ✅ 8 slots per room
+
+// ============================================================
 // GET DASHBOARD STATISTICS
 // ============================================================
 $stats = [
@@ -40,8 +48,8 @@ $stats = [
     'visitors_inside' => 0,          // Total visitors inside
     'pending_alerts' => 0,
     'critical_alerts' => 0,
-    'total_rooms' => 5,
-    'max_per_room' => 7
+    'total_rooms' => $totalRooms,
+    'max_per_room' => $maxPerRoom
 ];
 
 // 1. Total Registered Residents (EXCLUDING visitors and deleted)
@@ -89,6 +97,8 @@ $result = $conn->query("
     SELECT 
         u.user_id, 
         u.full_name, 
+        u.room_number,
+        u.student_id,
         al.access_type as last_access_type,
         al.timestamp as last_timestamp
     FROM users u
@@ -256,10 +266,10 @@ if ($result) {
 }
 
 // ============================================================
-// GET ROOM OCCUPANCY DATA (Rooms 1-5)
+// GET ROOM OCCUPANCY DATA (Rooms 1-13)
 // ============================================================
 $roomData = [];
-for ($i = 1; $i <= 5; $i++) {
+for ($i = 1; $i <= $totalRooms; $i++) {
     $roomData[$i] = [
         'room_number' => $i,
         'occupants' => [],
@@ -292,11 +302,11 @@ for ($i = 1; $i <= 5; $i++) {
     }
     $stmt->close();
     
-    $roomData[$i]['is_full'] = $roomData[$i]['count'] >= 7;
+    $roomData[$i]['is_full'] = $roomData[$i]['count'] >= $maxPerRoom;
 }
 
 // ============================================================
-// GET RESIDENTS OUTSIDE (for the new section)
+// GET RESIDENTS OUTSIDE (WITH ROOM NUMBER)
 // ============================================================
 $outsideResidents = [];
 $result = $conn->query("
@@ -1252,17 +1262,17 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 <?php endif; ?>
 
                 <!-- ============================================================
-                ROOMS 1-5 - OCCUPANCY
+                ROOMS 1-13 - OCCUPANCY
                 ============================================================ -->
                 <div class="row g-3 mb-4">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5><i class="fas fa-bed me-2"></i>Room Occupancy <span class="text-muted small">(Max 7 per room)</span></h5>
+                                <h5><i class="fas fa-bed me-2"></i>Room Occupancy <span class="text-muted small">(Max <?php echo $maxPerRoom; ?> per room)</span></h5>
                                 <span class="text-muted small">
                                     <?php 
                                         $totalOccupied = 0;
-                                        $totalCapacity = 5 * 7;
+                                        $totalCapacity = $totalRooms * $maxPerRoom;
                                         foreach ($roomData as $room) {
                                             $totalOccupied += $room['count'];
                                         }
@@ -1274,8 +1284,8 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                 <div class="row g-3">
                                     <?php foreach ($roomData as $room): 
                                         $count = $room['count'];
-                                        $isFull = $count >= 7;
-                                        $isPartial = $count > 0 && $count < 7;
+                                        $isFull = $count >= $maxPerRoom;
+                                        $isPartial = $count > 0 && $count < $maxPerRoom;
                                         $isEmpty = $count == 0;
                                         $statusClass = $isFull ? 'full' : ($isPartial ? 'partial' : 'available');
                                     ?>
@@ -1291,14 +1301,14 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                                                     </div>
                                                     <div class="room-capacity">
                                                         <span class="room-count <?php echo $statusClass; ?>"><?php echo $count; ?></span>
-                                                        / 7 residents
+                                                        / <?php echo $maxPerRoom; ?> residents
                                                         <span class="badge <?php echo $isFull ? 'bg-danger' : ($isPartial ? 'bg-warning' : 'bg-success'); ?> ms-1">
                                                             <?php echo $isFull ? 'Full' : ($isPartial ? 'Partial' : 'Available'); ?>
                                                         </span>
                                                     </div>
                                                 </div>
                                                 <div class="text-end">
-                                                    <span class="badge bg-light text-dark"><?php echo 7 - $count; ?> slots</span>
+                                                    <span class="badge bg-light text-dark"><?php echo $maxPerRoom - $count; ?> slots</span>
                                                 </div>
                                             </div>
                                             
@@ -1338,7 +1348,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                 </div>
 
                 <!-- ============================================================
-                RESIDENTS OUTSIDE / EXITED SECTION
+                RESIDENTS OUTSIDE / EXITED SECTION (WITH ROOM NUMBER)
                 ============================================================ -->
                 <div class="row g-3 mb-4">
                     <div class="col-12">
