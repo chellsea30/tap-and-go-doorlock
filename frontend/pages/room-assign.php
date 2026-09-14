@@ -1,10 +1,10 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Room Assignment
- * Manage rooms 1-5 with 7 residents per room
+ * Manage rooms 1-13 with 8 residents per room
  * COMPLETE VERSION - PURE DARK MODE
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
- * FIXED: Dark table
+ * UPDATED: 13 Rooms, 8 Slots Each
  */
 
 session_start();
@@ -25,10 +25,10 @@ $error = '';
 $success = '';
 
 // ============================================================
-// ROOM CONFIGURATION
+// ✅ ROOM CONFIGURATION - 13 ROOMS, 8 SLOTS EACH
 // ============================================================
-$totalRooms = 5;
-$maxPerRoom = 7;
+$totalRooms = 13;   // ✅ 13 rooms
+$maxPerRoom = 8;    // ✅ 8 slots per room
 $rooms = [];
 
 // Generate room list
@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['assign_room'])) {
     if (empty($user_id) || empty($room_number)) {
         $error = 'Please select a resident and room.';
     } else {
-        // Check if room is full
+        // Check if room is full (8 slots)
         $stmt = $conn->prepare("SELECT COUNT(*) as count FROM users WHERE room_number = ? AND status = 'active'");
         $stmt->bind_param("i", $room_number);
         $stmt->execute();
@@ -216,6 +216,9 @@ if ($result && $row = $result->fetch_assoc()) {
     $totalAssigned = (int)$row['count'];
 }
 
+// Total capacity
+$totalCapacity = $totalRooms * $maxPerRoom;
+
 // Get dark mode
 $darkModeClass = '';
 $darkModeFromDb = 'false';
@@ -259,9 +262,6 @@ if (isset($_SESSION['admin_id'])) {
             color: #e0e0e0 !important;
         }
         
-        /* ============================================================
-           FIXED NAVBAR
-           ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -277,9 +277,6 @@ if (isset($_SESSION['admin_id'])) {
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           SIDEBAR - FIXED POSITION
-           ============================================================ */
         .sidebar {
             position: fixed !important;
             top: 56px !important;
@@ -318,9 +315,6 @@ if (isset($_SESSION['admin_id'])) {
         }
         .sidebar-footer .text-muted { color: #606070 !important; font-size: 11px !important; }
         
-        /* ============================================================
-           PAGE WRAPPER - FLEX LAYOUT
-           ============================================================ */
         .page-wrapper {
             display: flex;
             flex-direction: column;
@@ -332,9 +326,6 @@ if (isset($_SESSION['admin_id'])) {
             flex: 1;
         }
         
-        /* ============================================================
-           MAIN CONTENT
-           ============================================================ */
         .main-content {
             margin-left: 220px !important;
             margin-top: 56px !important;
@@ -344,9 +335,6 @@ if (isset($_SESSION['admin_id'])) {
             background: #0a0e1a !important;
         }
         
-        /* ============================================================
-           FOOTER - STICKY BOTTOM
-           ============================================================ */
         .footer {
             margin-left: 220px !important;
             padding: 10px 25px !important;
@@ -360,9 +348,6 @@ if (isset($_SESSION['admin_id'])) {
         }
         .footer span { color: #ffd700 !important; }
         
-        /* ============================================================
-           DARK STAT CARDS
-           ============================================================ */
         .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -389,9 +374,6 @@ if (isset($_SESSION['admin_id'])) {
         .stat-number { font-size: 20px; font-weight: 700; color: #e0e0e0; margin: 0; }
         .stat-label { font-size: 11px; color: #808090; margin: 0; }
         
-        /* ============================================================
-           DARK FORM SECTIONS
-           ============================================================ */
         .form-section {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -431,9 +413,6 @@ if (isset($_SESSION['admin_id'])) {
         .form-control::placeholder { color: #606070 !important; }
         .required { color: #f87171 !important; }
         
-        /* ============================================================
-           DARK ROOM CARDS
-           ============================================================ */
         .room-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -481,9 +460,6 @@ if (isset($_SESSION['admin_id'])) {
         .room-card .resident-item .remove-btn:hover { color: #fca5a5 !important; }
         .room-card .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           DARK TABLE - FIXED
-           ============================================================ */
         .table {
             color: #e0e0e0 !important;
             font-size: 13px;
@@ -511,9 +487,6 @@ if (isset($_SESSION['admin_id'])) {
             overflow: hidden;
         }
         
-        /* ============================================================
-           DARK BADGES
-           ============================================================ */
         .badge-success { background: #065f46 !important; color: #34d399 !important; font-size: 10px; }
         .badge-danger { background: #7a2a2a !important; color: #f87171 !important; font-size: 10px; }
         .badge-warning { background: #4a3a1a !important; color: #fbbf24 !important; font-size: 10px; }
@@ -522,9 +495,6 @@ if (isset($_SESSION['admin_id'])) {
         .badge-primary { background: #1a3a6a !important; color: #93c5fd !important; font-size: 10px; }
         .badge-light { background: #2a2a4a !important; color: #b0b0c0 !important; font-size: 10px; }
         
-        /* ============================================================
-           DARK BUTTONS
-           ============================================================ */
         .btn-submit {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             border: none !important;
@@ -579,9 +549,6 @@ if (isset($_SESSION['admin_id'])) {
             color: white !important;
         }
         
-        /* ============================================================
-           DARK ALERTS
-           ============================================================ */
         .alert-success {
             background: #065f46 !important;
             border-color: #065f46 !important;
@@ -600,9 +567,6 @@ if (isset($_SESSION['admin_id'])) {
         }
         .alert .btn-close { filter: invert(1) !important; }
         
-        /* ============================================================
-           PAGINATION - DARK
-           ============================================================ */
         .pagination-container {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -637,9 +601,6 @@ if (isset($_SESSION['admin_id'])) {
         .page-info { color: #808090 !important; font-size: 12px; }
         .page-info strong { color: #93c5fd !important; }
         
-        /* ============================================================
-           PER PAGE SELECTOR - DARK
-           ============================================================ */
         .per-page-selector select {
             background: #1a1a2e !important;
             border: 1px solid #2a2a4a !important;
@@ -654,9 +615,6 @@ if (isset($_SESSION['admin_id'])) {
         }
         .per-page-selector label { color: #808090 !important; font-size: 12px; margin: 0; }
         
-        /* ============================================================
-           PAGE HEADER
-           ============================================================ */
         .page-header {
             padding-bottom: 10px;
             margin-bottom: 15px;
@@ -671,9 +629,6 @@ if (isset($_SESSION['admin_id'])) {
             color: #1a3a6a;
         }
         
-        /* ============================================================
-           BORDER & MISC
-           ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .border-top { border-top-color: #1a2a4a !important; }
         hr { border-color: #1a2a4a !important; }
@@ -683,9 +638,6 @@ if (isset($_SESSION['admin_id'])) {
         .text-success { color: #34d399 !important; }
         .text-warning { color: #fbbf24 !important; }
         
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
         @media (max-width: 768px) {
             .sidebar {
                 position: fixed !important;
@@ -714,9 +666,6 @@ if (isset($_SESSION['admin_id'])) {
             .stat-icon { width: 36px; height: 36px; font-size: 14px; }
         }
         
-        /* ============================================================
-           SCROLLBAR
-           ============================================================ */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -759,7 +708,6 @@ if (isset($_SESSION['admin_id'])) {
         <div class="content-wrapper">
             <?php include '../includes/sidebar.php'; ?>
             
-            <!-- MAIN CONTENT -->
             <main class="main-content">
                 <!-- Page Header -->
                 <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
@@ -821,6 +769,18 @@ if (isset($_SESSION['admin_id'])) {
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- ============================================================
+                TOTAL CAPACITY INFO
+                ============================================================ -->
+                <div class="alert alert-info mb-3" style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; color: #93c5fd; border-radius: 10px; padding: 12px 18px;">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Total Capacity:</strong> <?php echo $totalRooms; ?> rooms × <?php echo $maxPerRoom; ?> slots = <strong><?php echo $totalCapacity; ?> residents</strong>
+                    <span class="mx-2">|</span>
+                    <strong>Currently Assigned:</strong> <?php echo $totalAssigned; ?> / <?php echo $totalCapacity; ?>
+                    <span class="mx-2">|</span>
+                    <strong>Available Slots:</strong> <?php echo $totalCapacity - $totalAssigned; ?>
                 </div>
 
                 <!-- ============================================================
@@ -888,10 +848,10 @@ if (isset($_SESSION['admin_id'])) {
                 </div>
 
                 <!-- ============================================================
-                ROOM LIST
+                ROOM LIST - 13 ROOMS
                 ============================================================ -->
                 <div class="form-section">
-                    <h5><i class="fas fa-list me-2"></i>Room List</h5>
+                    <h5><i class="fas fa-list me-2"></i>Room List (<?php echo $totalRooms; ?> Rooms × <?php echo $maxPerRoom; ?> Slots)</h5>
                     
                     <div class="row g-2">
                         <?php for ($i = 1; $i <= $totalRooms; $i++): 
@@ -903,9 +863,8 @@ if (isset($_SESSION['admin_id'])) {
                             
                             $statusClass = $isFull ? 'full' : ($isPartial ? 'partial' : 'available');
                             $statusText = $isFull ? 'Full' : ($isPartial ? 'Partial' : 'Available');
-                            $statusColor = $isFull ? 'text-danger' : ($isPartial ? 'text-warning' : 'text-success');
                         ?>
-                        <div class="col-md-6 col-lg-4">
+                        <div class="col-md-6 col-lg-4 col-xl-3">
                             <div class="room-card">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
@@ -998,9 +957,7 @@ if (isset($_SESSION['admin_id'])) {
                         </table>
                     </div>
                     
-                    <!-- ============================================================
-                    PAGINATION WITH SHOW ENTRIES
-                    ============================================================ -->
+                    <!-- PAGINATION -->
                     <?php if ($totalPages > 1): ?>
                     <div class="pagination-container">
                         <div class="row align-items-center">
@@ -1014,7 +971,6 @@ if (isset($_SESSION['admin_id'])) {
                             </div>
                             <div class="col-md-6">
                                 <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-                                    <!-- Per Page Selector -->
                                     <div class="per-page-selector d-flex align-items-center gap-1">
                                         <label>Show:</label>
                                         <select onchange="changePerPage(this.value)">
@@ -1026,7 +982,6 @@ if (isset($_SESSION['admin_id'])) {
                                         </select>
                                     </div>
                                     
-                                    <!-- Pagination -->
                                     <nav aria-label="Page navigation">
                                         <ul class="pagination justify-content-end mb-0">
                                             <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
@@ -1080,16 +1035,17 @@ if (isset($_SESSION['admin_id'])) {
 
                 <div class="text-center text-muted small mt-2">
                     <i class="fas fa-info-circle me-1"></i>
-                    Rooms <?php echo $totalRooms; ?> total | <?php echo $maxPerRoom; ?> residents max per room
+                    <strong><?php echo $totalRooms; ?> Rooms</strong> total | 
+                    <strong><?php echo $maxPerRoom; ?> Slots</strong> max per room | 
+                    Total Capacity: <strong><?php echo $totalCapacity; ?></strong>
                     <span class="mx-1">|</span>
-                    <?php echo $totalAssigned; ?> assigned | <?php echo count($residentsWithoutRoom); ?> unassigned
+                    <span class="text-success"><?php echo $totalAssigned; ?> assigned</span>
+                    <span class="mx-1">|</span>
+                    <span class="text-warning"><?php echo count($residentsWithoutRoom); ?> unassigned</span>
                 </div>
             </main>
         </div>
         
-        <!-- ============================================================
-        FOOTER - STICKY BOTTOM
-        ============================================================ -->
         <footer class="footer">
             &copy; <?php echo date('Y'); ?> <span>Tap-and-Go Doorlock</span> System &bull; ISU-Echague Dormitory. All rights reserved.
         </footer>
@@ -1097,9 +1053,6 @@ if (isset($_SESSION['admin_id'])) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // CHANGE PER PAGE
-        // ============================================================
         function changePerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
@@ -1107,9 +1060,6 @@ if (isset($_SESSION['admin_id'])) {
             window.location.href = '?' + urlParams.toString();
         }
         
-        // ============================================================
-        // AUTO-SELECT RESIDENT
-        // ============================================================
         <?php if (isset($_GET['select']) && is_numeric($_GET['select'])): ?>
             document.addEventListener('DOMContentLoaded', function() {
                 const select = document.querySelector('select[name="user_id"]');
@@ -1119,9 +1069,6 @@ if (isset($_SESSION['admin_id'])) {
             });
         <?php endif; ?>
         
-        // ============================================================
-        // SIDEBAR TOGGLE (mobile)
-        // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
