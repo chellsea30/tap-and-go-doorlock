@@ -1,13 +1,14 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Dashboard Live Data API
+ * Location: backend/api/dashboard_data.php
  * Returns JSON data for auto-updating dashboard
  */
 
 session_start();
 
-require_once '../../backend/config/config.php';
-require_once '../../backend/helpers/functions.php';
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../helpers/functions.php';
 
 // Check authentication
 if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
