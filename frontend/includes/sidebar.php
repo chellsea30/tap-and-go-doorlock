@@ -5,8 +5,26 @@
  * WITH RESIDENTS REPORT - PERMANENT STORAGE (NO DELETE)
  * WITH CHART REPORT - PIE CHART FOR COURSE & YEAR LEVEL
  * REPORTS MOVED TO OTHERS SUBMENU
- * FIXED: Added staff-card.php to Staff submenu
+ * WITH STUDENT REGISTRATION APPROVAL TRACKING
+ * Location: frontend/includes/sidebar.php
  */
+
+// Get pending counts for badges
+$sidebarConn = getDBConnection();
+
+// Pending student approvals
+$pendingApprovals = 0;
+$result = $sidebarConn->query("SELECT COUNT(*) as count FROM users WHERE approval_status = 'pending' AND status != 'deleted'");
+if ($result && $row = $result->fetch_assoc()) {
+    $pendingApprovals = (int)$row['count'];
+}
+
+// Approved residents count
+$approvedResidents = 0;
+$result = $sidebarConn->query("SELECT COUNT(*) as count FROM users WHERE approval_status = 'approved' AND status != 'deleted'");
+if ($result && $row = $result->fetch_assoc()) {
+    $approvedResidents = (int)$row['count'];
+}
 ?>
 
 <style>
@@ -162,6 +180,24 @@
         color: #93c5fd !important;
     }
 
+    /* Pending Badge - Animated */
+    .badge-pending-pulse {
+        background: #dc2626 !important;
+        color: white !important;
+        animation: pendingPulse 1.5s infinite;
+    }
+
+    @keyframes pendingPulse {
+        0%, 100% { 
+            transform: scale(1); 
+            box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+        }
+        50% { 
+            transform: scale(1.05); 
+            box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+        }
+    }
+
     /* Separator - Dark */
     .sidebar-divider {
         border-top: 1px solid #1a2a4a !important;
@@ -268,12 +304,10 @@
        RESPONSIVE - MOBILE
        ============================================================ */
     @media (max-width: 768px) {
-        /* Show toggle button */
         .sidebar-toggle-btn {
             display: inline-block;
         }
 
-        /* Sidebar - hidden by default on mobile */
         .sidebar {
             position: fixed;
             top: 0;
@@ -289,18 +323,15 @@
             left: 0;
         }
 
-        /* Overlay show */
         .sidebar-overlay.show {
             display: block;
         }
 
-        /* Main content full width */
         .main-content {
             margin-left: 0 !important;
             padding: 10px !important;
         }
 
-        /* Smaller text */
         .sidebar .nav-link {
             font-size: 13px;
             padding: 10px 14px;
@@ -316,7 +347,6 @@
             font-size: 11px;
         }
 
-        /* Submenu */
         .sidebar ul ul .nav-link {
             font-size: 12px;
             padding: 7px 14px 7px 42px;
@@ -326,7 +356,6 @@
             padding: 5px 14px 5px 58px;
         }
 
-        /* Footer */
         .sidebar-footer .user-name {
             font-size: 12px;
         }
@@ -406,8 +435,7 @@ SIDEBAR OVERLAY - for mobile close
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php">
                     <i class="fas fa-home"></i> Dashboard
                     <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(DISTINCT room_number) as count FROM users WHERE room_number IS NOT NULL AND room_number != '' AND status = 'active'");
+                        $result = $sidebarConn->query("SELECT COUNT(DISTINCT room_number) as count FROM users WHERE room_number IS NOT NULL AND room_number != '' AND status = 'active'");
                         $row = $result->fetch_assoc();
                         $roomsUsed = $row['count'] ?? 0;
                     ?>
@@ -415,31 +443,66 @@ SIDEBAR OVERLAY - for mobile close
                 </a>
             </li>
             
-            <!-- ===== RESIDENTS ===== -->
+            <!-- ============================================================
+                 RESIDENTS - WITH PENDING APPROVAL BADGE
+                 ============================================================ -->
             <li class="nav-item">
-                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['residents.php', 'new-resident.php', 'admission-form.php', 'student-registration.php', 'room-assign.php']) ? 'active' : ''; ?>" 
+                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['residents.php', 'new-resident.php', 'admission-form.php', 'student-registration.php', 'room-assign.php', 'view-resident.php', 'edit-resident.php']) ? 'active' : ''; ?>" 
                    href="#residentsMenu" 
                    data-bs-toggle="collapse" 
                    role="button" 
-                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['residents.php', 'new-resident.php', 'admission-form.php', 'student-registration.php', 'room-assign.php']) ? 'true' : 'false'; ?>">
+                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['residents.php', 'new-resident.php', 'admission-form.php', 'student-registration.php', 'room-assign.php', 'view-resident.php', 'edit-resident.php']) ? 'true' : 'false'; ?>">
                     <i class="fas fa-users"></i> Residents
+                    
+                    <?php if ($pendingApprovals > 0): ?>
+                        <span class="badge badge-pending-pulse"><?php echo $pendingApprovals; ?> pending</span>
+                    <?php endif; ?>
+                    
                     <i class="fas fa-chevron-down"></i>
                 </a>
-                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['residents.php', 'new-resident.php', 'admission-form.php', 'student-registration.php', 'room-assign.php']) ? 'show' : ''; ?>" id="residentsMenu">
+                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['residents.php', 'new-resident.php', 'admission-form.php', 'student-registration.php', 'room-assign.php', 'view-resident.php', 'edit-resident.php']) ? 'show' : ''; ?>" id="residentsMenu">
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'residents.php' ? 'active' : ''; ?>" href="residents.php">
                             <i class="fas fa-list"></i> Resident List
+                            <?php if ($approvedResidents > 0): ?>
+                                <span class="badge bg-success rounded-pill"><?php echo $approvedResidents; ?></span>
+                            <?php endif; ?>
                         </a>
                     </li>
+                    
+                    <!-- PENDING APPROVALS LINK -->
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'residents.php' && isset($_GET['status']) && $_GET['status'] == 'pending' ? 'active' : ''; ?>" 
+                           href="residents.php?status=pending">
+                            <i class="fas fa-clock"></i> Pending Approval
+                            <?php if ($pendingApprovals > 0): ?>
+                                <span class="badge badge-pending-pulse"><?php echo $pendingApprovals; ?></span>
+                            <?php endif; ?>
+                        </a>
+                    </li>
+                    
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'student-registration.php' ? 'active' : ''; ?>" href="student-registration.php">
                             <i class="fas fa-user-graduate"></i> Student Portal
                         </a>
                     </li>
+                    
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'room-assign.php' ? 'active' : ''; ?>" href="room-assign.php">
                             <i class="fas fa-bed"></i> Room Assign
                             <span class="badge bg-warning rounded-pill" id="roomCount">0</span>
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'new-resident.php' ? 'active' : ''; ?>" href="new-resident.php">
+                            <i class="fas fa-plus-circle"></i> New Resident
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'admission-form.php' ? 'active' : ''; ?>" href="admission-form.php">
+                            <i class="fas fa-clipboard-list"></i> Admission Form
                         </a>
                     </li>
                 </ul>
@@ -447,22 +510,21 @@ SIDEBAR OVERLAY - for mobile close
             
             <!-- ===== RFID CARDS ===== -->
             <li class="nav-item">
-                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['cards.php', 'register-rfid.php', 'available-cards.php']) ? 'active' : ''; ?>" 
+                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['cards.php', 'register-rfid.php', 'available-cards.php', 'staff-card.php']) ? 'active' : ''; ?>" 
                    href="#rfidMenu" 
                    data-bs-toggle="collapse" 
                    role="button" 
-                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['cards.php', 'register-rfid.php', 'available-cards.php']) ? 'true' : 'false'; ?>">
+                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['cards.php', 'register-rfid.php', 'available-cards.php', 'staff-card.php']) ? 'true' : 'false'; ?>">
                     <i class="fas fa-id-card"></i> RFID Cards
                     <i class="fas fa-chevron-down"></i>
                     <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'active'");
+                        $result = $sidebarConn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'active'");
                         $row = $result->fetch_assoc();
                         $activeCards = $row['count'] ?? 0;
                     ?>
                     <span class="badge bg-success rounded-pill"><?php echo $activeCards; ?></span>
                 </a>
-                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['cards.php', 'register-rfid.php', 'available-cards.php']) ? 'show' : ''; ?>" id="rfidMenu">
+                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['cards.php', 'register-rfid.php', 'available-cards.php', 'staff-card.php']) ? 'show' : ''; ?>" id="rfidMenu">
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'cards.php' ? 'active' : ''; ?>" href="cards.php">
                             <i class="fas fa-list"></i> Card List
@@ -477,7 +539,7 @@ SIDEBAR OVERLAY - for mobile close
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'available-cards.php' ? 'active' : ''; ?>" href="available-cards.php">
                             <i class="fas fa-boxes"></i> Available Cards
                             <?php
-                                $result = $conn->query("SELECT COUNT(*) as count FROM available_rfid_cards WHERE status = 'available'");
+                                $result = $sidebarConn->query("SELECT COUNT(*) as count FROM available_rfid_cards WHERE status = 'available'");
                                 $row = $result->fetch_assoc();
                                 $availCount = $row['count'] ?? 0;
                             ?>
@@ -492,8 +554,7 @@ SIDEBAR OVERLAY - for mobile close
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'logs.php' ? 'active' : ''; ?>" href="logs.php">
                     <i class="fas fa-history"></i> Access Logs
                     <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM access_logs WHERE DATE(timestamp) = CURDATE()");
+                        $result = $sidebarConn->query("SELECT COUNT(*) as count FROM access_logs WHERE DATE(timestamp) = CURDATE()");
                         $row = $result->fetch_assoc();
                         $todayAccess = $row['count'] ?? 0;
                     ?>
@@ -506,8 +567,7 @@ SIDEBAR OVERLAY - for mobile close
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'alerts.php' ? 'active' : ''; ?>" href="alerts.php">
                     <i class="fas fa-bell"></i> Alerts
                     <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'pending'");
+                        $result = $sidebarConn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'pending'");
                         $row = $result->fetch_assoc();
                         $pendingAlerts = $row['count'] ?? 0;
                     ?>
@@ -527,8 +587,7 @@ SIDEBAR OVERLAY - for mobile close
                     <i class="fas fa-user-plus"></i> Visitors
                     <i class="fas fa-chevron-down"></i>
                     <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE DATE(entry_timestamp) = CURDATE()");
+                        $result = $sidebarConn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE DATE(entry_timestamp) = CURDATE()");
                         $row = $result->fetch_assoc();
                         $todayVisitors = $row['count'] ?? 0;
                     ?>
@@ -558,8 +617,7 @@ SIDEBAR OVERLAY - for mobile close
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'announcements.php' ? 'active' : ''; ?>" href="announcements.php">
                     <i class="fas fa-bullhorn"></i> Announcements
                     <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM announcements WHERE is_active = 1");
+                        $result = $sidebarConn->query("SELECT COUNT(*) as count FROM announcements WHERE is_active = 1");
                         $row = $result->fetch_assoc();
                         $announcementCount = $row['count'] ?? 0;
                     ?>
@@ -567,7 +625,7 @@ SIDEBAR OVERLAY - for mobile close
                 </a>
             </li>
             
-            <!-- ===== STAFF (with staff-card.php) ===== -->
+            <!-- ===== STAFF ===== -->
             <li class="nav-item">
                 <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['staff-info.php', 'staff-card.php', 'staff-logs.php']) ? 'active' : ''; ?>" 
                    href="#staffMenu" 
@@ -577,8 +635,7 @@ SIDEBAR OVERLAY - for mobile close
                     <i class="fas fa-user-tie"></i> Staff
                     <i class="fas fa-chevron-down"></i>
                     <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM staff_users");
+                        $result = $sidebarConn->query("SELECT COUNT(*) as count FROM staff_users");
                         $row = $result->fetch_assoc();
                         $staffCount = $row['count'] ?? 0;
                     ?>
@@ -594,7 +651,7 @@ SIDEBAR OVERLAY - for mobile close
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-card.php' ? 'active' : ''; ?>" href="staff-card.php">
                             <i class="fas fa-id-card"></i> Staff Cards
                             <?php
-                                $result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE card_type = 'staff' AND status = 'active'");
+                                $result = $sidebarConn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE card_type = 'staff' AND status = 'active'");
                                 $row = $result->fetch_assoc();
                                 $staffCardsCount = $row['count'] ?? 0;
                             ?>
@@ -605,7 +662,7 @@ SIDEBAR OVERLAY - for mobile close
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'staff-logs.php' ? 'active' : ''; ?>" href="staff-logs.php">
                             <i class="fas fa-clock"></i> Access Logs
                             <?php
-                                $result = $conn->query("SELECT COUNT(*) as count FROM staff_logs WHERE DATE(timestamp) = CURDATE()");
+                                $result = $sidebarConn->query("SELECT COUNT(*) as count FROM staff_logs WHERE DATE(timestamp) = CURDATE()");
                                 $row = $result->fetch_assoc();
                                 $todayStaffLogs = $row['count'] ?? 0;
                             ?>
@@ -625,12 +682,11 @@ SIDEBAR OVERLAY - for mobile close
                     <i class="fas fa-ellipsis-h"></i> Others
                     <i class="fas fa-chevron-down"></i>
                     <?php
-                        $conn = getDBConnection();
-                        $result = $conn->query("SELECT COUNT(*) as count FROM student_concerns WHERE status = 'pending'");
+                        $result = $sidebarConn->query("SELECT COUNT(*) as count FROM student_concerns WHERE status = 'pending'");
                         $row = $result->fetch_assoc();
                         $pendingConcerns = $row['count'] ?? 0;
                         
-                        $result = $conn->query("SELECT COUNT(*) as count FROM password_reset_requests WHERE status = 'pending'");
+                        $result = $sidebarConn->query("SELECT COUNT(*) as count FROM password_reset_requests WHERE status = 'pending'");
                         $row = $result->fetch_assoc();
                         $pendingResets = $row['count'] ?? 0;
                         
@@ -642,7 +698,7 @@ SIDEBAR OVERLAY - for mobile close
                 </a>
                 <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="othersMenu">
                     
-                    <!-- REPORTS SUBMENU (MOVED HERE) -->
+                    <!-- REPORTS SUBMENU -->
                     <li class="nav-item">
                         <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'active' : ''; ?>" 
                            href="#reportsSubMenu" 
@@ -651,14 +707,7 @@ SIDEBAR OVERLAY - for mobile close
                            aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'true' : 'false'; ?>">
                             <i class="fas fa-chart-bar"></i> Reports
                             <i class="fas fa-chevron-down"></i>
-                            <?php
-                                // Get total residents count for badge
-                                $conn = getDBConnection();
-                                $result = $conn->query("SELECT COUNT(*) as count FROM users WHERE status = 'active' OR status = 'inactive'");
-                                $row = $result->fetch_assoc();
-                                $totalResidents = $row['count'] ?? 0;
-                            ?>
-                            <span class="badge bg-info rounded-pill"><?php echo $totalResidents; ?></span>
+                            <span class="badge bg-info rounded-pill"><?php echo $approvedResidents; ?></span>
                         </a>
                         <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="reportsSubMenu">
                             <li class="nav-item">
@@ -669,8 +718,8 @@ SIDEBAR OVERLAY - for mobile close
                             <li class="nav-item">
                                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'resident-reports.php' || basename($_SERVER['PHP_SELF']) == 'residents-report.php' ? 'active' : ''; ?>" href="residents-report.php">
                                     <i class="fas fa-users"></i> Residents Report
-                                    <?php if ($totalResidents > 0): ?>
-                                        <span class="badge bg-success rounded-pill"><?php echo $totalResidents; ?></span>
+                                    <?php if ($approvedResidents > 0): ?>
+                                        <span class="badge bg-success rounded-pill"><?php echo $approvedResidents; ?></span>
                                     <?php endif; ?>
                                 </a>
                             </li>
@@ -832,10 +881,8 @@ JAVASCRIPT - SIDEBAR TOGGLE
             link.addEventListener('click', function() {
                 // Only close if it's not a dropdown toggle
                 if (!this.hasAttribute('data-bs-toggle')) {
-                    // Check if sidebar is open on mobile
                     const sidebar = document.getElementById('mainSidebar');
                     if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('show')) {
-                        // Delay close to allow navigation
                         setTimeout(function() {
                             closeSidebar();
                         }, 300);
@@ -845,5 +892,25 @@ JAVASCRIPT - SIDEBAR TOGGLE
         });
     });
 
-    console.log('✅ Dark Sidebar loaded with mobile toggle support');
+    // ============================================================
+    // AUTO-REFRESH PENDING COUNT
+    // ============================================================
+    function refreshPendingCount() {
+        fetch('api/check_pending_approvals.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const badge = document.querySelector('.badge-pending-pulse');
+                    if (badge && data.pending_count > 0) {
+                        badge.textContent = data.pending_count + ' pending';
+                    }
+                }
+            })
+            .catch(err => {});
+    }
+
+    // Refresh every 30 seconds
+    setInterval(refreshPendingCount, 30000);
+
+    console.log('✅ Dark Sidebar loaded with approval tracking');
 </script>
