@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Residents Admission Form
  * WITH AUTO-FILL FROM RESIDENT DATA - DARK MODE - NO ROOM ASSIGNMENT
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
+ * ✅ AUTO-FILL SEMESTER, SY BASED ON CURRENT DATE
  */
 
 // Start session
@@ -26,7 +27,48 @@ $error = '';
 $formData = [];
 $resident = null;
 $user_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-$room_assignment = 'Not Assigned'; // FIX: Define variable early
+$room_assignment = 'Not Assigned';
+
+// ============================================================
+// ✅ AUTO-GENERATE SEMESTER, SY BASED ON CURRENT DATE
+// ============================================================
+function getCurrentSemesterSY() {
+    $month = (int)date('n');   // 1-12
+    $year = (int)date('Y');
+    
+    // ============================================================
+    // ISU ACADEMIC CALENDAR LOGIC:
+    // - 1st Semester: August - December
+    // - 2nd Semester: January - May
+    // - Summer/Midyear: June - July
+    // ============================================================
+    
+    if ($month >= 8 && $month <= 12) {
+        // 1st Semester (Aug-Dec)
+        // SY = current year to current year + 1
+        // Example: Aug-Dec 2026 → 1st Semester, SY 2026-2027
+        $semester = '1st Semester';
+        $sy_start = $year;
+        $sy_end = $year + 1;
+    } elseif ($month >= 1 && $month <= 5) {
+        // 2nd Semester (Jan-May)
+        // SY = current year - 1 to current year
+        // Example: Jan-May 2027 → 2nd Semester, SY 2026-2027
+        $semester = '2nd Semester';
+        $sy_start = $year - 1;
+        $sy_end = $year;
+    } else {
+        // Summer / Midyear (June-July)
+        // SY = current year - 1 to current year
+        $semester = 'Summer';
+        $sy_start = $year - 1;
+        $sy_end = $year;
+    }
+    
+    return $semester . ', SY ' . $sy_start . '-' . $sy_end;
+}
+
+$auto_semester_sy = getCurrentSemesterSY();
 
 // ============================================================
 // GET RESIDENT DATA FOR AUTO-FILL
@@ -70,10 +112,42 @@ if ($user_id > 0) {
 }
 
 // ============================================================
+// ✅ CHECK IF ADMISSION ALREADY EXISTS FOR THIS RESIDENT
+// ============================================================
+$existing_admission = null;
+if ($user_id > 0) {
+    try {
+        if (!isset($conn)) $conn = getDBConnection();
+        $stmt = $conn->prepare("
+            SELECT * FROM admission_records 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        ");
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $existing_admission = $result->fetch_assoc();
+        $stmt->close();
+        
+        // If may existing admission, gamitin ang semester_sy na naka-save
+        // Pero kung gusto mong palitan ng current, i-uncomment ang linya sa baba
+        if ($existing_admission && !empty($existing_admission['semester_sy'])) {
+            // Option 1: Gamitin ang existing semester_sy
+            // $auto_semester_sy = $existing_admission['semester_sy'];
+            
+            // Option 2: Gamitin ang current semester_sy (auto-update)
+            // (Naka-default na ito — hindi kailangan baguhin)
+        }
+    } catch (Exception $e) {
+        // Silently fail
+    }
+}
+
+// ============================================================
 // HANDLE FORM SUBMISSION
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
-    // Get form data
     $data = [
         'semester_sy' => trim($_POST['semester_sy'] ?? ''),
         'name' => trim($_POST['name'] ?? ''),
@@ -103,7 +177,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         try {
             $conn = getDBConnection();
             
-            // Check if user already exists or create new
             if ($user_id > 0) {
                 // Check if admission record already exists
                 $check = $conn->prepare("SELECT admission_id FROM admission_records WHERE user_id = ?");
@@ -143,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     );
                 } else {
                     // Insert new admission
-                    $room_assignment = 'Not Assigned'; // FIX: Define before bind_param
+                    $room_assignment = 'Not Assigned';
                     $stmt = $conn->prepare("
                         INSERT INTO admission_records (
                             user_id, semester_sy, age, birth_date, home_address,
@@ -177,7 +250,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                         $data['guardian_contact'],
                         $data['student_signature'],
                         $data['status'],
-                        $room_assignment // FIX: Now defined
+                        $room_assignment
                     );
                 }
             } else {
@@ -195,7 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                 $stmt->close();
                 
                 // Insert admission
-                $room_assignment = 'Not Assigned'; // FIX: Define before bind_param
+                $room_assignment = 'Not Assigned';
                 $stmt = $conn->prepare("
                     INSERT INTO admission_records (
                         user_id, semester_sy, age, birth_date, home_address,
@@ -229,13 +302,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                     $data['guardian_contact'],
                     $data['student_signature'],
                     $data['status'],
-                    $room_assignment // FIX: Now defined
+                    $room_assignment
                 );
             }
             
             if ($stmt->execute()) {
                 $success = 'Admission form submitted successfully!';
-                // Clear form data if not editing
                 if ($user_id == 0) {
                     $formData = [];
                 }
@@ -439,6 +511,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         .form-select option {
             background: #131926 !important;
             color: #e5e7eb !important;
+        }
+        
+        /* ============================================================
+           ✅ AUTO-FILLED FIELD HIGHLIGHT
+           ============================================================ */
+        .form-control.auto-filled,
+        .form-select.auto-filled {
+            border-color: #ffd700 !important;
+            background: rgba(255, 215, 0, 0.05) !important;
+            position: relative;
+        }
+        
+        .auto-fill-indicator {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #ffd700;
+            font-size: 10px;
+            pointer-events: none;
+        }
+        
+        .semester-sy-wrapper {
+            position: relative;
+        }
+        
+        .semester-sy-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #ffd700, #f59e0b);
+            color: #0a0e1a;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 20px;
+            margin-left: 8px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            animation: pulse-badge 2s infinite;
+        }
+        
+        @keyframes pulse-badge {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
         
         .header-title {
@@ -669,6 +784,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
             .navbar { display: none !important; }
             .sidebar { display: none !important; }
             .main-content { margin: 0 !important; padding: 20px !important; }
+            .semester-sy-badge { background: #ffd700 !important; color: #000 !important; }
         }
     </style>
 </head>
@@ -733,8 +849,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
                             <div class="col-md-12">
                                 <div class="row g-2">
                                     <div class="col-md-6">
-                                        <label class="form-label">Semester, SY <span class="required">*</span></label>
-                                        <input type="text" class="form-control" name="semester_sy" placeholder="e.g., 1st Semester, SY 2025-2026" value="<?php echo htmlspecialchars($formData['semester_sy'] ?? ''); ?>" required>
+                                        <label class="form-label">
+                                            Semester, SY <span class="required">*</span>
+                                            <span class="semester-sy-badge">
+                                                <i class="fas fa-magic me-1"></i>Auto
+                                            </span>
+                                        </label>
+                                        <div class="semester-sy-wrapper">
+                                            <input type="text" 
+                                                   class="form-control auto-filled" 
+                                                   name="semester_sy" 
+                                                   id="semester_sy"
+                                                   placeholder="e.g., 1st Semester, SY 2025-2026" 
+                                                   value="<?php echo htmlspecialchars($formData['semester_sy'] ?? $auto_semester_sy); ?>" 
+                                                   required
+                                                   readonly>
+                                        </div>
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Auto-generated base sa kasalukuyang petsa. 
+                                            <a href="#" onclick="unlockSemesterField(event)" style="color: #ffd700;">I-edit manually</a>
+                                        </small>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">Date</label>
@@ -946,11 +1081,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit'])) {
         });
 
         // ============================================================
+        // ✅ UNLOCK SEMESTER FIELD (Manual edit)
+        // ============================================================
+        function unlockSemesterField(event) {
+            event.preventDefault();
+            const field = document.getElementById('semester_sy');
+            field.removeAttribute('readonly');
+            field.classList.remove('auto-filled');
+            field.style.borderColor = '#ffd700';
+            field.style.background = 'rgba(255, 215, 0, 0.1)';
+            field.focus();
+            
+            // Show notification
+            const badge = document.querySelector('.semester-sy-badge');
+            if (badge) {
+                badge.innerHTML = '<i class="fas fa-pen me-1"></i>Editing';
+                badge.style.background = '#ef4444';
+                badge.style.color = 'white';
+            }
+        }
+
+        // ============================================================
         // SIDEBAR TOGGLE (mobile)
         // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
+
+        // ============================================================
+        // ✅ AUTO-UPDATE SEMESTER SY KAPAG NAGBAGO ANG PETSA
+        // (Optional: Para sa testing — i-uncomment kung gusto mong subukan)
+        // ============================================================
+        /*
+        function getAutoSemesterSY() {
+            const now = new Date();
+            const month = now.getMonth() + 1;
+            const year = now.getFullYear();
+            
+            if (month >= 8 && month <= 12) {
+                return '1st Semester, SY ' + year + '-' + (year + 1);
+            } else if (month >= 1 && month <= 5) {
+                return '2nd Semester, SY ' + (year - 1) + '-' + year;
+            } else {
+                return 'Summer, SY ' + (year - 1) + '-' + year;
+            }
+        }
+        
+        // I-update ang value ng semester_sy field
+        document.getElementById('semester_sy').value = getAutoSemesterSY();
+        */
     </script>
 </body>
 </html>
