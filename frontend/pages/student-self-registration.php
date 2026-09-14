@@ -1,7 +1,6 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Student Self-Registration Form
- * COMPLETE FORM - Same as Admin's new-resident.php
  * Public - No login required
  * Location: frontend/pages/student-self-registration.php
  */
@@ -12,7 +11,6 @@ require_once '../../backend/helpers/functions.php';
 
 $success = '';
 $error = '';
-$formData = [];
 
 // ============================================================
 // HANDLE FORM SUBMISSION
@@ -123,7 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 $user_id = $conn->insert_id;
                 $stmt->close();
                 
-                // Insert into resident_profiles - WITH ALL FIELDS
+                // ============================================================
+                // INSERT INTO RESIDENT_PROFILES - FIXED BIND_PARAM
+                // ============================================================
                 $profileStmt = $conn->prepare("
                     INSERT INTO resident_profiles (
                         user_id, date_registered, gender, gender_other, birth_date, age,
@@ -136,8 +136,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 
-                // ✅ CORRECT: 32 types = i(1) + s(31)
-                $profileStmt->bind_param("ississssssssssssssssssssssssssssss",
+                // Type string: 32 chars (i + s + s + s + s + i + 26 s)
+                // user_id = i, age = i, all others = s
+                $types = "i" . str_repeat("s", 4) . "i" . str_repeat("s", 26);
+                // Result: "i" + "ssss" + "i" + "ssssssssssssssssssssssssss" = 32 chars
+                
+                $profileStmt->bind_param($types,
                     $user_id,
                     $date_registered,
                     $gender,
@@ -186,7 +190,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 $logStmt->close();
                 
                 $success = $student_id;
-                $formData = [];
             } else {
                 $error = 'Failed to save: ' . $stmt->error;
             }
@@ -364,9 +367,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
 
             <form method="POST" action="" enctype="multipart/form-data" id="registrationForm">
                 
-                <!-- ============================================================
-                     PHOTO UPLOAD
-                     ============================================================ -->
+                <!-- PHOTO UPLOAD -->
                 <div class="form-section">
                     <h5><i class="fas fa-camera me-2"></i>Profile Photo <span class="required">*</span></h5>
                     <div class="photo-upload" onclick="document.getElementById('photoInput').click()">
@@ -383,9 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     PERSONAL INFORMATION
-                     ============================================================ -->
+                <!-- PERSONAL INFORMATION -->
                 <div class="form-section">
                     <h5><i class="fas fa-user me-2"></i>Personal Information</h5>
                     <div class="row g-3">
@@ -452,9 +451,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     ACADEMIC INFORMATION
-                     ============================================================ -->
+                <!-- ACADEMIC INFORMATION -->
                 <div class="form-section">
                     <h5><i class="fas fa-graduation-cap me-2"></i>Academic Information</h5>
                     <div class="row g-3">
@@ -507,9 +504,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     PARENT / GUARDIAN INFORMATION
-                     ============================================================ -->
+                <!-- PARENT / GUARDIAN INFORMATION -->
                 <div class="form-section">
                     <h5><i class="fas fa-users me-2"></i>Parent / Guardian Information</h5>
                     <div class="row g-3">
@@ -557,9 +552,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     EMERGENCY CONTACT
-                     ============================================================ -->
+                <!-- EMERGENCY CONTACT -->
                 <div class="form-section">
                     <h5><i class="fas fa-phone-alt me-2"></i>Emergency Contact</h5>
                     <div class="row g-3">
@@ -586,9 +579,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     BOARDING HISTORY
-                     ============================================================ -->
+                <!-- BOARDING HISTORY -->
                 <div class="form-section">
                     <h5><i class="fas fa-home me-2"></i>Boarding History</h5>
                     <div class="row g-3">
@@ -645,9 +636,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
     </div>
 
     <script>
-        // ============================================================
         // AUTO UPPERCASE
-        // ============================================================
         document.querySelectorAll('.auto-upper').forEach(function(input) {
             input.addEventListener('input', function() {
                 const start = this.selectionStart;
@@ -657,9 +646,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             });
         });
 
-        // ============================================================
         // PHOTO PREVIEW
-        // ============================================================
         function previewPhoto(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
@@ -674,9 +661,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             }
         }
 
-        // ============================================================
-        // AUTO AGE CALCULATOR
-        // ============================================================
+        // AUTO AGE
         document.getElementById('birthDate')?.addEventListener('change', function() {
             if (this.value) {
                 const birth = new Date(this.value);
@@ -688,9 +673,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             }
         });
 
-        // ============================================================
-        // TOGGLE PLAN TRANSFER FIELDS
-        // ============================================================
+        // TOGGLE PLAN TRANSFER
         document.querySelectorAll('input[name="plan_transfer"]').forEach(function(el) {
             el.addEventListener('change', function() {
                 if (this.value === 'Yes') {
