@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Print Resident ID Card
  * STYLE: ISU-Echague Ladies Dormitory ID Card
  * WITHOUT CARD UID DISPLAY
+ * WITH YEAR LEVEL
  */
 
 session_start();
@@ -88,6 +89,9 @@ $room_display = $card['room_number'] ?? 'N/A';
 if ($is_visitor) {
     $room_display = 'Visit: ' . ($card['room_number'] ?? 'N/A');
 }
+
+// Year level display
+$year_level_display = $card['year_level'] ?? 'N/A';
 
 // User type label
 if ($is_visitor) {
@@ -272,6 +276,10 @@ if ($is_visitor && !empty($card['visitor_name'])) {
             color: #ffd700;
             font-weight: 700;
         }
+        .id-detail-row .value.year {
+            color: #93c5fd;
+            font-weight: 700;
+        }
         
         /* Footer */
         .id-card-footer {
@@ -396,6 +404,7 @@ if ($is_visitor && !empty($card['visitor_name'])) {
             .id-detail-row .label { color: #666 !important; }
             .id-detail-row .value { color: #000 !important; }
             .id-detail-row .value.room { color: #1a3a6a !important; }
+            .id-detail-row .value.year { color: #1a3a6a !important; }
             .id-card-footer { border-top-color: #ddd !important; }
             .id-card-footer .footer-text { color: #999 !important; }
             .id-card-footer .footer-text span { color: #1a3a6a !important; }
@@ -435,7 +444,7 @@ if ($is_visitor && !empty($card['visitor_name'])) {
                 <!-- Divider -->
                 <div class="id-divider"></div>
                 
-                <!-- Details - WITHOUT CARD UID -->
+                <!-- Details - WITH YEAR LEVEL -->
                 <div class="id-details">
                     <?php if (!$is_visitor && $card['card_type'] != 'staff'): ?>
                         <div class="id-detail-row">
@@ -445,6 +454,10 @@ if ($is_visitor && !empty($card['visitor_name'])) {
                         <div class="id-detail-row">
                             <span class="label">Course</span>
                             <span class="value"><?php echo htmlspecialchars($card['course'] ?? 'N/A'); ?></span>
+                        </div>
+                        <div class="id-detail-row">
+                            <span class="label">Year Level</span>
+                            <span class="value year"><?php echo htmlspecialchars($year_level_display); ?></span>
                         </div>
                         <div class="id-detail-row">
                             <span class="label">Room</span>
