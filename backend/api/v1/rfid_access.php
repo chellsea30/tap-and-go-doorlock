@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - RFID Access API
  * COMPLETE - WITH REAL-TIME ALERT NOTIFICATIONS
  * WITH ACCESS CONTROL
+ * WITH CARD STATUS VERIFICATION (DEACTIVATE/ACTIVATE SYNC)
  */
 
 header('Content-Type: application/json');
@@ -19,11 +20,10 @@ $conn = getDBConnection();
 // API KEY AUTHENTICATION (Optional but recommended)
 // ============================================================
 $api_key = isset($_SERVER['HTTP_X_API_KEY']) ? $_SERVER['HTTP_X_API_KEY'] : '';
-$valid_api_key = 'TAP_AND_GO_2024_SECURE_KEY'; // Change this to a secure key
+$valid_api_key = 'TAP_AND_GO_2024_SECURE_KEY';
 
-// Skip API key check for OPTIONS requests
 if ($_SERVER['REQUEST_METHOD'] !== 'OPTIONS') {
-    // Optional: Uncomment to enable API key validation
+    // Uncomment to enable API key validation
     // if (empty($api_key) || $api_key !== $valid_api_key) {
     //     sendResponse(false, 'Invalid API Key', [], 401);
     // }
@@ -58,7 +58,6 @@ function tableExists($table) {
 function createAlertNotification($uid, $reason, $user_name, $card_type, $access_type = 'entry') {
     global $conn;
     
-    // Check if notifications table exists, if not create it
     if (!tableExists('notifications')) {
         $conn->query("
             CREATE TABLE IF NOT EXISTS `notifications` (
@@ -81,7 +80,6 @@ function createAlertNotification($uid, $reason, $user_name, $card_type, $access_
         ");
     }
     
-    // Insert into notifications table
     $stmt = $conn->prepare("
         INSERT INTO notifications (
             notification_type,
@@ -109,11 +107,13 @@ function createAlertNotification($uid, $reason, $user_name, $card_type, $access_
 switch ($action) {
     
     // ============================================================
-    // GET ALL AUTHORIZED CARDS
+    // ✅ GET ALL AUTHORIZED CARDS - WITH VERSION HASH
+    // Only ACTIVE cards are returned. Deactivated/expired/lost are EXCLUDED.
     // ============================================================
     case 'get_cards':
         $cards = [];
         
+        // Kunin lang ang mga ACTIVE cards
         $result = $conn->query("
             SELECT 
                 c.card_uid, 
@@ -172,10 +172,99 @@ switch ($action) {
                     'resident_visited_name' => $row['resident_visited_name'] ?? ''
                 ];
             }
-            sendResponse(true, 'Cards loaded successfully', ['cards' => $cards]);
-        } else {
-            sendResponse(true, 'No active cards found', ['cards' => []]);
         }
+        
+        // ✅ VERSION HASH - para malaman ng ESP32 kung may nabago
+        $versionResult = $conn->query("
+            SELECT 
+                COUNT(*) as total,
+                MD5(GROUP_CONCAT(CONCAT(card_uid, ':', status) ORDER BY card_uid)) as version_hash
+            FROM rfid_cards
+        ");
+        $version_hash = 'v0';
+        $total_cards = 0;
+        if ($versionResult && $row = $versionResult->fetch_assoc()) {
+            $version_hash = $row['version_hash'] ?? md5((string)$row['total']);
+            $total_cards = (int)$row['total'];
+        }
+        
+        sendResponse(true, 'Cards loaded successfully', [
+            'cards' => $cards,
+            'total' => count($cards),
+            'version_hash' => $version_hash,
+            'total_registered' => $total_cards
+        ]);
+        break;
+    
+    // ============================================================
+    // ✅ CHECK SINGLE CARD STATUS - REAL-TIME VERIFICATION
+    // Ginagamit ng ESP32 bago mag-open ng lock
+    // ============================================================
+    case 'check_card_status':
+        $uid = isset($input['uid']) ? strtoupper(trim($input['uid'])) : '';
+        
+        if (empty($uid)) {
+            sendResponse(false, 'Card UID required');
+        }
+        
+        $stmt = $conn->prepare("
+            SELECT 
+                c.card_uid, 
+                c.status, 
+                c.card_type,
+                c.visitor_name,
+                u.full_name as user_name,
+                u.room_number
+            FROM rfid_cards c
+            LEFT JOIN users u ON c.user_id = u.user_id
+            WHERE c.card_uid = ?
+        ");
+        $stmt->bind_param("s", $uid);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($row = $result->fetch_assoc()) {
+            $is_active = ($row['status'] === 'active');
+            
+            // For visitors, also check validity date
+            $visitor_valid = true;
+            if ($row['card_type'] === 'visitor') {
+                $vCheck = $conn->prepare("
+                    SELECT validity_end 
+                    FROM visitor_logs 
+                    WHERE temporary_card_uid = ? 
+                    ORDER BY created_at DESC LIMIT 1
+                ");
+                $vCheck->bind_param("s", $uid);
+                $vCheck->execute();
+                $vResult = $vCheck->get_result();
+                if ($vRow = $vResult->fetch_assoc()) {
+                    $visitor_valid = ($vRow['validity_end'] >= date('Y-m-d'));
+                }
+                $vCheck->close();
+            }
+            
+            $final_active = $is_active && $visitor_valid;
+            
+            sendResponse(true, 'Card status retrieved', [
+                'uid' => $uid,
+                'status' => $row['status'],
+                'card_type' => $row['card_type'],
+                'user_name' => $row['user_name'] ?? 'Unknown',
+                'room_number' => $row['room_number'] ?? 'N/A',
+                'is_active' => $final_active,
+                'visitor_valid' => $visitor_valid,
+                'exists' => true
+            ]);
+        } else {
+            sendResponse(true, 'Card not found', [
+                'uid' => $uid,
+                'status' => 'not_found',
+                'is_active' => false,
+                'exists' => false
+            ]);
+        }
+        $stmt->close();
         break;
     
     // ============================================================
@@ -191,7 +280,6 @@ switch ($action) {
             sendResponse(false, 'Card UID required');
         }
         
-        // Initialize variables
         $user_id = null;
         $user_name = 'Unknown';
         $room_number = 'N/A';
@@ -300,10 +388,21 @@ switch ($action) {
                         break;
                 }
             } else {
-                $user_name = 'Inactive Card';
+                // ✅ DEACTIVATED / EXPIRED / LOST card - DENY ACCESS
+                $user_name = 'Inactive Card (' . ucfirst($cardStatus) . ')';
                 $cardType = $row['card_type'] ?? 'unknown';
                 $isAuthorized = false;
                 $granted = false;
+                
+                // Still set user info for logging
+                if ($cardType == 'visitor' && !empty($visitor_name)) {
+                    $user_name = $visitor_name . ' (' . ucfirst($cardStatus) . ')';
+                } elseif (!empty($row['full_name'])) {
+                    $user_name = $row['full_name'] . ' (' . ucfirst($cardStatus) . ')';
+                }
+                $room_number = $row['room_number'] ?? 'N/A';
+                $student_id = $row['student_id'] ?? 'N/A';
+                $user_id = $row['user_id'];
             }
         }
         $stmt->close();
@@ -311,7 +410,7 @@ switch ($action) {
         // ------------------------------------------------------------
         // STEP 2: If not found in rfid_cards, check visitor_logs
         // ------------------------------------------------------------
-        if (!$card_exists || $user_name == 'Unknown' || $user_name == 'Inactive Card') {
+        if (!$card_exists || $user_name == 'Unknown' || strpos($user_name, 'Inactive') !== false) {
             $stmt = $conn->prepare("
                 SELECT 
                     v.visitor_name, 
@@ -334,21 +433,24 @@ switch ($action) {
             $result = $stmt->get_result();
             
             if ($row = $result->fetch_assoc()) {
-                $card_exists = true;
-                $today = date('Y-m-d');
-                if ($row['validity_end'] >= $today) {
-                    $user_name = $row['visitor_name'] . ' (Visitor)';
-                    $room_number = $row['resident_room'] ?? 'N/A';
-                    $cardType = 'visitor';
-                    $visitor_name = $row['visitor_name'];
-                    $purpose = $row['purpose_of_visit'] ?? '';
-                    $isAuthorized = true;
-                    $granted = true;
-                } else {
-                    $user_name = $row['visitor_name'] . ' (Expired)';
-                    $cardType = 'visitor';
-                    $isAuthorized = false;
-                    $granted = false;
+                // Only override if the card isn't already marked inactive
+                if (strpos($user_name, 'Inactive') === false) {
+                    $card_exists = true;
+                    $today = date('Y-m-d');
+                    if ($row['validity_end'] >= $today) {
+                        $user_name = $row['visitor_name'] . ' (Visitor)';
+                        $room_number = $row['resident_room'] ?? 'N/A';
+                        $cardType = 'visitor';
+                        $visitor_name = $row['visitor_name'];
+                        $purpose = $row['purpose_of_visit'] ?? '';
+                        $isAuthorized = true;
+                        $granted = true;
+                    } else {
+                        $user_name = $row['visitor_name'] . ' (Expired)';
+                        $cardType = 'visitor';
+                        $isAuthorized = false;
+                        $granted = false;
+                    }
                 }
             }
             $stmt->close();
@@ -388,13 +490,12 @@ switch ($action) {
             // CREATE ALERT AND NOTIFICATION FOR DENIED ACCESS
             // ------------------------------------------------------------
             if (!$granted) {
-                // Determine the reason
                 if ($user_name == 'Unknown Card') {
                     $reason = 'Unknown card detected: ' . $uid;
                 } elseif (strpos($user_name, 'Expired') !== false) {
                     $reason = 'Expired visitor card: ' . $uid;
-                } elseif ($user_name == 'Inactive Card') {
-                    $reason = 'Inactive card detected: ' . $uid;
+                } elseif (strpos($user_name, 'Inactive') !== false) {
+                    $reason = 'Deactivated card detected: ' . $uid;
                 } else {
                     $reason = 'Unauthorized access attempt by: ' . $user_name;
                 }
@@ -404,7 +505,6 @@ switch ($action) {
                     $displayName = $visitor_name . ' (Visitor)';
                 }
                 
-                // Insert into alert_logs
                 $stmt2 = $conn->prepare("
                     INSERT INTO alert_logs (
                         card_uid, 
@@ -423,19 +523,12 @@ switch ($action) {
                     $alert_id = $conn->insert_id;
                     $alert_created = true;
                     
-                    // CREATE REAL-TIME NOTIFICATION
                     $notif_id = createAlertNotification($uid, $reason, $displayName, $cardType, $type);
                     
                     error_log("✅ Alert created with ID: " . $alert_id . " for card: " . $uid);
-                    if ($notif_id) {
-                        error_log("✅ Notification created with ID: " . $notif_id);
-                    }
-                } else {
-                    error_log("❌ Failed to create alert: " . $stmt2->error);
                 }
                 $stmt2->close();
                 
-                // Also insert into security_logs if table exists
                 if (tableExists('security_logs')) {
                     $stmt3 = $conn->prepare("
                         INSERT INTO security_logs (
@@ -453,7 +546,6 @@ switch ($action) {
                 }
             }
             
-            // If visitor granted, update visitor_logs
             if ($cardType == 'visitor' && $granted) {
                 $stmt5 = $conn->prepare("
                     UPDATE visitor_logs 
@@ -543,7 +635,6 @@ switch ($action) {
             $stmt->close();
         }
         
-        // Insert alert
         $stmt = $conn->prepare("
             INSERT INTO alert_logs (
                 card_uid, 
@@ -560,8 +651,6 @@ switch ($action) {
         
         if ($stmt->execute()) {
             $alert_id = $conn->insert_id;
-            
-            // Create real-time notification
             createAlertNotification($uid, $reason, $user_name, $card_type, $access_type);
             
             sendResponse(true, 'Alert sent successfully', [
@@ -598,9 +687,7 @@ switch ($action) {
             $query .= " AND n.status = '$status'";
         }
         
-        // Only show recent unexpired notifications
         $query .= " AND n.expires_at > NOW()";
-        
         $query .= " ORDER BY 
             CASE WHEN n.status = 'unread' THEN 0 ELSE 1 END,
             n.created_at DESC 
@@ -615,7 +702,6 @@ switch ($action) {
             }
         }
         
-        // Get unread count
         $countResult = $conn->query("
             SELECT COUNT(*) as count 
             FROM notifications 
@@ -731,7 +817,7 @@ switch ($action) {
         break;
     
     // ============================================================
-    // GET PENDING ALERT COUNT (for badge)
+    // GET PENDING ALERT COUNT
     // ============================================================
     case 'get_alert_count':
         $result = $conn->query("
@@ -948,7 +1034,6 @@ switch ($action) {
         $conn->begin_transaction();
         
         try {
-            // Check if card already exists
             $check = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE card_uid = ?");
             $check->bind_param("s", $uid);
             $check->execute();
@@ -958,7 +1043,6 @@ switch ($action) {
             }
             $check->close();
             
-            // Insert into rfid_cards
             $stmt = $conn->prepare("
                 INSERT INTO rfid_cards (
                     card_uid, 
@@ -978,7 +1062,6 @@ switch ($action) {
             }
             $stmt->close();
             
-            // Insert into visitor_logs
             $stmt2 = $conn->prepare("
                 INSERT INTO visitor_logs (
                     visitor_name,
@@ -1015,7 +1098,7 @@ switch ($action) {
     // DEFAULT
     // ============================================================
     default:
-        sendResponse(false, 'Invalid action. Available actions: get_cards, log_access, send_alert, get_alerts, resolve_alert, delete_alert, get_alert_stats, get_unauthorized, resolve_all_alerts, delete_old_alerts, register_visitor, get_notifications, mark_read, mark_all_read, get_alert_count');
+        sendResponse(false, 'Invalid action. Available actions: get_cards, check_card_status, log_access, send_alert, get_alerts, resolve_alert, delete_alert, get_alert_stats, get_unauthorized, resolve_all_alerts, delete_old_alerts, register_visitor, get_notifications, mark_read, mark_all_read, get_alert_count');
         break;
 }
 
