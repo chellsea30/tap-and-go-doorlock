@@ -14,6 +14,9 @@ $success = '';
 $error = '';
 $formData = [];
 
+// ============================================================
+// HANDLE FORM SUBMISSION
+// ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration'])) {
     // Get form data - UPPERCASE
     $full_name = strtoupper(trim($_POST['full_name'] ?? ''));
@@ -133,19 +136,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 
-                $profileStmt->bind_param("ississsssssssssssssssssssssssss",
-                    $user_id, $date_registered, $gender, $gender_other, $birth_date, $age,
-                    $birth_no, $course, $year_level, $no_siblings, $scholarship, $allowance_source,
-                    $school_last, $school_address, $cultural_origin, $religion, $dialect,
-                    $home_address, $civil_status, $father_education, $mother_education,
-                    $father_occupation, $mother_occupation, $emergency_name, $emergency_relationship,
-                    $emergency_address, $emergency_contact, $parents_marital_status,
-                    $former_boarding_years, $plan_transfer, $plan_transfer_yes, $plan_transfer_no
+                // ✅ CORRECT: 32 types = i(1) + s(31)
+                $profileStmt->bind_param("ississssssssssssssssssssssssssssss",
+                    $user_id,
+                    $date_registered,
+                    $gender,
+                    $gender_other,
+                    $birth_date,
+                    $age,
+                    $birth_no,
+                    $course,
+                    $year_level,
+                    $no_siblings,
+                    $scholarship,
+                    $allowance_source,
+                    $school_last,
+                    $school_address,
+                    $cultural_origin,
+                    $religion,
+                    $dialect,
+                    $home_address,
+                    $civil_status,
+                    $father_education,
+                    $mother_education,
+                    $father_occupation,
+                    $mother_occupation,
+                    $emergency_name,
+                    $emergency_relationship,
+                    $emergency_address,
+                    $emergency_contact,
+                    $parents_marital_status,
+                    $former_boarding_years,
+                    $plan_transfer,
+                    $plan_transfer_yes,
+                    $plan_transfer_no
                 );
                 $profileStmt->execute();
                 $profileStmt->close();
                 
-                // Log
+                // Log registration
                 $logStmt = $conn->prepare("
                     INSERT INTO student_registration_logs (user_id, action, details, performed_by, ip_address)
                     VALUES (?, 'self_registration', ?, 'student', ?)
@@ -230,6 +259,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
         }
         .form-control::placeholder { color: rgba(255,255,255,0.3) !important; text-transform: none !important; }
         .form-select option { background: #131926; color: #e5e7eb; }
+        .form-check-label { color: #d1d5db; font-size: 13px; }
+        .form-check-input {
+            background-color: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.2);
+        }
+        .form-check-input:checked {
+            background-color: #ffd700;
+            border-color: #ffd700;
+        }
         .required { color: #ef4444; }
         .photo-upload {
             text-align: center; padding: 25px;
@@ -384,12 +422,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                             <input type="number" class="form-control" name="age" id="ageInput" readonly>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">No. of Siblings</label>
-                            <input type="text" class="form-control auto-upper" name="no_siblings" placeholder="e.g., 3 siblings">
+                            <label class="form-label">Birth No.</label>
+                            <input type="text" class="form-control auto-upper" name="birth_no" placeholder="Birth Cert. No.">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Birth No.</label>
-                            <input type="text" class="form-control auto-upper" name="birth_no" placeholder="Birth Certificate No.">
+                            <label class="form-label">No. of Siblings</label>
+                            <input type="text" class="form-control auto-upper" name="no_siblings" placeholder="e.g., 3 siblings">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Contact Number <span class="required">*</span></label>
@@ -607,7 +645,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
     </div>
 
     <script>
+        // ============================================================
         // AUTO UPPERCASE
+        // ============================================================
         document.querySelectorAll('.auto-upper').forEach(function(input) {
             input.addEventListener('input', function() {
                 const start = this.selectionStart;
@@ -617,7 +657,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             });
         });
 
+        // ============================================================
         // PHOTO PREVIEW
+        // ============================================================
         function previewPhoto(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
@@ -632,7 +674,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             }
         }
 
-        // AUTO AGE
+        // ============================================================
+        // AUTO AGE CALCULATOR
+        // ============================================================
         document.getElementById('birthDate')?.addEventListener('change', function() {
             if (this.value) {
                 const birth = new Date(this.value);
@@ -644,7 +688,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             }
         });
 
+        // ============================================================
         // TOGGLE PLAN TRANSFER FIELDS
+        // ============================================================
         document.querySelectorAll('input[name="plan_transfer"]').forEach(function(el) {
             el.addEventListener('change', function() {
                 if (this.value === 'Yes') {
