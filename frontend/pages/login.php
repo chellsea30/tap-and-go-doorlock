@@ -512,7 +512,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISU Ladies Dormitory - Login</title>
     
-    <!-- FAVICON (Browser Tab Logo) -->
     <link rel="icon" type="image/png" href="../assets/images/isu-logo.png">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -536,7 +535,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             overflow: hidden;
         }
         
-        /* Background Animation */
         body::before {
             content: '';
             position: absolute;
@@ -558,7 +556,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             100% { transform: rotate(360deg) scale(1); }
         }
         
-        /* Floating Particles */
         .particle {
             position: absolute;
             border-radius: 50%;
@@ -576,9 +573,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             66% { transform: translate(-20px, 20px) scale(0.95); }
         }
         
-        /* ============================================================
-           LOGIN CONTAINER
-           ============================================================ */
         .login-wrapper {
             width: 100%;
             max-width: 1200px;
@@ -590,9 +584,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             gap: 60px;
         }
         
-        /* ============================================================
-           LEFT SIDE - BRANDING
-           ============================================================ */
         .brand-section {
             flex: 1;
             color: white;
@@ -694,9 +685,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             color: rgba(255, 215, 0, 0.3);
         }
         
-        /* ============================================================
-           RIGHT SIDE - LOGIN CARD
-           ============================================================ */
         .login-card {
             width: 100%;
             max-width: 440px;
@@ -742,9 +730,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             margin: 0;
         }
         
-        /* ============================================================
-           ROLE SELECTOR
-           ============================================================ */
         .role-selector {
             display: flex;
             gap: 8px;
@@ -783,9 +768,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             font-size: 13px;
         }
         
-        /* ============================================================
-           FORM ELEMENTS
-           ============================================================ */
         .form-group {
             margin-bottom: 18px;
         }
@@ -853,9 +835,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             color: rgba(255,255,255,0.6);
         }
         
-        /* ============================================================
-           LOCK INDICATOR
-           ============================================================ */
         .lock-indicator {
             display: <?php echo $is_blocked ? 'flex' : 'none'; ?>;
             align-items: center;
@@ -879,9 +858,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             font-weight: 700;
         }
         
-        /* ============================================================
-           ATTEMPTS WARNING
-           ============================================================ */
         .attempts-warning {
             color: #fbbf24;
             font-size: 13px;
@@ -902,9 +878,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             50% { opacity: 0.5; }
         }
         
-        /* ============================================================
-           ALERTS
-           ============================================================ */
         .alert-custom {
             padding: 12px 16px;
             border-radius: 12px;
@@ -932,9 +905,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             color: #6ee7b7;
         }
         
-        /* ============================================================
-           BUTTONS
-           ============================================================ */
         .btn-login {
             width: 100%;
             padding: 16px;
@@ -989,9 +959,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             cursor: not-allowed;
         }
         
-        /* ============================================================
-           MATH PUZZLE
-           ============================================================ */
         .puzzle-section {
             display: <?php echo $show_puzzle ? 'block' : 'none'; ?>;
             animation: fadeIn 0.5s ease;
@@ -1114,9 +1081,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             color: rgba(255,255,255,0.1);
         }
         
-        /* ============================================================
-           PASSWORD RESET SECTION
-           ============================================================ */
         .reset-section {
             display: <?php echo isset($_POST['show_reset']) ? 'block' : 'none'; ?>;
             animation: fadeIn 0.5s ease;
@@ -1196,9 +1160,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             color: rgba(255,255,255,0.25);
         }
         
-        /* ============================================================
-           FORGOT PASSWORD LINK
-           ============================================================ */
         .forgot-password-link {
             color: rgba(255,255,255,0.3);
             font-size: 13px;
@@ -1212,9 +1173,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             color: rgba(255,215,0,0.6);
         }
         
-        /* ============================================================
-           FOOTER TEXT (Login Card)
-           ============================================================ */
         .login-footer-text {
             text-align: center;
             margin-top: 25px;
@@ -1228,7 +1186,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         }
         
         /* ============================================================
-           STUDENT REGISTRATION CONFIRMATION MODAL
+           STUDENT CONFIRMATION MODAL
            ============================================================ */
         .student-confirm-modal .modal-content {
             background: #131926 !important;
@@ -1249,14 +1207,15 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         }
         
         .student-confirm-modal .modal-body {
-            padding: 30px 25px;
+            padding: 30px 25px 20px;
             text-align: center;
         }
         
         .student-confirm-modal .modal-footer {
             border-top: 1px solid #1a2a4a;
-            padding: 15px 25px;
-            justify-content: center;
+            padding: 20px 25px;
+            display: flex;
+            flex-direction: column;
             gap: 10px;
         }
         
@@ -1287,29 +1246,77 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         }
         
         .student-confirm-modal .confirm-note {
-            background: rgba(251, 191, 36, 0.1);
-            border: 1px solid rgba(251, 191, 36, 0.3);
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
             border-radius: 12px;
             padding: 14px 16px;
             margin-bottom: 10px;
+            text-align: left;
         }
         
         .student-confirm-modal .confirm-note p {
-            color: #fbbf24;
+            color: #93c5fd;
             font-size: 12px;
             margin: 0;
-            line-height: 1.5;
+            line-height: 1.7;
+        }
+        
+        .btn-have-account {
+            background: linear-gradient(135deg, #10b981, #059669) !important;
+            border: none !important;
+            color: white !important;
+            padding: 14px 25px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: center;
+            cursor: pointer;
+        }
+        
+        .btn-have-account:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+            color: white !important;
+        }
+        
+        .btn-no-account {
+            background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
+            border: none !important;
+            color: #0a1628 !important;
+            padding: 14px 25px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .btn-no-account:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
+            color: #0a1628 !important;
         }
         
         .btn-cancel-confirm {
             background: #2a2a4a !important;
             border: none !important;
             color: #b0b0c0 !important;
-            padding: 12px 35px;
+            padding: 12px 25px;
             border-radius: 12px;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
             transition: all 0.3s ease;
+            display: block;
+            width: 100%;
+            cursor: pointer;
+            margin-top: 5px;
         }
         
         .btn-cancel-confirm:hover {
@@ -1317,28 +1324,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             color: #e0e0e0 !important;
         }
         
-        .btn-continue-confirm {
-            background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
-            border: none !important;
-            color: #0a1628 !important;
-            padding: 12px 35px;
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 14px;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .btn-continue-confirm:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
-            color: #0a1628 !important;
-        }
-        
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
         @media (max-width: 992px) {
             .login-wrapper {
                 flex-direction: column;
@@ -1434,17 +1419,8 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             .student-confirm-modal .confirm-text {
                 font-size: 13px;
             }
-            
-            .btn-cancel-confirm,
-            .btn-continue-confirm {
-                padding: 10px 20px;
-                font-size: 13px;
-            }
         }
         
-        /* ============================================================
-           SCROLLBAR
-           ============================================================ */
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -1462,7 +1438,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 </head>
 <body>
     
-    <!-- Floating Particles -->
     <div class="particle"></div>
     <div class="particle"></div>
     <div class="particle"></div>
@@ -1531,7 +1506,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 </div>
             <?php endif; ?>
 
-            <!-- ===== LOCK INDICATOR ===== -->
             <?php if ($is_blocked): ?>
             <div class="lock-indicator" id="lockIndicator">
                 <i class="fas fa-lock"></i>
@@ -1788,7 +1762,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     </div>
 
     <!-- ============================================================
-    STUDENT REGISTRATION CONFIRMATION MODAL
+    STUDENT PORTAL CONFIRMATION MODAL
     ============================================================ -->
     <div class="modal fade student-confirm-modal" id="studentConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
         <div class="modal-dialog modal-dialog-centered">
@@ -1796,7 +1770,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 <div class="modal-header">
                     <h5 class="modal-title">
                         <i class="fas fa-user-graduate me-2"></i>
-                        Student Registration
+                        Student Portal
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: invert(1);"></button>
                 </div>
@@ -1804,25 +1778,43 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <div class="confirm-icon">
                         <i class="fas fa-question-circle"></i>
                     </div>
-                    <h4 class="confirm-title">Are you sure you want to register?</h4>
+                    <h4 class="confirm-title">Do you already have an account?</h4>
                     <p class="confirm-text">
-                        You will be redirected to the <strong style="color: #ffd700;">Student Registration Form</strong>. 
-                        Please fill up all required fields and upload your photo.
+                        Choose an option below to continue.
                     </p>
                     <div class="confirm-note">
                         <p>
-                            <i class="fas fa-info-circle me-1"></i>
-                            <strong>Note:</strong> After submitting, wait for admin approval before you can create your portal account.
+                            <i class="fas fa-sign-in-alt me-1"></i>
+                            <strong>Existing Student:</strong> Login with your portal account
+                        </p>
+                        <p>
+                            <i class="fas fa-user-plus me-1"></i>
+                            <strong>New Student:</strong> Fill up the registration form
                         </p>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-cancel-confirm" data-bs-dismiss="modal">
+                    <!-- BUTTON 1: YES, I HAVE AN ACCOUNT -->
+                    <button type="button" 
+                            class="btn-have-account"
+                            onclick="showStudentLogin()">
+                        <i class="fas fa-sign-in-alt me-2"></i>
+                        Yes, I have an account (Login)
+                    </button>
+                    
+                    <!-- BUTTON 2: NO, I WANT TO REGISTER -->
+                    <a href="student-self-registration.php" 
+                       class="btn-no-account">
+                        <i class="fas fa-user-plus me-2"></i>
+                        No, I want to register (Sign Up)
+                    </a>
+                    
+                    <!-- CANCEL BUTTON -->
+                    <button type="button" 
+                            class="btn-cancel-confirm"
+                            data-bs-dismiss="modal">
                         <i class="fas fa-times me-1"></i> Cancel
                     </button>
-                    <a href="student-self-registration.php" class="btn btn-continue-confirm">
-                        <i class="fas fa-arrow-right me-1"></i> Continue
-                    </a>
                 </div>
             </div>
         </div>
@@ -1831,11 +1823,41 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
-        // STUDENT REGISTRATION CONFIRMATION
+        // SHOW STUDENT CONFIRMATION MODAL
         // ============================================================
         function confirmStudentRegistration() {
             const modal = new bootstrap.Modal(document.getElementById('studentConfirmModal'));
             modal.show();
+        }
+
+        // ============================================================
+        // SHOW STUDENT LOGIN FORM (Yes, I have an account)
+        // ============================================================
+        function showStudentLogin() {
+            // Close modal
+            const modalElement = document.getElementById('studentConfirmModal');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+            
+            // Activate student button
+            document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+            const studentBtn = document.querySelector('.role-btn[data-role="student"]');
+            if (studentBtn) studentBtn.classList.add('active');
+            
+            // Hide all forms
+            document.querySelectorAll('.login-form').forEach(form => {
+                form.style.display = 'none';
+            });
+            
+            // Show student login form
+            document.getElementById('studentForm').style.display = 'block';
+            document.getElementById('resetSection').style.display = 'none';
+            
+            // Focus on email
+            setTimeout(() => {
+                const emailInput = document.querySelector('#studentForm input[name="email"]');
+                if (emailInput) emailInput.focus();
+            }, 400);
         }
 
         // ============================================================
@@ -1853,7 +1875,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     return;
                 }
                 
-                // Other roles = switch form
+                // Other roles = switch form normally
                 document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
                 
