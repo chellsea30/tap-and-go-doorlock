@@ -5,6 +5,7 @@
  * SIMPLE ADDITION ONLY
  * WITH 10-MINUTE BAN AFTER 3 INCORRECT ATTEMPTS
  * WITH STUDENT REGISTRATION CONFIRMATION
+ * FIXED: Modal backdrop issue
  * DESIGN: Modern Login Page
  */
 
@@ -1257,8 +1258,12 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         .student-confirm-modal .confirm-note p {
             color: #93c5fd;
             font-size: 12px;
-            margin: 0;
+            margin: 0 0 8px 0;
             line-height: 1.7;
+        }
+        
+        .student-confirm-modal .confirm-note p:last-child {
+            margin-bottom: 0;
         }
         
         .btn-have-account {
@@ -1322,6 +1327,39 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         .btn-cancel-confirm:hover {
             background: #3a3a5a !important;
             color: #e0e0e0 !important;
+        }
+        
+        /* ============================================================
+           ✅ FIX: MODAL BACKDROP ISSUE
+           ============================================================ */
+        .modal-backdrop {
+            z-index: 1040 !important;
+            background-color: #000 !important;
+        }
+        
+        .modal {
+            z-index: 1050 !important;
+        }
+        
+        body.modal-open {
+            overflow: hidden !important;
+        }
+        
+        /* ✅ CRITICAL FIX: Ensure body is clickable when modal is closed */
+        body:not(.modal-open) {
+            pointer-events: auto !important;
+            overflow: auto !important;
+        }
+        
+        /* ✅ Hide backdrop when no modal is open */
+        body:not(.modal-open) .modal-backdrop {
+            display: none !important;
+        }
+        
+        /* ✅ Force hidden modals to not block clicks */
+        .modal:not(.show) {
+            display: none !important;
+            pointer-events: none !important;
         }
         
         @media (max-width: 992px) {
@@ -1410,14 +1448,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             .brand-section .logo img {
                 width: 70px;
                 height: 70px;
-            }
-            
-            .student-confirm-modal .confirm-title {
-                font-size: 17px;
-            }
-            
-            .student-confirm-modal .confirm-text {
-                font-size: 13px;
             }
         }
         
@@ -1823,47 +1853,102 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
-        // SHOW STUDENT CONFIRMATION MODAL
+        // ✅ AUTO CLEANUP: Remove leftover backdrops on page load
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            // Remove any leftover backdrops
+            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        });
+
+        // ============================================================
+        // ✅ SHOW STUDENT CONFIRMATION MODAL
         // ============================================================
         function confirmStudentRegistration() {
-            const modal = new bootstrap.Modal(document.getElementById('studentConfirmModal'));
+            const modalElement = document.getElementById('studentConfirmModal');
+            
+            // Dispose existing modal instance (para fresh)
+            let existingModal = bootstrap.Modal.getInstance(modalElement);
+            if (existingModal) {
+                existingModal.dispose();
+            }
+            
+            // Create fresh modal instance
+            const modal = new bootstrap.Modal(modalElement, {
+                backdrop: 'static',
+                keyboard: false
+            });
+            
             modal.show();
         }
 
         // ============================================================
-        // SHOW STUDENT LOGIN FORM (Yes, I have an account)
+        // ✅ SHOW STUDENT LOGIN FORM (with FORCE CLEANUP)
         // ============================================================
         function showStudentLogin() {
-            // Close modal
             const modalElement = document.getElementById('studentConfirmModal');
             const modal = bootstrap.Modal.getInstance(modalElement);
-            if (modal) modal.hide();
             
-            // Activate student button
-            document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
-            const studentBtn = document.querySelector('.role-btn[data-role="student"]');
-            if (studentBtn) studentBtn.classList.add('active');
+            // Hide the modal first
+            if (modal) {
+                modal.hide();
+            }
             
-            // Hide all forms
-            document.querySelectorAll('.login-form').forEach(form => {
-                form.style.display = 'none';
-            });
-            
-            // Show student login form
-            document.getElementById('studentForm').style.display = 'block';
-            document.getElementById('resetSection').style.display = 'none';
-            
-            // Focus on email
-            setTimeout(() => {
-                const emailInput = document.querySelector('#studentForm input[name="email"]');
-                if (emailInput) emailInput.focus();
-            }, 400);
+            // ✅ FORCE CLEANUP after animation (300ms)
+            setTimeout(function() {
+                // 1. Remove ALL modal backdrops
+                document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) {
+                    backdrop.remove();
+                });
+                
+                // 2. Remove modal-open class from body
+                document.body.classList.remove('modal-open');
+                
+                // 3. Reset body styles
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+                document.body.style.pointerEvents = 'auto';
+                
+                // 4. Force hide modal element
+                modalElement.style.display = 'none';
+                modalElement.classList.remove('show');
+                modalElement.setAttribute('aria-hidden', 'true');
+                modalElement.removeAttribute('aria-modal');
+                
+                // 5. ✅ Activate student button
+                document.querySelectorAll('.role-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                const studentBtn = document.querySelector('.role-btn[data-role="student"]');
+                if (studentBtn) studentBtn.classList.add('active');
+                
+                // 6. ✅ Hide all forms
+                document.querySelectorAll('.login-form').forEach(function(form) {
+                    form.style.display = 'none';
+                });
+                
+                // 7. ✅ Show student login form
+                const studentForm = document.getElementById('studentForm');
+                if (studentForm) studentForm.style.display = 'block';
+                
+                const resetSection = document.getElementById('resetSection');
+                if (resetSection) resetSection.style.display = 'none';
+                
+                // 8. ✅ Focus on email input
+                setTimeout(function() {
+                    const emailInput = document.querySelector('#studentForm input[name="email"]');
+                    if (emailInput) emailInput.focus();
+                }, 100);
+                
+            }, 300);
         }
 
         // ============================================================
-        // ROLE SELECTOR - UPDATED
+        // ROLE SELECTOR
         // ============================================================
-        document.querySelectorAll('.role-btn').forEach(btn => {
+        document.querySelectorAll('.role-btn').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 const role = this.dataset.role;
                 
@@ -1876,10 +1961,12 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 }
                 
                 // Other roles = switch form normally
-                document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.role-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
                 this.classList.add('active');
                 
-                document.querySelectorAll('.login-form').forEach(form => {
+                document.querySelectorAll('.login-form').forEach(function(form) {
                     form.style.display = 'none';
                 });
                 document.getElementById(role + 'Form').style.display = 'block';
@@ -1895,7 +1982,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             const passwordInputs = document.querySelectorAll('input[type="password"]');
             const icon = document.getElementById('passwordToggleIcon');
             
-            passwordInputs.forEach(input => {
+            passwordInputs.forEach(function(input) {
                 if (input.type === 'password') {
                     input.type = 'text';
                     if (icon) icon.className = 'fas fa-eye-slash';
