@@ -1,10 +1,11 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Residents List
- * WITH PROFILE PHOTO UPLOAD AND DISPLAY - FIXED PATH
+ * WITH APPROVAL SYSTEM (Pending/Approved/Rejected)
+ * WITH PROFILE PHOTO UPLOAD AND DISPLAY
  * PURE DARK MODE - No white backgrounds
  * WITH SHOW ENTRIES PAGINATION
- * WITH NEW RESIDENT & ADMISSION FORM BUTTONS
+ * Location: frontend/pages/residents.php
  */
 
 // Start session
@@ -23,6 +24,7 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
 // ============================================================
 // FIX: MOVE ALL REDIRECTS HERE (BEFORE INCLUDING HEADER)
 // ============================================================
+
 // Handle Delete Request
 if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
     $delete_id = (int)$_GET['delete'];
@@ -35,17 +37,15 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
         if ($stmt->execute()) {
             header('Location: residents.php?msg=deleted');
             exit();
-        } else {
-            $error = "Failed to delete resident: " . $stmt->error;
         }
         $stmt->close();
     } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
+        // Log error
     }
 }
 
 // ============================================================
-// HANDLE PROFILE PHOTO UPLOAD - FIXED
+// HANDLE PROFILE PHOTO UPLOAD
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && isset($_POST['user_id'])) {
     $user_id = (int)$_POST['user_id'];
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && is
             mkdir($upload_dir, 0777, true);
         }
         
-        $file_extension = pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION);
+        $file_extension = strtolower(pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION));
         $file_name = time() . '_' . $user_id . '.' . $file_extension;
         $target_file = $upload_dir . $file_name;
         
@@ -66,35 +66,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && is
             $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
             if (in_array($image_info['mime'], $allowed_types)) {
                 if (move_uploaded_file($_FILES['profile_photo']['tmp_name'], $target_file)) {
-                    // FIX: Store relative path from root
                     $photo_path = 'uploads/resident_photos/' . $file_name;
                     
                     $conn = getDBConnection();
                     $stmt = $conn->prepare("UPDATE users SET profile_photo = ? WHERE user_id = ?");
                     $stmt->bind_param("si", $photo_path, $user_id);
-                    
-                    if ($stmt->execute()) {
-                        $success = "Profile photo uploaded successfully!";
-                    } else {
-                        $error = "Failed to update database: " . $stmt->error;
-                    }
+                    $stmt->execute();
                     $stmt->close();
-                } else {
-                    $error = "Failed to upload photo. Please check folder permissions.";
+                    
+                    header('Location: residents.php?msg=photo_uploaded');
+                    exit();
                 }
-            } else {
-                $error = "Invalid file type. Please upload JPEG, PNG, GIF, or WEBP.";
             }
-        } else {
-            $error = "Uploaded file is not a valid image.";
         }
-    } else {
-        $error = "Please select a photo to upload.";
     }
 }
 
 // ============================================================
-// HANDLE PHOTO REMOVE - FIXED
+// HANDLE PHOTO REMOVE
 // ============================================================
 if (isset($_GET['remove_photo']) && is_numeric($_GET['remove_photo'])) {
     $user_id = (int)$_GET['remove_photo'];
@@ -110,7 +99,6 @@ if (isset($_GET['remove_photo']) && is_numeric($_GET['remove_photo'])) {
         $stmt->close();
         
         if (!empty($row['profile_photo'])) {
-            // FIX: Determine correct file path
             if (strpos($row['profile_photo'], 'uploads/') === 0) {
                 $file_path = '../../' . $row['profile_photo'];
             } else {
@@ -124,15 +112,13 @@ if (isset($_GET['remove_photo']) && is_numeric($_GET['remove_photo'])) {
         
         $stmt = $conn->prepare("UPDATE users SET profile_photo = NULL WHERE user_id = ?");
         $stmt->bind_param("i", $user_id);
-        
-        if ($stmt->execute()) {
-            $success = "Profile photo removed successfully!";
-        } else {
-            $error = "Failed to remove photo: " . $stmt->error;
-        }
+        $stmt->execute();
         $stmt->close();
+        
+        header('Location: residents.php?msg=photo_removed');
+        exit();
     } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
+        // Silently fail
     }
 }
 
@@ -150,9 +136,9 @@ $totalPages = 1;
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $perPage = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 10;
+$statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 $error = '';
 $success = '';
-$delete_success = false;
 
 // Valid per page options
 $perPageOptions = [10, 25, 50, 100];
@@ -183,15 +169,23 @@ if (isset($_SESSION['admin_id'])) {
 }
 
 // ============================================================
-// GET RESIDENTS LIST
+// GET RESIDENTS LIST WITH APPROVAL STATUS
 // ============================================================
 try {
     $conn = getDBConnection();
     
-    // Count total residents
+    // Build count query
     $countQuery = "SELECT COUNT(*) as total FROM users WHERE status != 'deleted'";
     $countParams = [];
     $types = "";
+    
+    if ($statusFilter === 'pending') {
+        $countQuery .= " AND approval_status = 'pending'";
+    } elseif ($statusFilter === 'approved') {
+        $countQuery .= " AND approval_status = 'approved'";
+    } elseif ($statusFilter === 'rejected') {
+        $countQuery .= " AND approval_status = 'rejected'";
+    }
     
     if (!empty($search)) {
         $countQuery .= " AND (full_name LIKE ? OR student_id LIKE ? OR room_number LIKE ?)";
@@ -216,10 +210,13 @@ try {
     if ($page < 1) $page = 1;
     $offset = ($page - 1) * $perPage;
     
-    // Get residents
+    // Get residents with approval status
     $query = "
         SELECT 
             u.*,
+            u.approval_status,
+            u.approved_at,
+            u.portal_email,
             u.profile_photo,
             rp.course,
             rp.year_level,
@@ -233,18 +230,23 @@ try {
             rp.emergency_address,
             rp.date_registered,
             c.card_uid,
-            c.status as card_status,
-            ar.status as admission_status,
-            ar.room_assignment
+            c.status as card_status
         FROM users u
         LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
         LEFT JOIN rfid_cards c ON u.user_id = c.user_id AND c.status = 'active'
-        LEFT JOIN admission_records ar ON u.user_id = ar.user_id
         WHERE u.status != 'deleted'
     ";
     
     $params = [];
     $types = "";
+    
+    if ($statusFilter === 'pending') {
+        $query .= " AND u.approval_status = 'pending'";
+    } elseif ($statusFilter === 'approved') {
+        $query .= " AND u.approval_status = 'approved'";
+    } elseif ($statusFilter === 'rejected') {
+        $query .= " AND u.approval_status = 'rejected'";
+    }
     
     if (!empty($search)) {
         $query .= " AND (u.full_name LIKE ? OR u.student_id LIKE ? OR u.room_number LIKE ?)";
@@ -253,7 +255,14 @@ try {
         $types = "sss";
     }
     
-    $query .= " ORDER BY u.created_at DESC LIMIT ? OFFSET ?";
+    $query .= " ORDER BY 
+        CASE u.approval_status 
+            WHEN 'pending' THEN 1 
+            WHEN 'approved' THEN 2 
+            ELSE 3 
+        END,
+        u.created_at DESC 
+        LIMIT ? OFFSET ?";
     $params[] = $perPage;
     $params[] = $offset;
     $types .= "ii";
@@ -265,28 +274,63 @@ try {
     $stmt->execute();
     $result = $stmt->get_result();
     
-    $residents = [];
     while ($row = $result->fetch_assoc()) {
         $residents[] = $row;
     }
     $stmt->close();
     
+    // Get counts for tabs
+    $pendingCount = 0;
+    $approvedCount = 0;
+    $rejectedCount = 0;
+    $allCount = 0;
+    
+    $countResult = $conn->query("SELECT COUNT(*) as c FROM users WHERE approval_status = 'pending' AND status != 'deleted'");
+    if ($countResult && $row = $countResult->fetch_assoc()) $pendingCount = (int)$row['c'];
+    
+    $countResult = $conn->query("SELECT COUNT(*) as c FROM users WHERE approval_status = 'approved' AND status != 'deleted'");
+    if ($countResult && $row = $countResult->fetch_assoc()) $approvedCount = (int)$row['c'];
+    
+    $countResult = $conn->query("SELECT COUNT(*) as c FROM users WHERE approval_status = 'rejected' AND status != 'deleted'");
+    if ($countResult && $row = $countResult->fetch_assoc()) $rejectedCount = (int)$row['c'];
+    
+    $countResult = $conn->query("SELECT COUNT(*) as c FROM users WHERE status != 'deleted'");
+    if ($countResult && $row = $countResult->fetch_assoc()) $allCount = (int)$row['c'];
+    
 } catch (Exception $e) {
     $error = 'Error loading residents: ' . $e->getMessage();
-    $residents = [];
 }
 
-$delete_success = isset($_GET['msg']) && $_GET['msg'] === 'deleted';
+// Handle success messages
+if (isset($_GET['msg'])) {
+    switch ($_GET['msg']) {
+        case 'deleted':
+            $success = 'Resident deleted successfully!';
+            break;
+        case 'approved':
+            $success = 'Student registration APPROVED successfully!';
+            break;
+        case 'rejected':
+            $success = 'Student registration REJECTED.';
+            break;
+        case 'photo_uploaded':
+            $success = 'Profile photo uploaded successfully!';
+            break;
+        case 'photo_removed':
+            $success = 'Profile photo removed successfully!';
+            break;
+        case 'error':
+            $error = 'An error occurred. Please try again.';
+            break;
+    }
+}
 
 // ============================================================
-// HELPER FUNCTION: GET PROFILE PHOTO PATH - FIXED
+// HELPER FUNCTIONS
 // ============================================================
 function getProfilePhotoPath($photoPath) {
-    if (empty($photoPath)) {
-        return null;
-    }
+    if (empty($photoPath)) return null;
     
-    // Check if path already has 'uploads/'
     if (strpos($photoPath, 'uploads/') === 0) {
         $fullPath = '../../' . $photoPath;
     } else {
@@ -299,9 +343,6 @@ function getProfilePhotoPath($photoPath) {
     return null;
 }
 
-// ============================================================
-// HELPER FUNCTION: GET INITIALS
-// ============================================================
 function getInitials($name) {
     if (empty($name)) return '?';
     $parts = explode(' ', $name);
@@ -404,7 +445,7 @@ function getInitials($name) {
         }
         
         /* ============================================================
-           MAIN CONTENT - OFFSET FOR FIXED NAVBAR & SIDEBAR
+           MAIN CONTENT
            ============================================================ */
         .main-content {
             margin-left: 220px !important;
@@ -427,6 +468,78 @@ function getInitials($name) {
             color: #606070 !important;
             font-size: 12px !important;
             text-align: center !important;
+        }
+        
+        /* ============================================================
+           APPROVAL TABS
+           ============================================================ */
+        .approval-tabs {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+        
+        .approval-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: #111827;
+            border: 1px solid #1a2a4a;
+            border-radius: 12px;
+            color: #9090a0;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .approval-tab:hover {
+            background: #1a2a4a;
+            color: #e0e0e0;
+            transform: translateY(-2px);
+        }
+        
+        .approval-tab.active {
+            background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
+            color: white;
+            border-color: #2a5a9a;
+            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
+        }
+        
+        .approval-tab.tab-pending.active {
+            background: linear-gradient(135deg, #92400e, #d97706);
+            border-color: #d97706;
+        }
+        
+        .approval-tab.tab-approved.active {
+            background: linear-gradient(135deg, #065f46, #10b981);
+            border-color: #10b981;
+        }
+        
+        .approval-tab.tab-rejected.active {
+            background: linear-gradient(135deg, #7a2a2a, #ef4444);
+            border-color: #ef4444;
+        }
+        
+        .approval-tab .badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.15);
+        }
+        
+        .approval-tab.tab-pending .badge {
+            background: #dc2626;
+            color: white;
+            animation: pulseBadge 1.5s infinite;
+        }
+        
+        @keyframes pulseBadge {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
         }
         
         /* ============================================================
@@ -455,6 +568,21 @@ function getInitials($name) {
             transition: all 0.3s ease;
             border-left: 3px solid #1a3a6a;
         }
+        
+        .resident-card.pending-status {
+            border-left-color: #f59e0b;
+            background: linear-gradient(90deg, rgba(251, 191, 36, 0.05) 0%, #111827 15%) !important;
+        }
+        
+        .resident-card.approved-status {
+            border-left-color: #10b981;
+        }
+        
+        .resident-card.rejected-status {
+            border-left-color: #ef4444;
+            opacity: 0.75;
+        }
+        
         .resident-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 25px rgba(0,0,0,0.5) !important;
@@ -530,7 +658,7 @@ function getInitials($name) {
         .resident-info .text-muted { color: #808090 !important; font-size: 11px; }
         
         /* ============================================================
-           BUTTON STYLES - DARK (SMALLER)
+           BUTTON STYLES - DARK
            ============================================================ */
         .btn-action {
             border-radius: 8px;
@@ -542,6 +670,30 @@ function getInitials($name) {
             margin: 1px;
         }
         .btn-action:hover { transform: translateY(-1px); }
+        
+        .btn-approve {
+            background: #065f46 !important;
+            color: #6ee7b7 !important;
+            border-color: #10b981 !important;
+            font-weight: 600;
+        }
+        .btn-approve:hover {
+            background: #10b981 !important;
+            color: #0a0e1a !important;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn-reject {
+            background: #7a2a2a !important;
+            color: #f87171 !important;
+            border-color: #ef4444 !important;
+            font-weight: 600;
+        }
+        .btn-reject:hover {
+            background: #ef4444 !important;
+            color: #0a0e1a !important;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+        }
         
         .btn-admission { 
             background: #1a2a4a !important; 
@@ -621,7 +773,12 @@ function getInitials($name) {
            ============================================================ */
         .badge-status { padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 500; }
         .badge-active { background: #065f46 !important; color: #6ee7b7 !important; }
-        .badge-pending { background: #92400e !important; color: #fcd34d !important; }
+        .badge-pending { 
+            background: #92400e !important; 
+            color: #fcd34d !important;
+            animation: pulseBadge 2s infinite;
+        }
+        .badge-rejected { background: #7a2a2a !important; color: #f87171 !important; }
         .badge-inactive { background: #2a2a3a !important; color: #808090 !important; }
         .badge-no-card { background: #2a2a3a !important; color: #808090 !important; }
         .badge-success { background: #065f46 !important; color: #34d399 !important; }
@@ -795,6 +952,14 @@ function getInitials($name) {
             padding: 10px 16px !important;
             border-radius: 10px !important;
         }
+        .alert-warning {
+            background: #4a3a1a !important;
+            border-color: #4a3a1a !important;
+            color: #fbbf24 !important;
+            font-size: 13px !important;
+            padding: 10px 16px !important;
+            border-radius: 10px !important;
+        }
         .alert .btn-close { filter: invert(1) !important; }
         
         /* ============================================================
@@ -884,6 +1049,11 @@ function getInitials($name) {
                 font-size: 11px !important;
                 padding: 6px 12px !important;
             }
+            
+            .approval-tab {
+                font-size: 11px;
+                padding: 8px 12px;
+            }
         }
         
         /* ============================================================
@@ -896,6 +1066,7 @@ function getInitials($name) {
         .text-muted { color: #808090 !important; }
         .text-danger { color: #f87171 !important; }
         .text-success { color: #34d399 !important; }
+        .text-warning { color: #fbbf24 !important; }
         .small { font-size: 11px !important; }
     </style>
 </head>
@@ -910,7 +1081,7 @@ function getInitials($name) {
             <!-- Page Header -->
             <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
                 <h1><i class="fas fa-users me-2"></i>Residents</h1>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 flex-wrap">
                     <a href="new-resident.php" class="btn btn-new-resident">
                         <i class="fas fa-user-plus me-1"></i> New Resident Form
                     </a>
@@ -919,13 +1090,6 @@ function getInitials($name) {
                     </a>
                 </div>
             </div>
-
-            <?php if ($delete_success): ?>
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    <i class="fas fa-check-circle me-2"></i> Resident deleted successfully!
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            <?php endif; ?>
 
             <?php if (!empty($success)): ?>
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -941,20 +1105,72 @@ function getInitials($name) {
                 </div>
             <?php endif; ?>
 
+            <!-- ============================================================
+                 APPROVAL STATUS TABS
+                 ============================================================ -->
+            <div class="approval-tabs">
+                <a href="residents.php<?php echo !empty($search) ? '?search=' . urlencode($search) : ''; ?>" 
+                   class="approval-tab <?php echo empty($statusFilter) ? 'active' : ''; ?>">
+                    <i class="fas fa-list"></i>
+                    All Residents
+                    <span class="badge"><?php echo $allCount; ?></span>
+                </a>
+                
+                <a href="residents.php?status=pending<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" 
+                   class="approval-tab tab-pending <?php echo $statusFilter == 'pending' ? 'active' : ''; ?>">
+                    <i class="fas fa-clock"></i>
+                    Pending Approval
+                    <?php if ($pendingCount > 0): ?>
+                        <span class="badge"><?php echo $pendingCount; ?></span>
+                    <?php else: ?>
+                        <span class="badge" style="background: rgba(255,255,255,0.1);">0</span>
+                    <?php endif; ?>
+                </a>
+                
+                <a href="residents.php?status=approved<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" 
+                   class="approval-tab tab-approved <?php echo $statusFilter == 'approved' ? 'active' : ''; ?>">
+                    <i class="fas fa-check-circle"></i>
+                    Approved
+                    <span class="badge"><?php echo $approvedCount; ?></span>
+                </a>
+                
+                <a href="residents.php?status=rejected<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" 
+                   class="approval-tab tab-rejected <?php echo $statusFilter == 'rejected' ? 'active' : ''; ?>">
+                    <i class="fas fa-times-circle"></i>
+                    Rejected
+                    <span class="badge"><?php echo $rejectedCount; ?></span>
+                </a>
+            </div>
+
+            <?php if ($pendingCount > 0 && empty($statusFilter)): ?>
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong><?php echo $pendingCount; ?> student registration(s)</strong> are waiting for your approval.
+                    <a href="residents.php?status=pending" class="ms-2 text-warning">
+                        <u>Review now</u> <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+
             <!-- Search Bar -->
             <div class="row mb-3">
                 <div class="col-md-8">
                     <form method="GET" action="" class="search-box d-flex">
+                        <?php if (!empty($statusFilter)): ?>
+                            <input type="hidden" name="status" value="<?php echo htmlspecialchars($statusFilter); ?>">
+                        <?php endif; ?>
                         <input type="text" 
                                class="form-control" 
                                name="search" 
-                               placeholder="Search by name, ID, course, or room..." 
+                               placeholder="Search by name, ID, or room..." 
                                value="<?php echo htmlspecialchars($search); ?>">
                         <button type="submit" class="btn">
                             <i class="fas fa-search"></i>
                         </button>
                         <?php if (!empty($search)): ?>
-                            <a href="residents.php" class="btn btn-outline-secondary ms-2">
+                            <a href="residents.php<?php echo !empty($statusFilter) ? '?status=' . urlencode($statusFilter) : ''; ?>" 
+                               class="btn btn-outline-secondary ms-2">
                                 <i class="fas fa-times"></i> Clear
                             </a>
                         <?php endif; ?>
@@ -971,15 +1187,24 @@ function getInitials($name) {
                 </div>
             </div>
 
-            <!-- Residents List -->
+            <!-- ============================================================
+                 RESIDENTS LIST
+                 ============================================================ -->
             <?php if (empty($residents)): ?>
                 <div class="card">
                     <div class="card-body text-center py-4">
                         <i class="fas fa-users fa-3x text-muted mb-2"></i>
-                        <h5 class="text-muted">No residents found</h5>
+                        <h5 class="text-muted">
+                            <?php if (!empty($statusFilter)): ?>
+                                No <?php echo htmlspecialchars($statusFilter); ?> residents found
+                            <?php else: ?>
+                                No residents found
+                            <?php endif; ?>
+                        </h5>
                         <?php if (!empty($search)): ?>
                             <p class="text-muted small">Try adjusting your search criteria</p>
-                            <a href="residents.php" class="btn btn-outline-secondary btn-sm">Clear Search</a>
+                            <a href="residents.php<?php echo !empty($statusFilter) ? '?status=' . urlencode($statusFilter) : ''; ?>" 
+                               class="btn btn-outline-secondary btn-sm">Clear Search</a>
                         <?php else: ?>
                             <p class="text-muted small">Start by adding your first resident</p>
                             <div class="d-flex gap-2 justify-content-center mt-2">
@@ -999,7 +1224,6 @@ function getInitials($name) {
                     $hasPhoto = false;
                     $fullPhotoPath = '';
                     
-                    // FIX: Get correct photo path
                     if (!empty($photoPath)) {
                         if (strpos($photoPath, 'uploads/') === 0) {
                             $fullPhotoPath = '../../' . $photoPath;
@@ -1013,8 +1237,14 @@ function getInitials($name) {
                     }
                     
                     $initials = getInitials($resident['full_name'] ?? '');
+                    $approvalStatus = $resident['approval_status'] ?? 'pending';
+                    
+                    $cardClass = '';
+                    if ($approvalStatus === 'pending') $cardClass = 'pending-status';
+                    elseif ($approvalStatus === 'approved') $cardClass = 'approved-status';
+                    elseif ($approvalStatus === 'rejected') $cardClass = 'rejected-status';
                 ?>
-                    <div class="resident-card">
+                    <div class="resident-card <?php echo $cardClass; ?>">
                         <div class="row align-items-center">
                             <!-- Avatar & Name -->
                             <div class="col-md-4 col-lg-3">
@@ -1047,7 +1277,9 @@ function getInitials($name) {
                                         <span class="text-muted">
                                             <i class="fas fa-graduation-cap me-1"></i>
                                             <?php echo htmlspecialchars($resident['course'] ?? 'N/A'); ?>
-                                            - <?php echo htmlspecialchars($resident['year_level'] ?? 'N/A'); ?>
+                                            <?php if (!empty($resident['year_level'])): ?>
+                                                - <?php echo htmlspecialchars($resident['year_level']); ?>
+                                            <?php endif; ?>
                                         </span>
                                     </div>
                                 </div>
@@ -1075,86 +1307,116 @@ function getInitials($name) {
                                 </div>
                             </div>
 
-                            <!-- Admission Status -->
+                            <!-- Approval Status -->
                             <div class="col-md-2 col-lg-2">
                                 <div>
-                                    <span class="text-muted small">Admission</span>
+                                    <span class="text-muted small">Approval</span>
                                     <br>
-                                    <?php 
-                                        $admStatus = $resident['admission_status'] ?? 'pending';
-                                        if ($admStatus == 'active'): ?>
-                                            <span class="badge-status badge-active">
-                                                <i class="fas fa-check-circle me-1"></i> Active
-                                            </span>
-                                        <?php elseif ($admStatus == 'pending'): ?>
-                                            <span class="badge-status badge-pending">
-                                                <i class="fas fa-clock me-1"></i> Pending
+                                    <?php if ($approvalStatus === 'pending'): ?>
+                                        <span class="badge-status badge-pending">
+                                            <i class="fas fa-clock me-1"></i> Pending
+                                        </span>
+                                    <?php elseif ($approvalStatus === 'approved'): ?>
+                                        <span class="badge-status badge-active">
+                                            <i class="fas fa-check-circle me-1"></i> Approved
+                                        </span>
+                                        <?php if (!empty($resident['portal_email'])): ?>
+                                            <br><span class="badge-status badge-info mt-1" style="font-size: 9px;">
+                                                <i class="fas fa-user-check me-1"></i> Portal Active
                                             </span>
                                         <?php else: ?>
-                                            <span class="badge-status badge-inactive">
-                                                <i class="fas fa-minus-circle me-1"></i> Inactive
+                                            <br><span class="badge-status badge-warning mt-1" style="font-size: 9px;">
+                                                <i class="fas fa-hourglass-half me-1"></i> No Portal
                                             </span>
                                         <?php endif; ?>
-                                    ?>
+                                    <?php else: ?>
+                                        <span class="badge-status badge-rejected">
+                                            <i class="fas fa-times-circle me-1"></i> Rejected
+                                        </span>
+                                    <?php endif; ?>
                                 </div>
                             </div>
 
                             <!-- Action Buttons -->
                             <div class="col-md-3 col-lg-4">
                                 <div class="resident-actions d-flex flex-wrap gap-1">
-                                    <button type="button" 
-                                            class="btn btn-action btn-upload-photo"
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#photoModal<?php echo $resident['user_id']; ?>">
-                                        <i class="fas fa-camera me-1"></i> Photo
-                                    </button>
                                     
-                                    <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                       class="btn btn-action btn-view">
-                                        <i class="fas fa-eye me-1"></i> View
-                                    </a>
-                                    
-                                    <?php if (!empty($resident['admission_status'])): ?>
-                                        <a href="view-admission.php?id=<?php echo $resident['user_id']; ?>" 
+                                    <?php if ($approvalStatus === 'pending'): ?>
+                                        <!-- APPROVE / REJECT BUTTONS -->
+                                        <a href="approve-resident.php?approve=<?php echo $resident['user_id']; ?>" 
+                                           class="btn btn-action btn-approve"
+                                           onclick="return confirm('Approve this student registration?\n\nStudent: <?php echo htmlspecialchars(addslashes($resident['full_name'])); ?>\nID: <?php echo htmlspecialchars($resident['student_id']); ?>')">
+                                            <i class="fas fa-check me-1"></i> Approve
+                                        </a>
+                                        <a href="#" 
+                                           class="btn btn-action btn-reject"
+                                           data-bs-toggle="modal"
+                                           data-bs-target="#rejectModal<?php echo $resident['user_id']; ?>">
+                                            <i class="fas fa-times me-1"></i> Reject
+                                        </a>
+                                        <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
+                                           class="btn btn-action btn-view">
+                                            <i class="fas fa-eye me-1"></i> View
+                                        </a>
+                                        
+                                    <?php elseif ($approvalStatus === 'approved'): ?>
+                                        <!-- APPROVED ACTIONS -->
+                                        <button type="button" 
+                                                class="btn btn-action btn-upload-photo"
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#photoModal<?php echo $resident['user_id']; ?>">
+                                            <i class="fas fa-camera me-1"></i> Photo
+                                        </button>
+                                        
+                                        <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
+                                           class="btn btn-action btn-view">
+                                            <i class="fas fa-eye me-1"></i> View
+                                        </a>
+                                        
+                                        <a href="edit-resident.php?id=<?php echo $resident['user_id']; ?>" 
+                                           class="btn btn-action btn-edit">
+                                            <i class="fas fa-edit me-1"></i> Edit
+                                        </a>
+                                        
+                                        <a href="admission-form.php?id=<?php echo $resident['user_id']; ?>" 
                                            class="btn btn-action btn-admission">
                                             <i class="fas fa-clipboard-list me-1"></i> Admission
                                         </a>
+                                        
+                                        <button type="button" 
+                                                class="btn btn-action btn-delete" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
+                                            <i class="fas fa-trash me-1"></i> Delete
+                                        </button>
+                                        
                                     <?php else: ?>
-                                        <a href="admission-form.php?id=<?php echo $resident['user_id']; ?>" 
-                                           class="btn btn-action btn-admission">
-                                            <i class="fas fa-plus-circle me-1"></i> Add Admission
+                                        <!-- REJECTED ACTIONS -->
+                                        <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
+                                           class="btn btn-action btn-view">
+                                            <i class="fas fa-eye me-1"></i> View
                                         </a>
+                                        <a href="approve-resident.php?approve=<?php echo $resident['user_id']; ?>" 
+                                           class="btn btn-action btn-approve"
+                                           onclick="return confirm('Re-approve this student?')">
+                                            <i class="fas fa-redo me-1"></i> Re-Approve
+                                        </a>
+                                        <button type="button" 
+                                                class="btn btn-action btn-delete" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
+                                            <i class="fas fa-trash me-1"></i> Delete
+                                        </button>
                                     <?php endif; ?>
                                     
-                                    <?php if (!empty($resident['course'])): ?>
-                                        <a href="view-profile.php?id=<?php echo $resident['user_id']; ?>" 
-                                           class="btn btn-action btn-profile">
-                                            <i class="fas fa-user me-1"></i> Profile
-                                        </a>
-                                    <?php else: ?>
-                                        <a href="edit-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                           class="btn btn-action btn-profile">
-                                            <i class="fas fa-plus-circle me-1"></i> Add Profile
-                                        </a>
-                                    <?php endif; ?>
-                                    
-                                    <a href="edit-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                       class="btn btn-action btn-edit">
-                                        <i class="fas fa-edit me-1"></i> Edit
-                                    </a>
-                                    
-                                    <button type="button" 
-                                            class="btn btn-action btn-delete" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
-                                        <i class="fas fa-trash me-1"></i> Delete
-                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- PHOTO UPLOAD MODAL - FIXED -->
+                    <!-- ============================================================
+                         PHOTO UPLOAD MODAL
+                         ============================================================ -->
                     <div class="modal fade" id="photoModal<?php echo $resident['user_id']; ?>" tabindex="-1">
                         <div class="modal-dialog modal-dialog-centered">
                             <div class="modal-content">
@@ -1166,7 +1428,6 @@ function getInitials($name) {
                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                 </div>
                                 <div class="modal-body text-center">
-                                    <!-- Current Photo Preview - FIXED -->
                                     <div class="mb-3">
                                         <?php 
                                             $photoPath = $resident['profile_photo'] ?? '';
@@ -1210,7 +1471,6 @@ function getInitials($name) {
                                     
                                     <hr>
                                     
-                                    <!-- Upload Form -->
                                     <form method="POST" enctype="multipart/form-data">
                                         <input type="hidden" name="user_id" value="<?php echo $resident['user_id']; ?>">
                                         <div class="mb-3">
@@ -1234,7 +1494,68 @@ function getInitials($name) {
                         </div>
                     </div>
 
-                    <!-- DELETE CONFIRMATION MODAL -->
+                    <!-- ============================================================
+                         REJECT MODAL
+                         ============================================================ -->
+                    <div class="modal fade" id="rejectModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header" style="border-bottom-color: #7a2a2a !important;">
+                                    <h5 class="modal-title text-danger">
+                                        <i class="fas fa-times-circle me-2"></i>
+                                        Reject Registration
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form method="GET" action="approve-resident.php">
+                                    <div class="modal-body">
+                                        <input type="hidden" name="reject" value="<?php echo $resident['user_id']; ?>">
+                                        
+                                        <div class="text-center mb-3">
+                                            <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#7a2a2a,#ef4444);display:flex;align-items:center;justify-content:center;margin:0 auto 15px;font-size:24px;color:white;">
+                                                <i class="fas fa-user-times"></i>
+                                            </div>
+                                            <p style="color: #e0e0e0; margin-bottom: 5px;">
+                                                Are you sure you want to <strong class="text-danger">REJECT</strong> this registration?
+                                            </p>
+                                            <p style="color: #fbbf24; font-weight: 600; margin-bottom: 15px;">
+                                                <?php echo htmlspecialchars($resident['full_name']); ?>
+                                            </p>
+                                            <p class="text-muted small">
+                                                <i class="fas fa-id-card me-1"></i>
+                                                <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
+                                            </p>
+                                        </div>
+                                        
+                                        <hr style="border-color: #1a2a4a;">
+                                        
+                                        <div class="mb-2">
+                                            <label class="form-label" style="color: #d1d5db; font-size: 13px;">
+                                                Reason for Rejection (Optional)
+                                            </label>
+                                            <textarea class="form-control" 
+                                                      name="reason" 
+                                                      rows="3" 
+                                                      placeholder="e.g., Incomplete requirements, Invalid information..."
+                                                      style="background: #1a1a2e; border: 1px solid #2a2a4a; color: #e0e0e0;"></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                            <i class="fas fa-times me-1"></i> Cancel
+                                        </button>
+                                        <button type="submit" class="btn btn-danger">
+                                            <i class="fas fa-times-circle me-1"></i> Yes, Reject
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ============================================================
+                         DELETE CONFIRMATION MODAL
+                         ============================================================ -->
                     <div class="modal fade" id="deleteModal<?php echo $resident['user_id']; ?>" tabindex="-1">
                         <div class="modal-dialog modal-dialog-centered">
                             <div class="modal-content">
@@ -1288,7 +1609,6 @@ function getInitials($name) {
                         </div>
                         <div class="col-md-6">
                             <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-                                <!-- Per Page Selector -->
                                 <div class="per-page-selector d-flex align-items-center gap-1">
                                     <label>Show:</label>
                                     <select onchange="changePerPage(this.value)">
@@ -1300,16 +1620,15 @@ function getInitials($name) {
                                     </select>
                                 </div>
                                 
-                                <!-- Pagination -->
                                 <nav aria-label="Page navigation">
                                     <ul class="pagination justify-content-end mb-0">
                                         <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                 <i class="fas fa-angle-double-left"></i>
                                             </a>
                                         </li>
                                         <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                 <i class="fas fa-angle-left"></i>
                                             </a>
                                         </li>
@@ -1323,7 +1642,7 @@ function getInitials($name) {
                                         for ($i = $startPage; $i <= $endPage; $i++):
                                         ?>
                                             <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                     <?php echo $i; ?>
                                                 </a>
                                             </li>
@@ -1333,12 +1652,12 @@ function getInitials($name) {
                                         <?php endif; ?>
                                         
                                         <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                 <i class="fas fa-angle-right"></i>
                                             </a>
                                         </li>
                                         <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                 <i class="fas fa-angle-double-right"></i>
                                             </a>
                                         </li>
@@ -1372,6 +1691,14 @@ function getInitials($name) {
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
+        
+        // AUTO DISMISS ALERTS
+        setTimeout(function() {
+            document.querySelectorAll('.alert-dismissible').forEach(function(alert) {
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            });
+        }, 5000);
     </script>
 </body>
 </html>
