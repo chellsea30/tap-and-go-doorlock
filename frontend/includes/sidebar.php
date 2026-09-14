@@ -6,6 +6,7 @@
  * WITH CHART REPORT - PIE CHART FOR COURSE & YEAR LEVEL
  * REPORTS MOVED TO OTHERS SUBMENU
  * WITH STUDENT REGISTRATION APPROVAL TRACKING
+ * ✅ UPDATED: 13 ROOMS (from 5 rooms)
  * Location: frontend/includes/sidebar.php
  */
 
@@ -25,6 +26,11 @@ $result = $sidebarConn->query("SELECT COUNT(*) as count FROM users WHERE approva
 if ($result && $row = $result->fetch_assoc()) {
     $approvedResidents = (int)$row['count'];
 }
+
+// ============================================================
+// ✅ ROOM CONFIGURATION - 13 ROOMS
+// ============================================================
+$totalRooms = 13;
 ?>
 
 <style>
@@ -430,7 +436,7 @@ SIDEBAR OVERLAY - for mobile close
         <!-- ===== NAVIGATION ===== -->
         <ul class="nav flex-column">
             
-            <!-- ===== DASHBOARD ===== -->
+            <!-- ===== DASHBOARD - ✅ 13 ROOMS ===== -->
             <li class="nav-item">
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php">
                     <i class="fas fa-home"></i> Dashboard
@@ -439,7 +445,7 @@ SIDEBAR OVERLAY - for mobile close
                         $row = $result->fetch_assoc();
                         $roomsUsed = $row['count'] ?? 0;
                     ?>
-                    <span class="badge bg-info rounded-pill"><?php echo $roomsUsed; ?>/5</span>
+                    <span class="badge bg-info rounded-pill"><?php echo $roomsUsed; ?>/<?php echo $totalRooms; ?></span>
                 </a>
             </li>
             
@@ -912,5 +918,5 @@ JAVASCRIPT - SIDEBAR TOGGLE
     // Refresh every 30 seconds
     setInterval(refreshPendingCount, 30000);
 
-    console.log('✅ Dark Sidebar loaded with approval tracking');
+    console.log('✅ Dark Sidebar loaded with approval tracking - 13 Rooms');
 </script>
