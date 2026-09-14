@@ -4,6 +4,7 @@
  * ISABELA STATE UNIVERSITY - LADIES DORMITORY
  * SIMPLE ADDITION ONLY
  * WITH 10-MINUTE BAN AFTER 3 INCORRECT ATTEMPTS
+ * WITH STUDENT REGISTRATION CONFIRMATION
  * DESIGN: Modern Login Page
  */
 
@@ -67,23 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
             } else {
                 $stmt2 = $conn->prepare("
                     INSERT INTO password_reset_requests (
-                        student_id, 
-                        student_name, 
-                        student_id_number, 
-                        username, 
-                        email, 
-                        reason, 
-                        status, 
-                        requested_at
+                        student_id, student_name, student_id_number, username, email, reason, status, requested_at
                     ) VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())
                 ");
                 $stmt2->bind_param("isssss", 
-                    $row['student_id'], 
-                    $row['full_name'], 
-                    $row['student_id_number'], 
-                    $row['username'], 
-                    $row['email'], 
-                    $reset_reason
+                    $row['student_id'], $row['full_name'], $row['student_id_number'], 
+                    $row['username'], $row['email'], $reset_reason
                 );
                 
                 if ($stmt2->execute()) {
@@ -616,7 +606,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             margin-bottom: 30px;
         }
         
-        /* Logo Image Styling */
         .brand-section .logo img {
             width: 100px;
             height: 100px;
@@ -1150,20 +1139,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             margin: 0;
         }
         
-        .reset-section .reset-link {
-            color: rgba(255,215,0,0.6);
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            background: none;
-            border: none;
-        }
-        
-        .reset-section .reset-link:hover {
-            color: #ffd700;
-        }
-        
         .reset-section .back-to-login-link {
             color: rgba(255,255,255,0.3);
             font-size: 13px;
@@ -1196,15 +1171,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         .btn-reset:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 30px rgba(245, 158, 11, 0.25);
-        }
-        
-        .btn-reset:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .btn-reset i {
-            margin-right: 8px;
         }
         
         textarea.form-control-custom {
@@ -1259,6 +1225,115 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         
         .login-footer-text span {
             color: rgba(255,215,0,0.15);
+        }
+        
+        /* ============================================================
+           STUDENT REGISTRATION CONFIRMATION MODAL
+           ============================================================ */
+        .student-confirm-modal .modal-content {
+            background: #131926 !important;
+            border: 1px solid #1a2a4a;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        }
+        
+        .student-confirm-modal .modal-header {
+            border-bottom: 1px solid #1a2a4a;
+            padding: 20px 25px;
+        }
+        
+        .student-confirm-modal .modal-title {
+            color: #ffd700;
+            font-size: 18px;
+            font-weight: 700;
+        }
+        
+        .student-confirm-modal .modal-body {
+            padding: 30px 25px;
+            text-align: center;
+        }
+        
+        .student-confirm-modal .modal-footer {
+            border-top: 1px solid #1a2a4a;
+            padding: 15px 25px;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .student-confirm-modal .confirm-icon {
+            font-size: 70px;
+            color: #ffd700;
+            margin-bottom: 20px;
+            animation: bounceIcon 1s ease-in-out;
+        }
+        
+        @keyframes bounceIcon {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .student-confirm-modal .confirm-title {
+            color: #e5e7eb;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        
+        .student-confirm-modal .confirm-text {
+            color: rgba(255,255,255,0.6);
+            font-size: 14px;
+            line-height: 1.7;
+            margin-bottom: 20px;
+        }
+        
+        .student-confirm-modal .confirm-note {
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+        }
+        
+        .student-confirm-modal .confirm-note p {
+            color: #fbbf24;
+            font-size: 12px;
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        .btn-cancel-confirm {
+            background: #2a2a4a !important;
+            border: none !important;
+            color: #b0b0c0 !important;
+            padding: 12px 35px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-cancel-confirm:hover {
+            background: #3a3a5a !important;
+            color: #e0e0e0 !important;
+        }
+        
+        .btn-continue-confirm {
+            background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
+            border: none !important;
+            color: #0a1628 !important;
+            padding: 12px 35px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-continue-confirm:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
+            color: #0a1628 !important;
         }
         
         /* ============================================================
@@ -1351,6 +1426,20 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 width: 70px;
                 height: 70px;
             }
+            
+            .student-confirm-modal .confirm-title {
+                font-size: 17px;
+            }
+            
+            .student-confirm-modal .confirm-text {
+                font-size: 13px;
+            }
+            
+            .btn-cancel-confirm,
+            .btn-continue-confirm {
+                padding: 10px 20px;
+                font-size: 13px;
+            }
         }
         
         /* ============================================================
@@ -1383,7 +1472,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         <!-- ===== LEFT SIDE - BRANDING ===== -->
         <div class="brand-section">
             <div class="logo">
-                <!-- Logo Image (Malaki at Buo) -->
                 <img src="../assets/images/isu-logo.png" alt="ISU Logo">
                 
                 <div class="logo-text">
@@ -1519,7 +1607,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <button type="button" class="role-btn" data-role="staff">
                         <i class="fas fa-user-tie"></i> Staff
                     </button>
-                    <button type="button" class="role-btn" data-role="student">
+                    <button type="button" class="role-btn" data-role="student" onclick="confirmStudentRegistration()">
                         <i class="fas fa-user-graduate"></i> Student
                     </button>
                 </div>
@@ -1557,7 +1645,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
                     
-                    <!-- ===== HOW IT WORKS NOTE ===== -->
                     <div style="margin-top: 15px; padding: 12px 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; text-align: center;">
                         <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; line-height: 1.6;">
                             <i class="fas fa-info-circle" style="color: #ffd700; margin-right: 5px;"></i>
@@ -1600,7 +1687,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
                     
-                    <!-- ===== HOW IT WORKS NOTE ===== -->
                     <div style="margin-top: 15px; padding: 12px 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; text-align: center;">
                         <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; line-height: 1.6;">
                             <i class="fas fa-info-circle" style="color: #ffd700; margin-right: 5px;"></i>
@@ -1639,7 +1725,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     </div>
                     <?php endif; ?>
                     
-                    <!-- Forgot Password Link -->
                     <div class="text-center mt-2 mb-3">
                         <a href="#" class="forgot-password-link" onclick="showResetForm()">
                             <i class="fas fa-key me-1"></i> Forgot Password? Request Reset
@@ -1650,7 +1735,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
                     
-                    <!-- ===== HOW IT WORKS NOTE ===== -->
                     <div style="margin-top: 15px; padding: 12px 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; text-align: center;">
                         <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; line-height: 1.6;">
                             <i class="fas fa-info-circle" style="color: #ffd700; margin-right: 5px;"></i>
@@ -1695,7 +1779,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     </div>
                 </div>
                 
-                <!-- ===== LOGIN FOOTER ===== -->
                 <div class="login-footer-text">
                     &copy; <?php echo date('Y'); ?> <span>Isabela State University</span> · Ladies Dormitory
                 </div>
@@ -1704,16 +1787,76 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         </div>
     </div>
 
+    <!-- ============================================================
+    STUDENT REGISTRATION CONFIRMATION MODAL
+    ============================================================ -->
+    <div class="modal fade student-confirm-modal" id="studentConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-user-graduate me-2"></i>
+                        Student Registration
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter: invert(1);"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="confirm-icon">
+                        <i class="fas fa-question-circle"></i>
+                    </div>
+                    <h4 class="confirm-title">Are you sure you want to register?</h4>
+                    <p class="confirm-text">
+                        You will be redirected to the <strong style="color: #ffd700;">Student Registration Form</strong>. 
+                        Please fill up all required fields and upload your photo.
+                    </p>
+                    <div class="confirm-note">
+                        <p>
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong>Note:</strong> After submitting, wait for admin approval before you can create your portal account.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-cancel-confirm" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Cancel
+                    </button>
+                    <a href="student-self-registration.php" class="btn btn-continue-confirm">
+                        <i class="fas fa-arrow-right me-1"></i> Continue
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
-        // ROLE SELECTOR
+        // STUDENT REGISTRATION CONFIRMATION
+        // ============================================================
+        function confirmStudentRegistration() {
+            const modal = new bootstrap.Modal(document.getElementById('studentConfirmModal'));
+            modal.show();
+        }
+
+        // ============================================================
+        // ROLE SELECTOR - UPDATED
         // ============================================================
         document.querySelectorAll('.role-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function(e) {
+                const role = this.dataset.role;
+                
+                // Student = Show confirmation modal instead
+                if (role === 'student') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    confirmStudentRegistration();
+                    return;
+                }
+                
+                // Other roles = switch form
                 document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
                 
-                const role = this.dataset.role;
                 document.querySelectorAll('.login-form').forEach(form => {
                     form.style.display = 'none';
                 });
