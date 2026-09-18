@@ -5,9 +5,10 @@
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
  * AUTO UPPERCASE FOR ALL TEXT FIELDS
  * ✅ PRINT LAYOUT MATCHES OFFICIAL FORM (PORTRAIT)
+ * ✅ COLORED PRINT - Blue values, Green dorm name, Light blue title
+ * ✅ WITH ISU LOGO
  */
 
-// Start session
 session_start();
 
 require_once '../../backend/config/config.php';
@@ -441,7 +442,7 @@ $formData = $_POST ?? [];
         ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
         /* ============================================================
-           ✅ PRINT LAYOUT - PORTRAIT (MATCHES OFFICIAL FORM)
+           ✅ PRINT LAYOUT - PORTRAIT (COLORED - MATCHES OFFICIAL FORM)
            ============================================================ */
         @page {
             size: A4 portrait;
@@ -476,6 +477,7 @@ $formData = $_POST ?? [];
                 font-size: 10px !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+                color-adjust: exact !important;
             }
             
             .main-content {
@@ -543,17 +545,19 @@ $formData = $_POST ?? [];
                 color: #000 !important;
             }
             
+            /* ✅ GREEN: Dormitory Name */
             .print-header-center .dorm-name {
                 font-size: 11px;
                 font-weight: 700;
-                color: #000 !important;
+                color: #15803d !important;
                 margin-top: 2px;
             }
             
+            /* ✅ LIGHT BLUE: Student Boarder's Data Profile */
             .print-header-center .profile-title {
                 font-size: 12px;
                 font-weight: 800;
-                color: #000 !important;
+                color: #0284c7 !important;
                 margin: 3px 0;
                 letter-spacing: 0.5px;
             }
@@ -607,13 +611,20 @@ $formData = $_POST ?? [];
                 font-size: 10px;
             }
             
+            /* ✅ BLUE: Filled values */
             .print-value {
                 border-bottom: 1px solid #000;
                 padding: 0 3px 1px 3px;
                 min-width: 80px;
                 display: inline-block;
-                color: #000 !important;
-                font-weight: normal;
+                color: #1e40af !important;
+                font-weight: 600;
+            }
+            
+            /* Empty values - italic */
+            .print-value:empty,
+            .print-value.blank {
+                color: transparent !important;
             }
             
             .print-value-empty {
@@ -645,8 +656,10 @@ $formData = $_POST ?? [];
                 background: #fff;
             }
             
+            /* ✅ BLUE: Checked checkbox */
             .print-checkbox .box.checked {
-                background: #000;
+                background: #1e40af !important;
+                border-color: #1e40af !important;
             }
             
             .print-checkbox .box-text {
@@ -726,9 +739,7 @@ $formData = $_POST ?? [];
                     </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                     SCREEN VERSION (DARK MODE)
-                     ============================================================ -->
+                <!-- SCREEN VERSION (DARK MODE) -->
                 <form method="POST" action="" id="residentForm">
                     
                     <div class="form-section">
@@ -980,15 +991,18 @@ $formData = $_POST ?? [];
                 </form>
                 
                 <!-- ============================================================
-                     ✅ PRINT FORM (PORTRAIT - OFFICIAL ISU FORMAT)
-                     Hidden on screen, only shows when printing
+                     ✅ COLORED PRINT FORM (PORTRAIT)
+                     - Blue values (pangalan, course, etc.)
+                     - Green dorm name
+                     - Light blue profile title
+                     - ISU Logo
                      ============================================================ -->
                 <div class="print-form">
                     
                     <!-- HEADER: Logo | University Info | Photo Box -->
                     <div class="print-header">
                         <div class="print-header-left">
-                            <img src="../../frontend/assets/img/isu-logo.png" 
+                            <img src="../../frontend/assets/images/isu-logo.png" 
                                  alt="ISU Logo" 
                                  class="print-logo"
                                  onerror="this.style.display='none'; this.parentNode.innerHTML='<div style=\'width:75px;height:75px;border:1px dashed #999;display:flex;align-items:center;justify-content:center;font-size:8px;color:#999;text-align:center;\'>ISU<br>Logo</div>';">
