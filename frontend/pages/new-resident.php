@@ -5,7 +5,8 @@
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
  * AUTO UPPERCASE FOR ALL TEXT FIELDS
  * ✅ PRINT LAYOUT MATCHES OFFICIAL FORM (PORTRAIT)
- * ✅ COLORED PRINT - Blue values, Green dorm name, Light blue title
+ * ✅ BLUE LABELS, BLACK VALUES
+ * ✅ GREEN DORM NAME, LIGHT BLUE PROFILE TITLE
  * ✅ WITH ISU LOGO
  */
 
@@ -442,20 +443,21 @@ $formData = $_POST ?? [];
         ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
         /* ============================================================
-           ✅ PRINT LAYOUT - PORTRAIT (COLORED - MATCHES OFFICIAL FORM)
+           ✅ PRINT LAYOUT - PORTRAIT
+           ✅ BLUE LABELS (Name:, Gender:, Birthday:, etc.)
+           ✅ BLACK VALUES
+           ✅ GREEN DORM NAME, LIGHT BLUE PROFILE TITLE
            ============================================================ */
         @page {
             size: A4 portrait;
             margin: 8mm 10mm;
         }
         
-        /* Print form hidden on screen */
         .print-form {
             display: none;
         }
         
         @media print {
-            /* Hide screen elements */
             .no-print,
             .navbar,
             .sidebar,
@@ -489,7 +491,6 @@ $formData = $_POST ?? [];
                 width: 100% !important;
             }
             
-            /* Show print form */
             .print-form {
                 display: block !important;
                 width: 100%;
@@ -504,7 +505,7 @@ $formData = $_POST ?? [];
             }
             
             /* ============================================================
-               PRINT HEADER - 3 COLUMNS (Logo | Info | Photo box)
+               PRINT HEADER
                ============================================================ */
             .print-header {
                 display: flex;
@@ -553,7 +554,7 @@ $formData = $_POST ?? [];
                 margin-top: 2px;
             }
             
-            /* ✅ LIGHT BLUE: Student Boarder's Data Profile */
+            /* ✅ LIGHT BLUE: Profile Title */
             .print-header-center .profile-title {
                 font-size: 12px;
                 font-weight: 800;
@@ -587,7 +588,7 @@ $formData = $_POST ?? [];
             }
             
             /* ============================================================
-               PRINT BODY - Line by line, checkbox style
+               PRINT BODY
                ============================================================ */
             .print-body {
                 margin-top: 4px;
@@ -604,24 +605,24 @@ $formData = $_POST ?? [];
                 line-height: 1.5;
             }
             
+            /* ✅ BLUE: Field Labels (Name:, Gender:, Birthday:, etc.) */
             .print-label {
                 font-weight: 600;
-                color: #000 !important;
+                color: #1e40af !important;
                 white-space: nowrap;
                 font-size: 10px;
             }
             
-            /* ✅ BLUE: Filled values */
+            /* ✅ BLACK: Filled values */
             .print-value {
                 border-bottom: 1px solid #000;
                 padding: 0 3px 1px 3px;
                 min-width: 80px;
                 display: inline-block;
-                color: #1e40af !important;
+                color: #000 !important;
                 font-weight: 600;
             }
             
-            /* Empty values - italic */
             .print-value:empty,
             .print-value.blank {
                 color: transparent !important;
@@ -667,25 +668,20 @@ $formData = $_POST ?? [];
                 color: #000 !important;
             }
             
-            /* Sections */
-            .print-section {
-                margin-top: 4px;
-                margin-bottom: 2px;
-            }
-            
+            /* ✅ BLUE: Section labels */
             .print-section-label {
                 font-weight: 700;
                 font-size: 10px;
-                color: #000 !important;
+                color: #1e40af !important;
             }
             
-            /* Emergency person row */
+            /* ✅ BLUE: Emergency person title */
             .print-emergency-title {
                 font-weight: 700;
                 font-size: 10px;
                 margin-top: 4px;
                 margin-bottom: 2px;
-                color: #000 !important;
+                color: #1e40af !important;
             }
             
             /* Footer form number */
@@ -992,7 +988,8 @@ $formData = $_POST ?? [];
                 
                 <!-- ============================================================
                      ✅ COLORED PRINT FORM (PORTRAIT)
-                     - Blue values (pangalan, course, etc.)
+                     - Blue labels (Name:, Gender:, Birthday:, etc.)
+                     - Black values
                      - Green dorm name
                      - Light blue profile title
                      - ISU Logo
