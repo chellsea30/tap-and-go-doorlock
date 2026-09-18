@@ -2,23 +2,21 @@
 /**
  * Tap-and-Go Doorlock - Register RFID Card
  * WITH AUTO-FILL FROM AVAILABLE CARDS
+ * ✅ WITH LIVE SCAN AUTO-FILL FROM RFID READER
  * PURE DARK MODE - WITH SHOW ENTRIES
  * WITH FIXED NAVBAR, SIDEBAR, AND FOOTER
- * FIXED: Dark table and dark footer
  */
 
 session_start();
 
-// Load config and functions
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
 
-// Check authentication (Admin only)
 if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
 }
-// Include header
+
 include '../includes/header.php'; 
 $conn = getDBConnection();
 $error = '';
@@ -51,7 +49,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET RESIDENTS WITHOUT RFID CARDS (with pagination)
+// GET RESIDENTS WITHOUT RFID CARDS
 // ============================================================
 $residentsWithoutCard = [];
 $countQuery = "
@@ -117,13 +115,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_rfid'])) {
     $card_uid = strtoupper(trim($_POST['card_uid'] ?? ''));
     $expiry_date = $_POST['expiry_date'] ?? date('Y-m-d', strtotime('+1 year'));
     $card_type = $_POST['card_type'] ?? 'resident';
+    $scan_id = isset($_POST['scan_id']) ? (int)$_POST['scan_id'] : 0;
     
     if (empty($user_id) || empty($card_uid)) {
         $error = 'Please select a resident and enter a card UID.';
     } elseif (strlen($card_uid) < 4) {
         $error = 'Card UID must be at least 4 characters.';
     } else {
-        // Check if card UID already exists in rfid_cards
+        // Check if card UID already exists
         $check = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE card_uid = ?");
         $check->bind_param("s", $card_uid);
         $check->execute();
@@ -146,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_rfid'])) {
             $stmt->bind_param("siss", $card_uid, $user_id, $expiry_date, $card_type);
             
             if ($stmt->execute()) {
-                // If it was from available cards, mark as assigned
+                // Mark available card as assigned
                 if ($isAvailable) {
                     $stmt2 = $conn->prepare("UPDATE available_rfid_cards SET status = 'assigned' WHERE card_uid = ?");
                     $stmt2->bind_param("s", $card_uid);
@@ -154,10 +153,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register_rfid'])) {
                     $stmt2->close();
                 }
                 
+                // ✅ Mark live scan as used
+                if ($scan_id > 0) {
+                    $stmt3 = $conn->prepare("UPDATE live_scan SET status = 'used' WHERE scan_id = ?");
+                    $stmt3->bind_param("i", $scan_id);
+                    $stmt3->execute();
+                    $stmt3->close();
+                }
+                
                 $success = "✅ RFID card registered successfully!";
                 logAudit($_SESSION['admin_id'], 'Register RFID', "Registered RFID card $card_uid for user ID: $user_id");
                 
-                // Refresh page
                 header('Location: register-rfid.php?success=1');
                 exit();
             } else {
@@ -242,7 +248,7 @@ if (isset($_SESSION['admin_id'])) {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
         /* ============================================================
-           RESET & BASE
+           SAME STYLES AS BEFORE + NEW SCAN MODAL STYLES
            ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -252,16 +258,12 @@ if (isset($_SESSION['admin_id'])) {
             color: #e0e0e0 !important;
         }
         
-        /* ============================================================
-           FIXED NAVBAR
-           ============================================================ */
+        /* NAVBAR, SIDEBAR, MAIN, FOOTER - SAME AS BEFORE */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
             position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
+            top: 0 !important; left: 0 !important; right: 0 !important;
             z-index: 1050 !important;
             height: 56px !important;
         }
@@ -270,14 +272,9 @@ if (isset($_SESSION['admin_id'])) {
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           SIDEBAR - FIXED POSITION
-           ============================================================ */
         .sidebar {
             position: fixed !important;
-            top: 56px !important;
-            left: 0 !important;
-            bottom: 0 !important;
+            top: 56px !important; left: 0 !important; bottom: 0 !important;
             width: 220px !important;
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
@@ -292,42 +289,15 @@ if (isset($_SESSION['admin_id'])) {
             margin: 2px 10px !important;
             font-size: 13px !important;
         }
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.05) !important;
-            color: #e0e0e0 !important;
-        }
-        .sidebar .nav-link.active {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-        }
-        .sidebar .nav-link i {
-            width: 18px;
-            text-align: center;
-        }
-        .sidebar-footer { 
-            border-top-color: #1a2a4a !important;
-            padding: 12px 16px !important;
-            margin-top: 10px !important;
-        }
+        .sidebar .nav-link:hover { background: rgba(255,255,255,0.05) !important; color: #e0e0e0 !important; }
+        .sidebar .nav-link.active { background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important; color: white !important; }
+        .sidebar .nav-link i { width: 18px; text-align: center; }
+        .sidebar-footer { border-top-color: #1a2a4a !important; padding: 12px 16px !important; margin-top: 10px !important; }
         .sidebar-footer .text-muted { color: #606070 !important; font-size: 11px !important; }
         
-        /* ============================================================
-           PAGE WRAPPER - FLEX LAYOUT
-           ============================================================ */
-        .page-wrapper {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
+        .page-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+        .content-wrapper { display: flex; flex: 1; }
         
-        .content-wrapper {
-            display: flex;
-            flex: 1;
-        }
-        
-        /* ============================================================
-           MAIN CONTENT
-           ============================================================ */
         .main-content {
             margin-left: 220px !important;
             margin-top: 56px !important;
@@ -337,9 +307,6 @@ if (isset($_SESSION['admin_id'])) {
             background: #0a0e1a !important;
         }
         
-        /* ============================================================
-           FOOTER - STICKY BOTTOM (DARK)
-           ============================================================ */
         .footer {
             margin-left: 220px !important;
             padding: 10px 25px !important;
@@ -353,9 +320,6 @@ if (isset($_SESSION['admin_id'])) {
         }
         .footer span { color: #ffd700 !important; }
         
-        /* ============================================================
-           DARK STAT CARDS
-           ============================================================ */
         .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -369,22 +333,13 @@ if (isset($_SESSION['admin_id'])) {
         }
         .stat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; }
         .stat-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            color: white;
-            flex-shrink: 0;
+            width: 42px; height: 42px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; color: white; flex-shrink: 0;
         }
         .stat-number { font-size: 20px; font-weight: 700; color: #e0e0e0; margin: 0; }
         .stat-label { font-size: 11px; color: #808090; margin: 0; }
         
-        /* ============================================================
-           DARK FORM SECTIONS
-           ============================================================ */
         .form-section {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -401,11 +356,7 @@ if (isset($_SESSION['admin_id'])) {
             margin-bottom: 16px;
             font-size: 15px;
         }
-        .form-label {
-            font-weight: 500;
-            font-size: 12px;
-            color: #b0b0c0 !important;
-        }
+        .form-label { font-weight: 500; font-size: 12px; color: #b0b0c0 !important; }
         .form-control, .form-select {
             background: #1a1a2e !important;
             border: 1px solid #2a2a4a !important;
@@ -424,9 +375,6 @@ if (isset($_SESSION['admin_id'])) {
         .form-control::placeholder { color: #606070 !important; }
         .required { color: #f87171 !important; }
         
-        /* ============================================================
-           DARK BUTTONS
-           ============================================================ */
         .btn-submit {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             border: none !important;
@@ -437,16 +385,36 @@ if (isset($_SESSION['admin_id'])) {
             color: white !important;
             transition: all 0.3s ease;
         }
-        .btn-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(26,58,106,0.4);
+        .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(26,58,106,0.4); color: white !important; }
+        .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+        
+        /* ✅ BAGO: Scan Button */
+        .btn-scan {
+            background: linear-gradient(135deg, #f59e0b, #dc2626) !important;
+            border: none !important;
+            padding: 8px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 13px;
+            color: white !important;
+            transition: all 0.3s ease;
+            animation: pulse-scan 2s infinite;
+        }
+        .btn-scan:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 10px 30px rgba(245,158,11,0.5); 
             color: white !important;
         }
-        .btn-submit:disabled {
+        .btn-scan:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-            transform: none !important;
+            animation: none;
         }
+        @keyframes pulse-scan {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(245,158,11,0); }
+        }
+        
         .btn-outline-secondary {
             border-color: #2a2a4a !important;
             color: #808090 !important;
@@ -454,10 +422,8 @@ if (isset($_SESSION['admin_id'])) {
             padding: 5px 12px;
             border-radius: 8px;
         }
-        .btn-outline-secondary:hover {
-            background: #2a2a4a !important;
-            color: #e0e0e0 !important;
-        }
+        .btn-outline-secondary:hover { background: #2a2a4a !important; color: #e0e0e0 !important; }
+        
         .btn-sm-custom {
             padding: 2px 8px;
             font-size: 10px;
@@ -466,15 +432,9 @@ if (isset($_SESSION['admin_id'])) {
             transition: all 0.3s ease;
         }
         .btn-sm-custom:hover { transform: translateY(-1px); }
-        .btn-warning {
-            background: #4a3a1a !important;
-            color: #fbbf24 !important;
-        }
+        .btn-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
         .btn-warning:hover { background: #5a4a2a !important; color: #fcd34d !important; }
-        .btn-success {
-            background: #065f46 !important;
-            color: #34d399 !important;
-        }
+        .btn-success { background: #065f46 !important; color: #34d399 !important; }
         .btn-success:hover { background: #0a7a5a !important; color: #6ee7b7 !important; }
         .btn-primary-sm {
             background: #1a3a6a !important;
@@ -484,15 +444,8 @@ if (isset($_SESSION['admin_id'])) {
             font-size: 10px;
             border-radius: 6px;
         }
-        .btn-primary-sm:hover {
-            background: #2a5a9a !important;
-            border-color: #2a5a9a !important;
-            color: white !important;
-        }
+        .btn-primary-sm:hover { background: #2a5a9a !important; border-color: #2a5a9a !important; color: white !important; }
         
-        /* ============================================================
-           DARK CARD ITEMS
-           ============================================================ */
         .card-item {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -503,19 +456,9 @@ if (isset($_SESSION['admin_id'])) {
             box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
             transition: all 0.3s ease;
         }
-        .card-item:hover {
-            transform: translateX(4px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.4) !important;
-        }
-        .card-item .name {
-            font-weight: 600;
-            color: #e0e0e0 !important;
-            font-size: 13px;
-        }
-        .card-item .detail {
-            font-size: 11px;
-            color: #808090 !important;
-        }
+        .card-item:hover { transform: translateX(4px); box-shadow: 0 8px 25px rgba(0,0,0,0.4) !important; }
+        .card-item .name { font-weight: 600; color: #e0e0e0 !important; font-size: 13px; }
+        .card-item .detail { font-size: 11px; color: #808090 !important; }
         .card-item .uid {
             font-family: monospace;
             font-weight: 700;
@@ -525,27 +468,11 @@ if (isset($_SESSION['admin_id'])) {
             padding: 2px 8px;
             border-radius: 4px;
         }
-        .card-item.deactivated {
-            border-left-color: #6b7280 !important;
-            opacity: 0.7;
-        }
-        .card-item .status-badge {
-            font-size: 9px;
-            padding: 2px 8px;
-            border-radius: 20px;
-        }
-        .card-item .status-active {
-            background: #065f46 !important;
-            color: #34d399 !important;
-        }
-        .card-item .status-deactivated {
-            background: #2a2a3a !important;
-            color: #808090 !important;
-        }
+        .card-item.deactivated { border-left-color: #6b7280 !important; opacity: 0.7; }
+        .card-item .status-badge { font-size: 9px; padding: 2px 8px; border-radius: 20px; }
+        .card-item .status-active { background: #065f46 !important; color: #34d399 !important; }
+        .card-item .status-deactivated { background: #2a2a3a !important; color: #808090 !important; }
         
-        /* ============================================================
-           DARK AVAILABLE CARDS
-           ============================================================ */
         .available-card-list {
             display: flex;
             flex-wrap: wrap;
@@ -581,9 +508,6 @@ if (isset($_SESSION['admin_id'])) {
             box-shadow: 0 0 0 3px rgba(102,126,234,0.2);
         }
         
-        /* ============================================================
-           DARK AUTO-FILL INFO
-           ============================================================ */
         .auto-fill-info {
             background: #15152a !important;
             border-radius: 8px;
@@ -592,20 +516,12 @@ if (isset($_SESSION['admin_id'])) {
             display: none;
             margin-bottom: 12px;
         }
-        .auto-fill-info.show {
-            display: block;
-        }
+        .auto-fill-info.show { display: block; }
         .auto-fill-info .text-muted { color: #808090 !important; }
         .auto-fill-info .text-success { color: #34d399 !important; }
         
-        /* ============================================================
-           DARK TABLE - FIXED
-           ============================================================ */
-        .table {
-            color: #e0e0e0 !important;
-            font-size: 13px;
-            background: #111827 !important;
-        }
+        /* TABLE */
+        .table { color: #e0e0e0 !important; font-size: 13px; background: #111827 !important; }
         .table th {
             color: #808090 !important;
             border-bottom: 2px solid #1a2a4a !important;
@@ -617,9 +533,7 @@ if (isset($_SESSION['admin_id'])) {
             background: #111827 !important;
             color: #e0e0e0 !important;
         }
-        .table-hover tbody tr:hover td {
-            background: rgba(255,255,255,0.03) !important;
-        }
+        .table-hover tbody tr:hover td { background: rgba(255,255,255,0.03) !important; }
         .table .text-muted { color: #6b7280 !important; }
         .table-responsive {
             background: #111827 !important;
@@ -628,9 +542,7 @@ if (isset($_SESSION['admin_id'])) {
             overflow: hidden;
         }
         
-        /* ============================================================
-           DARK ALERTS
-           ============================================================ */
+        /* ALERTS */
         .alert-success {
             background: #065f46 !important;
             border-color: #065f46 !important;
@@ -665,26 +577,15 @@ if (isset($_SESSION['admin_id'])) {
         }
         .alert .btn-close { filter: invert(1) !important; }
         
-        /* ============================================================
-           PAGE HEADER
-           ============================================================ */
         .page-header {
             padding-bottom: 10px;
             margin-bottom: 15px;
             border-bottom: 1px solid #1a2a4a;
         }
-        .page-header h1 {
-            font-size: 20px;
-            font-weight: 600;
-            color: #e0e0e0;
-        }
-        .page-header h1 i {
-            color: #1a3a6a;
-        }
+        .page-header h1 { font-size: 20px; font-weight: 600; color: #e0e0e0; }
+        .page-header h1 i { color: #1a3a6a; }
         
-        /* ============================================================
-           PAGINATION - DARK
-           ============================================================ */
+        /* PAGINATION */
         .pagination-container {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -704,24 +605,16 @@ if (isset($_SESSION['admin_id'])) {
             font-size: 12px;
             transition: all 0.3s ease;
         }
-        .pagination .page-link:hover {
-            background: #2a2a4a !important;
-            color: #e0e0e0 !important;
-        }
+        .pagination .page-link:hover { background: #2a2a4a !important; color: #e0e0e0 !important; }
         .pagination .page-item.active .page-link {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             color: white !important;
             box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
-        .pagination .page-item.disabled .page-link {
-            color: #4a4a5a !important;
-        }
+        .pagination .page-item.disabled .page-link { color: #4a4a5a !important; }
         .page-info { color: #808090 !important; font-size: 12px; }
         .page-info strong { color: #93c5fd !important; }
         
-        /* ============================================================
-           PER PAGE SELECTOR - DARK
-           ============================================================ */
         .per-page-selector select {
             background: #1a1a2e !important;
             border: 1px solid #2a2a4a !important;
@@ -737,23 +630,137 @@ if (isset($_SESSION['admin_id'])) {
         .per-page-selector label { color: #808090 !important; font-size: 12px; margin: 0; }
         
         /* ============================================================
-           BORDER & MISC
+           ✅ SCAN MODAL - LIVE RFID READER
            ============================================================ */
-        .border-bottom { border-bottom-color: #1a2a4a !important; }
-        .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
-        .text-muted { color: #808090 !important; }
-        .text-success { color: #34d399 !important; }
-        .text-warning { color: #fbbf24 !important; }
-        .text-danger { color: #f87171 !important; }
+        .scan-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+        }
+        .scan-modal-overlay.show { display: flex; }
         
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
+        .scan-modal {
+            background: linear-gradient(135deg, #0d1528, #1a2a4a);
+            border: 2px solid #2a5a9a;
+            border-radius: 24px;
+            padding: 40px 50px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.8), 0 0 60px rgba(42,90,154,0.5);
+            animation: modalPop 0.4s ease;
+        }
+        @keyframes modalPop {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .scan-modal .scan-icon {
+            font-size: 80px;
+            color: #f59e0b;
+            margin-bottom: 20px;
+            animation: scanPulse 1.5s infinite;
+            display: inline-block;
+        }
+        @keyframes scanPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+        }
+        
+        .scan-modal h3 {
+            color: #ffd700 !important;
+            font-weight: 700;
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+        
+        .scan-modal p {
+            color: #b0b0c0 !important;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        
+        .scan-modal .scan-status {
+            display: inline-block;
+            padding: 8px 20px;
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid #f59e0b;
+            border-radius: 30px;
+            color: #fbbf24 !important;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .scan-modal .scan-status.scanned {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: #10b981;
+            color: #34d399 !important;
+        }
+        
+        .scan-modal .scanned-uid {
+            font-family: monospace;
+            font-size: 32px;
+            font-weight: 700;
+            color: #34d399 !important;
+            background: rgba(16, 185, 129, 0.1);
+            padding: 15px 30px;
+            border-radius: 12px;
+            letter-spacing: 4px;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .scan-modal .scanned-uid.show {
+            display: block;
+            animation: uidReveal 0.5s ease;
+        }
+        
+        @keyframes uidReveal {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .scan-modal .btn-cancel-scan {
+            background: transparent;
+            border: 1px solid #7a2a2a;
+            color: #f87171;
+            padding: 8px 24px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+        .scan-modal .btn-cancel-scan:hover {
+            background: #7a2a2a;
+            color: white;
+        }
+        
+        .pulse-reader {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #10b981;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: readerPulse 1s infinite;
+        }
+        @keyframes readerPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.3); }
+        }
+        
+        /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
                 position: fixed !important;
-                top: 56px !important;
-                bottom: 0 !important;
+                top: 56px !important; bottom: 0 !important;
                 left: -260px !important;
                 width: 260px !important;
                 transition: left 0.3s ease !important;
@@ -765,53 +772,28 @@ if (isset($_SESSION['admin_id'])) {
                 padding: 12px 15px !important;
                 min-height: calc(100vh - 56px - 40px) !important;
             }
-            .footer {
-                margin-left: 0 !important;
-                padding: 8px 15px !important;
-                width: 100% !important;
-            }
+            .footer { margin-left: 0 !important; padding: 8px 15px !important; width: 100% !important; }
             .form-section { padding: 15px; }
             .stat-card { padding: 12px; }
             .stat-number { font-size: 18px; }
             .stat-icon { width: 36px; height: 36px; font-size: 14px; }
-            .pagination-container .row {
-                flex-direction: column;
-                gap: 8px;
-            }
-            .pagination-container .col-md-6 {
-                width: 100%;
-                text-align: center !important;
-            }
-            .pagination {
-                justify-content: center !important;
-            }
+            .pagination-container .row { flex-direction: column; gap: 8px; }
+            .pagination-container .col-md-6 { width: 100%; text-align: center !important; }
+            .pagination { justify-content: center !important; }
+            .scan-modal { padding: 30px 25px; }
+            .scan-modal .scan-icon { font-size: 60px; }
         }
         
-        /* ============================================================
-           SCROLLBAR
-           ============================================================ */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0a0e1a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #1e2a3a;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #ffd700;
-        }
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0e1a; }
+        ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
         @media print {
             .no-print { display: none !important; }
-            .footer { display: none !important; }
-            .navbar { display: none !important; }
-            .sidebar { display: none !important; }
+            .footer, .navbar, .sidebar { display: none !important; }
             .main-content { margin: 0 !important; padding: 20px !important; }
-            .stat-card { background: #f8f9fa !important; border: 1px solid #ddd !important; }
-            .card-item { background: #f8f9fa !important; border: 1px solid #ddd !important; }
             body { background: #fff !important; color: #000 !important; }
         }
     </style>
@@ -824,9 +806,7 @@ if (isset($_SESSION['admin_id'])) {
         <div class="content-wrapper">
             <?php include '../includes/sidebar.php'; ?>
             
-            <!-- MAIN CONTENT -->
             <main class="main-content">
-                <!-- Page Header -->
                 <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
                     <h1><i class="fas fa-id-card me-2"></i>Register RFID Card</h1>
                     <a href="cards.php" class="btn btn-outline-secondary btn-sm">
@@ -848,7 +828,7 @@ if (isset($_SESSION['admin_id'])) {
                     </div>
                 <?php endif; ?>
 
-                <!-- Stats -->
+                <!-- STATS -->
                 <div class="row g-2 mb-3">
                     <div class="col-6 col-sm-6 col-xl-3">
                         <div class="stat-card">
@@ -892,9 +872,7 @@ if (isset($_SESSION['admin_id'])) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                REGISTER RFID FORM
-                ============================================================ -->
+                <!-- REGISTER RFID FORM -->
                 <div class="form-section">
                     <h5><i class="fas fa-plus-circle me-2"></i>Assign RFID Card</h5>
                     
@@ -902,7 +880,7 @@ if (isset($_SESSION['admin_id'])) {
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
                             <strong><?php echo count($availableCards); ?> available cards</strong> in inventory.
-                            Enter a card UID below or click an available card to auto-fill.
+                            Click a card below to auto-fill, or use the <strong>Scan Card</strong> button.
                         </div>
                         
                         <div class="mb-2">
@@ -914,18 +892,10 @@ if (isset($_SESSION['admin_id'])) {
                                     </span>
                                 <?php endforeach; ?>
                             </div>
-                            <small class="text-muted">Click any card above to auto-fill the UID below</small>
-                        </div>
-                    <?php else: ?>
-                        <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            No available cards in inventory. Please add cards to the <strong>available_rfid_cards</strong> table.
                         </div>
                     <?php endif; ?>
                     
-                    <!-- ============================================================
-                    AUTO-FILL INFO DISPLAY
-                    ============================================================ -->
+                    <!-- AUTO-FILL INFO DISPLAY -->
                     <div class="auto-fill-info" id="autoFillInfo">
                         <div class="d-flex align-items-center gap-2">
                             <i class="fas fa-check-circle text-success fa-lg"></i>
@@ -937,10 +907,12 @@ if (isset($_SESSION['admin_id'])) {
                     </div>
                     
                     <form method="POST" action="" id="rfidForm">
+                        <input type="hidden" name="scan_id" id="scanIdInput" value="">
+                        
                         <div class="row g-2">
                             <div class="col-md-5">
                                 <label class="form-label">Select Resident <span class="required">*</span></label>
-                                <select class="form-select" name="user_id" required>
+                                <select class="form-select" name="user_id" id="userSelect" required>
                                     <option value="">-- Select Resident --</option>
                                     <?php foreach ($residentsWithoutCard as $resident): ?>
                                         <option value="<?php echo $resident['user_id']; ?>">
@@ -952,9 +924,6 @@ if (isset($_SESSION['admin_id'])) {
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <?php if (empty($residentsWithoutCard)): ?>
-                                    <small class="text-success"><i class="fas fa-check-circle me-1"></i> All residents have RFID cards!</small>
-                                <?php endif; ?>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Card UID <span class="required">*</span></label>
@@ -969,10 +938,26 @@ if (isset($_SESSION['admin_id'])) {
                                     <option value="visitor">Visitor</option>
                                 </select>
                             </div>
+                            
+                            <!-- ✅ SCAN BUTTON -->
+                            <div class="col-md-6">
+                                <label class="form-label">Live RFID Scan</label>
+                                <div>
+                                    <button type="button" class="btn btn-scan w-100" id="scanBtn" onclick="startScan()">
+                                        <i class="fas fa-wifi me-2"></i> Tap Card to Scan UID
+                                    </button>
+                                </div>
+                                <small class="text-muted">
+                                    <span class="pulse-reader"></span>
+                                    Reader is active. Tap your card on the RFID reader.
+                                </small>
+                            </div>
+                            
                             <div class="col-md-6">
                                 <label class="form-label">Expiry Date</label>
                                 <input type="date" class="form-control" name="expiry_date" id="expiryDateInput" value="<?php echo date('Y-m-d', strtotime('+1 year')); ?>">
                             </div>
+                            
                             <div class="col-md-12">
                                 <button type="submit" name="register_rfid" class="btn btn-submit" id="registerBtn" <?php echo empty($residentsWithoutCard) ? 'disabled' : ''; ?>>
                                     <i class="fas fa-save me-1"></i> Register RFID Card
@@ -982,9 +967,7 @@ if (isset($_SESSION['admin_id'])) {
                     </form>
                 </div>
 
-                <!-- ============================================================
-                RESIDENTS WITH CARDS
-                ============================================================ -->
+                <!-- RESIDENTS WITH CARDS -->
                 <div class="form-section">
                     <h5><i class="fas fa-list me-2"></i>Residents with RFID Cards</h5>
                     
@@ -1046,9 +1029,7 @@ if (isset($_SESSION['admin_id'])) {
                     <?php endif; ?>
                 </div>
 
-                <!-- ============================================================
-                RESIDENTS WITHOUT CARDS WITH PAGINATION
-                ============================================================ -->
+                <!-- RESIDENTS WITHOUT CARDS -->
                 <div class="form-section">
                     <h5><i class="fas fa-user-plus me-2"></i>Residents Without RFID Cards</h5>
                     
@@ -1089,23 +1070,18 @@ if (isset($_SESSION['admin_id'])) {
                             </table>
                         </div>
                         
-                        <!-- ============================================================
-                        PAGINATION WITH SHOW ENTRIES
-                        ============================================================ -->
                         <?php if ($totalPages > 1): ?>
                         <div class="pagination-container">
                             <div class="row align-items-center">
                                 <div class="col-md-6">
                                     <div class="page-info">
-                                        <i class="fas fa-info-circle me-1"></i>
                                         Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalWithoutCard); ?> of <?php echo $totalWithoutCard; ?> residents
                                         <span class="mx-1 text-muted">|</span>
-                                        <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
+                                        Page <?php echo $page; ?> of <?php echo $totalPages; ?>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-                                        <!-- Per Page Selector -->
                                         <div class="per-page-selector d-flex align-items-center gap-1">
                                             <label>Show:</label>
                                             <select onchange="changePerPage(this.value)">
@@ -1116,48 +1092,28 @@ if (isset($_SESSION['admin_id'])) {
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
-                                        
-                                        <!-- Pagination -->
-                                        <nav aria-label="Page navigation">
+                                        <nav>
                                             <ul class="pagination justify-content-end mb-0">
                                                 <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=1<?php echo '&per_page=' . $perPage; ?>">
-                                                        <i class="fas fa-angle-double-left"></i>
-                                                    </a>
+                                                    <a class="page-link" href="?page=1&per_page=<?php echo $perPage; ?>"><i class="fas fa-angle-double-left"></i></a>
                                                 </li>
                                                 <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                        <i class="fas fa-angle-left"></i>
-                                                    </a>
+                                                    <a class="page-link" href="?page=<?php echo $page - 1; ?>&per_page=<?php echo $perPage; ?>"><i class="fas fa-angle-left"></i></a>
                                                 </li>
-                                                
                                                 <?php
                                                 $startPage = max(1, $page - 2);
                                                 $endPage = min($totalPages, $page + 2);
-                                                if ($startPage > 1) {
-                                                    echo '<li class="page-item"><span class="page-link">...</span></li>';
-                                                }
                                                 for ($i = $startPage; $i <= $endPage; $i++):
                                                 ?>
                                                     <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                        <a class="page-link" href="?page=<?php echo $i; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                            <?php echo $i; ?>
-                                                        </a>
+                                                        <a class="page-link" href="?page=<?php echo $i; ?>&per_page=<?php echo $perPage; ?>"><?php echo $i; ?></a>
                                                     </li>
                                                 <?php endfor; ?>
-                                                <?php if ($endPage < $totalPages): ?>
-                                                    <li class="page-item"><span class="page-link">...</span></li>
-                                                <?php endif; ?>
-                                                
                                                 <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                        <i class="fas fa-angle-right"></i>
-                                                    </a>
+                                                    <a class="page-link" href="?page=<?php echo $page + 1; ?>&per_page=<?php echo $perPage; ?>"><i class="fas fa-angle-right"></i></a>
                                                 </li>
                                                 <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                        <i class="fas fa-angle-double-right"></i>
-                                                    </a>
+                                                    <a class="page-link" href="?page=<?php echo $totalPages; ?>&per_page=<?php echo $perPage; ?>"><i class="fas fa-angle-double-right"></i></a>
                                                 </li>
                                             </ul>
                                         </nav>
@@ -1168,14 +1124,47 @@ if (isset($_SESSION['admin_id'])) {
                         <?php endif; ?>
                     <?php endif; ?>
                 </div>
-
             </main>
         </div>
 
     <?php include '../includes/footer.php'; ?>
     
+    <!-- ============================================================
+         ✅ SCAN MODAL - LIVE RFID READER
+         ============================================================ -->
+    <div class="scan-modal-overlay" id="scanModal">
+        <div class="scan-modal">
+            <div class="scan-icon">
+                <i class="fas fa-wifi"></i>
+            </div>
+            <h3>Scanning for RFID Card...</h3>
+            <p>Please tap your card on the RFID reader now</p>
+            
+            <div class="scan-status" id="scanStatus">
+                <span class="pulse-reader"></span>
+                Waiting for card...
+            </div>
+            
+            <div class="scanned-uid" id="scannedUid">----</div>
+            
+            <button type="button" class="btn-cancel-scan" onclick="cancelScan()">
+                <i class="fas fa-times me-1"></i> Cancel Scan
+            </button>
+        </div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // ============================================================
+        // GLOBAL STATE
+        // ============================================================
+        let scanPollingInterval = null;
+        let scanActive = false;
+        let lastScannedUid = '';
+        
+        // ✅ API PATH
+        const SCAN_API_URL = '../../backend/api/get_latest_scan.php';
+        
         // ============================================================
         // CHANGE PER PAGE
         // ============================================================
@@ -1187,16 +1176,14 @@ if (isset($_SESSION['admin_id'])) {
         }
         
         // ============================================================
-        // SELECT CARD FROM AVAILABLE LIST - AUTO-FILL
+        // SELECT CARD FROM AVAILABLE LIST
         // ============================================================
         function selectCard(uid) {
             document.getElementById('cardUidInput').value = uid;
             
             document.querySelectorAll('.card-item-mini').forEach(el => {
                 el.classList.remove('selected');
-                if (el.dataset.uid === uid) {
-                    el.classList.add('selected');
-                }
+                if (el.dataset.uid === uid) el.classList.add('selected');
             });
             
             const infoDiv = document.getElementById('autoFillInfo');
@@ -1205,10 +1192,107 @@ if (isset($_SESSION['admin_id'])) {
             
             document.getElementById('uidStatus').innerHTML = '<i class="fas fa-check-circle text-success me-1"></i> Card available! Click Register to assign';
             document.getElementById('uidStatus').style.color = '#34d399';
-            
-            document.getElementById('registerBtn').focus();
         }
 
+        // ============================================================
+        // ✅ START SCAN - OPEN MODAL AND POLL FOR UID
+        // ============================================================
+        function startScan() {
+            scanActive = true;
+            lastScannedUid = '';
+            
+            // Reset modal
+            document.getElementById('scanStatus').innerHTML = '<span class="pulse-reader"></span> Waiting for card...';
+            document.getElementById('scanStatus').classList.remove('scanned');
+            document.getElementById('scannedUid').classList.remove('show');
+            document.getElementById('scannedUid').textContent = '----';
+            
+            // Show modal
+            document.getElementById('scanModal').classList.add('show');
+            
+            // Clear any pending scans on server
+            fetch(SCAN_API_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'clear_scans'})
+            }).then(() => {
+                // Start polling
+                scanPollingInterval = setInterval(pollForScan, 1000);
+            });
+        }
+        
+        // ============================================================
+        // ✅ POLL FOR NEW SCAN
+        // ============================================================
+        function pollForScan() {
+            if (!scanActive) return;
+            
+            fetch(SCAN_API_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'get_latest_scan'})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) return;
+                
+                if (data.has_scan && data.scan && data.scan.uid !== lastScannedUid) {
+                    // ✅ NEW SCAN DETECTED
+                    lastScannedUid = data.scan.uid;
+                    
+                    // Update modal
+                    document.getElementById('scanStatus').innerHTML = '<i class="fas fa-check-circle me-1"></i> Card Detected!';
+                    document.getElementById('scanStatus').classList.add('scanned');
+                    
+                    const uidEl = document.getElementById('scannedUid');
+                    uidEl.textContent = data.scan.uid;
+                    uidEl.classList.add('show');
+                    
+                    // Auto-fill the form
+                    document.getElementById('cardUidInput').value = data.scan.uid;
+                    document.getElementById('scanIdInput').value = data.scan.scan_id;
+                    
+                    // Update status
+                    const statusText = document.getElementById('uidStatus');
+                    statusText.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i> Scanned from reader! UID: ' + data.scan.uid;
+                    statusText.style.color = '#34d399';
+                    
+                    // Check if it's available
+                    const availableUids = <?php echo json_encode(array_column($availableCards, 'card_uid')); ?>;
+                    if (availableUids.includes(data.scan.uid)) {
+                        document.getElementById('autoFillInfo').classList.add('show');
+                        document.getElementById('autoFillCardInfo').textContent = 'Card UID: ' + data.scan.uid + ' is in available inventory!';
+                        
+                        document.querySelectorAll('.card-item-mini').forEach(el => {
+                            el.classList.remove('selected');
+                            if (el.dataset.uid === data.scan.uid) el.classList.add('selected');
+                        });
+                    }
+                    
+                    // Close modal after 1.5 seconds
+                    setTimeout(() => {
+                        cancelScan();
+                        document.getElementById('registerBtn').focus();
+                    }, 1500);
+                }
+            })
+            .catch(err => console.warn('Scan polling error:', err));
+        }
+        
+        // ============================================================
+        // ✅ CANCEL SCAN
+        // ============================================================
+        function cancelScan() {
+            scanActive = false;
+            
+            if (scanPollingInterval) {
+                clearInterval(scanPollingInterval);
+                scanPollingInterval = null;
+            }
+            
+            document.getElementById('scanModal').classList.remove('show');
+        }
+        
         // ============================================================
         // CHECK MANUAL ENTRY
         // ============================================================
@@ -1228,9 +1312,7 @@ if (isset($_SESSION['admin_id'])) {
                     
                     document.querySelectorAll('.card-item-mini').forEach(el => {
                         el.classList.remove('selected');
-                        if (el.dataset.uid === uid) {
-                            el.classList.add('selected');
-                        }
+                        if (el.dataset.uid === uid) el.classList.add('selected');
                     });
                 } else {
                     infoDiv.classList.remove('show');
@@ -1243,26 +1325,31 @@ if (isset($_SESSION['admin_id'])) {
                 statusText.style.color = '';
             }
         });
-
+        
         // ============================================================
-        // AUTO-SELECT RESIDENT
+        // AUTO-SELECT RESIDENT FROM URL
         // ============================================================
         <?php if (isset($_GET['select']) && is_numeric($_GET['select'])): ?>
             document.addEventListener('DOMContentLoaded', function() {
                 const select = document.querySelector('select[name="user_id"]');
-                if (select) {
-                    select.value = '<?php echo (int)$_GET['select']; ?>';
-                }
+                if (select) select.value = '<?php echo (int)$_GET['select']; ?>';
             });
         <?php endif; ?>
-
+        
         // ============================================================
         // AUTO-FOCUS
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
             const input = document.getElementById('cardUidInput');
-            if (input) {
-                input.focus();
+            if (input) input.focus();
+        });
+        
+        // ============================================================
+        // CLOSE MODAL ON ESC
+        // ============================================================
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && scanActive) {
+                cancelScan();
             }
         });
         
