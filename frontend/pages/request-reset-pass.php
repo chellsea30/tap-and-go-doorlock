@@ -2,6 +2,9 @@
 /**
  * Tap-and-Go Doorlock - Password Reset Requests (Admin)
  * FIXED: Proper URL generation for Railway
+ * ✅ PERMANENT HISTORY (hindi nabubura)
+ * ✅ AUTO-EXPIRE DETECTION
+ * ✅ DELETE BUTTON sa history
  */
 
 session_start();
@@ -22,20 +25,28 @@ $error = '';
 $generated_link = '';
 
 // ============================================================
+// AUTO-EXPIRE: Mark approved requests as expired kapag lagpas na sa token_expires_at
+// ============================================================
+$conn->query("
+    UPDATE password_reset_requests 
+    SET status = 'expired'
+    WHERE status = 'approved' 
+    AND token_expires_at IS NOT NULL 
+    AND token_expires_at < NOW()
+");
+
+// ============================================================
 // FIXED: Get proper base URL for Railway
 // ============================================================
 function getBaseUrl() {
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
     $host = $_SERVER['HTTP_HOST'];
-    
-    // Remove port if present
     $host = preg_replace('/:\d+$/', '', $host);
-    
     return $protocol . $host;
 }
 
 // ============================================================
-// HANDLE APPROVE REQUEST - GENERATE RESET LINK
+// HANDLE APPROVE REQUEST
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
     $request_id = (int)$_POST['request_id'];
@@ -70,11 +81,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve'])) {
         $stmt->execute();
         $stmt->close();
         
-        // FIXED: Remove duplicate folder name
         $base_url = getBaseUrl();
         $reset_link = $base_url . '/frontend/pages/student/reset-password.php?token=' . $reset_token;
         
-        logAudit($_SESSION['admin_id'], 'Password Reset Approved', "Approved reset for student: {$student['full_name']} - Token generated");
+        logAudit($_SESSION['admin_id'], 'Password Reset Approved', "Approved reset for: {$student['full_name']}");
         $success = "✅ Reset request approved!";
         $generated_link = $reset_link;
         
@@ -104,6 +114,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deny'])) {
 }
 
 // ============================================================
+// HANDLE DELETE SINGLE HISTORY
+// ============================================================
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $delete_id = (int)$_GET['delete'];
+    
+    // Only allow deleting non-pending requests
+    $check = $conn->prepare("SELECT status FROM password_reset_requests WHERE request_id = ?");
+    $check->bind_param("i", $delete_id);
+    $check->execute();
+    $checkResult = $check->get_result();
+    $row = $checkResult->fetch_assoc();
+    $check->close();
+    
+    if ($row && $row['status'] != 'pending') {
+        $stmt = $conn->prepare("DELETE FROM password_reset_requests WHERE request_id = ?");
+        $stmt->bind_param("i", $delete_id);
+        if ($stmt->execute()) {
+            $success = "✅ Request deleted from history.";
+            logAudit($_SESSION['admin_id'], 'Delete Reset Request', "Deleted request ID: $delete_id");
+        } else {
+            $error = "Failed to delete: " . $stmt->error;
+        }
+        $stmt->close();
+    } else {
+        $error = "Cannot delete pending requests. Process them first.";
+    }
+    header('Location: request-reset-pass.php?deleted=1');
+    exit();
+}
+
+// ============================================================
+// HANDLE CLEAR ALL HISTORY (bulk delete)
+// ============================================================
+if (isset($_GET['clear_history']) && $_GET['clear_history'] === '1') {
+    $stmt = $conn->prepare("
+        DELETE FROM password_reset_requests 
+        WHERE status IN ('approved', 'denied', 'completed', 'expired')
+    ");
+    if ($stmt->execute()) {
+        $count = $stmt->affected_rows;
+        $success = "✅ Cleared $count history record(s).";
+        logAudit($_SESSION['admin_id'], 'Clear Reset History', "Cleared $count records");
+    } else {
+        $error = "Failed to clear: " . $stmt->error;
+    }
+    $stmt->close();
+    header('Location: request-reset-pass.php?cleared=1');
+    exit();
+}
+
+// ============================================================
 // HANDLE REGENERATE TOKEN
 // ============================================================
 if (isset($_GET['regenerate']) && !empty($_GET['regenerate'])) {
@@ -114,7 +175,9 @@ if (isset($_GET['regenerate']) && !empty($_GET['regenerate'])) {
     
     $stmt = $conn->prepare("
         UPDATE password_reset_requests 
-        SET reset_token = ?, token_expires_at = ?
+        SET status = 'approved',
+            reset_token = ?, 
+            token_expires_at = ?
         WHERE request_id = ?
     ");
     $stmt->bind_param("ssi", $reset_token, $token_expires, $request_id);
@@ -161,6 +224,7 @@ if ($result) {
     }
 }
 
+// ✅ HISTORY - PERMANENT (kasama approved, denied, completed, expired)
 $result = $conn->query("
     SELECT r.*, s.full_name, s.username, s.email, s.student_id_number
     FROM password_reset_requests r
@@ -169,11 +233,13 @@ $result = $conn->query("
     ORDER BY 
         CASE 
             WHEN r.status = 'completed' THEN 0
-            WHEN r.status = 'approved' THEN 1
-            ELSE 2
+            WHEN r.status = 'expired' THEN 1
+            WHEN r.status = 'approved' THEN 2
+            WHEN r.status = 'denied' THEN 3
+            ELSE 4
         END,
         r.responded_at DESC
-    LIMIT 50
+    LIMIT 200
 ");
 if ($result) {
     while ($row = $result->fetch_assoc()) {
@@ -186,13 +252,15 @@ $stats = [
     'pending' => count($pendingRequests),
     'approved' => 0,
     'denied' => 0,
-    'completed' => 0
+    'completed' => 0,
+    'expired' => 0
 ];
 
 foreach ($historyRequests as $req) {
     if ($req['status'] == 'approved') $stats['approved']++;
     elseif ($req['status'] == 'denied') $stats['denied']++;
     elseif ($req['status'] == 'completed') $stats['completed']++;
+    elseif ($req['status'] == 'expired') $stats['expired']++;
 }
 
 if (isset($_SESSION['generated_link']) && empty($generated_link)) {
@@ -211,9 +279,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
-        /* ============================================================
-           GLOBAL DARK THEME
-           ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
@@ -224,22 +289,14 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             padding-top: 70px !important;
         }
         
-        .container-fluid {
-            padding-top: 10px !important;
-        }
-        
-        main {
-            padding-top: 10px !important;
-            margin-top: 0 !important;
-        }
+        .container-fluid { padding-top: 10px !important; }
+        main { padding-top: 10px !important; margin-top: 0 !important; }
         
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
             position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
+            top: 0 !important; left: 0 !important; right: 0 !important;
             z-index: 1050 !important;
             height: 70px !important;
         }
@@ -254,17 +311,9 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             padding-top: 80px !important;
             min-height: calc(100vh - 70px) !important;
         }
-        .sidebar .nav-link {
-            color: #9090a0 !important;
-        }
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.05) !important;
-            color: #e0e0e0 !important;
-        }
-        .sidebar .nav-link.active {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-        }
+        .sidebar .nav-link { color: #9090a0 !important; }
+        .sidebar .nav-link:hover { background: rgba(255,255,255,0.05) !important; color: #e0e0e0 !important; }
+        .sidebar .nav-link.active { background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important; color: white !important; }
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
@@ -292,10 +341,9 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
         .stat-number.text-warning { color: #fbbf24 !important; }
         .stat-number.text-success { color: #34d399 !important; }
         .stat-number.text-danger { color: #f87171 !important; }
+        .stat-number.text-secondary { color: #9ca3af !important; }
         
-        .pulse-badge {
-            animation: pulseBadge 1s infinite;
-        }
+        .pulse-badge { animation: pulseBadge 1s infinite; }
         @keyframes pulseBadge {
             0% { transform: scale(1); }
             50% { transform: scale(1.2); }
@@ -326,50 +374,40 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             border-left: 4px solid #f59e0b;
             border: 1px solid #1a2a4a;
             transition: all 0.3s ease;
+            position: relative;
         }
         .request-card:hover {
             transform: translateX(4px);
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
-        .request-card.history-approved {
-            border-left-color: #ffd700;
-        }
-        .request-card.history-denied {
-            border-left-color: #ef4444;
-        }
-        .request-card.history-completed {
-            border-left-color: #10b981;
-        }
+        .request-card.history-approved { border-left-color: #ffd700; }
+        .request-card.history-denied { border-left-color: #ef4444; }
+        .request-card.history-completed { border-left-color: #10b981; }
+        .request-card.history-expired { border-left-color: #6b7280; opacity: 0.85; }
+        
         .request-card .student-name {
             font-weight: 600;
             color: #ffd700 !important;
             font-size: 15px;
         }
-        .request-card .student-name i {
-            color: #8b5cf6 !important;
-        }
+        .request-card .student-name i { color: #8b5cf6 !important; }
         .request-card .detail {
             font-size: 13px;
             color: #9ca3af !important;
         }
-        .request-card .detail i {
-            color: #6b7280 !important;
-        }
+        .request-card .detail i { color: #6b7280 !important; }
         .request-card .reason {
             color: #d1d5db !important;
             margin: 6px 0;
             font-size: 13px;
         }
-        .request-card .reason i {
-            color: #8b5cf6 !important;
-        }
+        .request-card .reason i { color: #8b5cf6 !important; }
         .request-card .meta {
             font-size: 12px;
             color: #6b7280 !important;
         }
-        .request-card .meta i {
-            color: #6b7280 !important;
-        }
+        .request-card .meta i { color: #6b7280 !important; }
+        
         .request-card .reset-link-box {
             background: #0a0e1a !important;
             border-radius: 8px;
@@ -378,9 +416,17 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             border: 1px solid #1a2a4a;
             word-break: break-all;
         }
+        .request-card .reset-link-box.expired {
+            border-color: #7a2a2a;
+            background: #1a0a0a !important;
+        }
         .request-card .reset-link-box .link {
             color: #93c5fd !important;
             font-size: 13px;
+        }
+        .request-card .reset-link-box.expired .link {
+            color: #6b7280 !important;
+            text-decoration: line-through;
         }
         .request-card .reset-link-box .copy-btn {
             background: rgba(59, 130, 246, 0.2);
@@ -400,6 +446,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
         .badge-approved { background: rgba(255, 215, 0, 0.2) !important; color: #ffd700 !important; }
         .badge-denied { background: rgba(239, 68, 68, 0.2) !important; color: #fca5a5 !important; }
         .badge-completed { background: rgba(16, 185, 129, 0.2) !important; color: #6ee7b7 !important; }
+        .badge-expired { background: rgba(107, 114, 128, 0.3) !important; color: #9ca3af !important; }
         
         .btn-approve {
             background: rgba(16, 185, 129, 0.2) !important;
@@ -446,6 +493,40 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             color: #93c5fd !important;
         }
         
+        /* ✅ DELETE BUTTON */
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.15) !important;
+            color: #f87171 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3) !important;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .btn-delete:hover {
+            background: rgba(239, 68, 68, 0.3) !important;
+            color: #fca5a5 !important;
+            transform: scale(1.05);
+        }
+        
+        /* ✅ EXPIRED BADGE */
+        .expired-badge {
+            background: rgba(239, 68, 68, 0.2) !important;
+            color: #f87171 !important;
+            border: 1px solid rgba(239, 68, 68, 0.4) !important;
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            animation: pulseRed 1.5s infinite;
+        }
+        @keyframes pulseRed {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
         .form-control {
             background: #0d1220 !important;
             border: 1px solid #1a2a4a !important;
@@ -460,9 +541,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             background: #0d1220 !important;
             color: #e5e7eb !important;
         }
-        .form-control::placeholder {
-            color: #6b7280 !important;
-        }
+        .form-control::placeholder { color: #6b7280 !important; }
         
         .alert-success {
             background: rgba(16, 185, 129, 0.15) !important;
@@ -483,11 +562,11 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
         .text-danger { color: #f87171 !important; }
         .text-warning { color: #fbbf24 !important; }
         .text-primary { color: #93c5fd !important; }
+        .text-secondary { color: #9ca3af !important; }
         
         .live-indicator {
             display: inline-block;
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             background: #34d399;
             animation: pulse 1.5s infinite;
@@ -499,23 +578,35 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             100% { opacity: 1; transform: scale(1); }
         }
         
+        /* ✅ Clear History Button */
+        .btn-clear-history {
+            background: rgba(107, 114, 128, 0.2) !important;
+            color: #9ca3af !important;
+            border: 1px solid rgba(107, 114, 128, 0.3) !important;
+            padding: 5px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+        .btn-clear-history:hover {
+            background: rgba(239, 68, 68, 0.2) !important;
+            color: #fca5a5 !important;
+            border-color: rgba(239, 68, 68, 0.3) !important;
+        }
+        
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a0e1a; }
         ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
         @media (max-width: 768px) {
-            body {
-                padding-top: 60px !important;
-            }
-            .navbar {
-                height: 60px !important;
-            }
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
-                top: 60px;
-                bottom: 0;
+                top: 60px; bottom: 0;
                 left: -280px;
                 width: 280px;
                 transition: left 0.3s ease;
@@ -630,6 +721,19 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                             </div>
                         </div>
                     </div>
+                    <!-- ✅ EXPIRED STAT -->
+                    <div class="col-6 col-sm-4 col-xl-2">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: #6b7280;"><i class="fas fa-hourglass-end"></i></div>
+                            <div>
+                                <div class="stat-number text-secondary"><?php echo $stats['expired']; ?></div>
+                                <div class="stat-label">Expired</div>
+                            </div>
+                            <?php if ($stats['expired'] > 0): ?>
+                                <span class="badge bg-secondary pulse-badge" style="position:absolute; top:8px; right:8px;"><?php echo $stats['expired']; ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                     <div class="col-6 col-sm-4 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #ef4444;"><i class="fas fa-times-circle"></i></div>
@@ -639,9 +743,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                 </div>
                                 <div class="stat-label">Denied</div>
                             </div>
-                            <?php if ($stats['denied'] > 0): ?>
-                                <span class="badge bg-danger pulse-badge" style="position:absolute; top:8px; right:8px;"><?php echo $stats['denied']; ?></span>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -718,14 +819,31 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                     </div>
                 </div>
 
-                <!-- HISTORY -->
+                <!-- ✅ HISTORY - PERMANENT WITH DELETE -->
                 <div class="card">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <h5><i class="fas fa-history me-2"></i>Request History</h5>
-                            <span class="text-muted small">
-                                <?php echo $stats['approved']; ?> approved | <?php echo $stats['completed']; ?> completed | <?php echo $stats['denied']; ?> denied
-                            </span>
+                            <div>
+                                <h5><i class="fas fa-history me-2"></i>Request History 
+                                    <span class="badge bg-secondary ms-2"><?php echo count($historyRequests); ?></span>
+                                </h5>
+                                <small class="text-muted">Permanent record - hindi nabubura</small>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-muted small">
+                                    <?php echo $stats['approved']; ?> approved | 
+                                    <?php echo $stats['completed']; ?> completed | 
+                                    <?php echo $stats['expired']; ?> expired | 
+                                    <?php echo $stats['denied']; ?> denied
+                                </span>
+                                <?php if (!empty($historyRequests)): ?>
+                                    <a href="?clear_history=1" 
+                                       class="btn-clear-history"
+                                       onclick="return confirm('⚠️ Are you sure you want to CLEAR ALL history?\n\nThis will delete ALL approved, denied, completed, and expired records.\nThis action CANNOT be undone!')">
+                                        <i class="fas fa-trash-alt me-1"></i> Clear All History
+                                    </a>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">
@@ -740,20 +858,45 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                 $isApproved = $request['status'] == 'approved';
                                 $isCompleted = $request['status'] == 'completed';
                                 $isDenied = $request['status'] == 'denied';
-                                $badgeClass = $isApproved ? 'badge-approved' : ($isCompleted ? 'badge-completed' : 'badge-denied');
-                                $cardClass = $isApproved ? 'history-approved' : ($isCompleted ? 'history-completed' : 'history-denied');
-                                $statusIcon = $isApproved ? 'fa-clock' : ($isCompleted ? 'fa-check-double' : 'fa-times-circle');
-                                $statusText = $isApproved ? 'Approved - Waiting' : ($isCompleted ? 'Completed' : 'Denied');
+                                $isExpired = $request['status'] == 'expired';
+                                
+                                // Check kung na-expire na kahit approved pa ang status
+                                $isActuallyExpired = false;
+                                if ($isApproved && !empty($request['token_expires_at'])) {
+                                    $isActuallyExpired = strtotime($request['token_expires_at']) < time();
+                                }
+                                
+                                $badgeClass = $isApproved ? 'badge-approved' : 
+                                              ($isCompleted ? 'badge-completed' : 
+                                              ($isExpired || $isActuallyExpired ? 'badge-expired' : 'badge-denied'));
+                                
+                                $cardClass = $isApproved ? 'history-approved' : 
+                                             ($isCompleted ? 'history-completed' : 
+                                             ($isExpired || $isActuallyExpired ? 'history-expired' : 'history-denied'));
+                                
+                                $statusIcon = $isApproved ? 'fa-clock' : 
+                                              ($isCompleted ? 'fa-check-double' : 
+                                              ($isExpired || $isActuallyExpired ? 'fa-hourglass-end' : 'fa-times-circle'));
+                                
+                                $statusText = $isApproved ? ($isActuallyExpired ? 'Expired' : 'Approved - Waiting') : 
+                                              ($isCompleted ? 'Completed' : 
+                                              ($isExpired ? 'Expired' : 'Denied'));
                             ?>
                                 <div class="request-card <?php echo $cardClass; ?>">
                                     <div class="row align-items-center">
-                                        <div class="col-md-8">
+                                        <div class="col-md-9">
                                             <div class="student-name">
                                                 <i class="fas fa-user me-2"></i>
                                                 <?php echo htmlspecialchars($request['full_name']); ?>
                                                 <span class="badge <?php echo $badgeClass; ?> ms-2">
+                                                    <i class="fas <?php echo $statusIcon; ?> me-1"></i>
                                                     <?php echo $statusText; ?>
                                                 </span>
+                                                <?php if ($isActuallyExpired): ?>
+                                                    <span class="expired-badge ms-2">
+                                                        <i class="fas fa-exclamation-triangle me-1"></i>EXPIRED
+                                                    </span>
+                                                <?php endif; ?>
                                             </div>
                                             <div class="detail">
                                                 <i class="fas fa-id-card me-1"></i>
@@ -767,27 +910,37 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                                 <?php echo nl2br(htmlspecialchars($request['reason'] ?: 'No reason provided')); ?>
                                             </div>
                                             
-                                            <?php if ($isApproved && !empty($request['reset_token'])): 
+                                            <?php if (($isApproved || $isExpired || $isActuallyExpired) && !empty($request['reset_token'])): 
                                                 $base_url = getBaseUrl();
                                                 $reset_link = $base_url . '/frontend/pages/student/reset-password.php?token=' . $request['reset_token'];
+                                                $linkExpired = $isActuallyExpired || $isExpired;
                                             ?>
-                                                <div class="reset-link-box">
-                                                    <div class="d-flex justify-content-between align-items-center">
-                                                        <span class="link"><i class="fas fa-link me-1"></i> <?php echo htmlspecialchars($reset_link); ?></span>
-                                                        <div>
-                                                            <button class="copy-btn" onclick="copyLink('<?php echo htmlspecialchars($reset_link); ?>')">
-                                                                <i class="fas fa-copy me-1"></i> Copy
-                                                            </button>
-                                                            <a href="?regenerate=<?php echo $request['request_id']; ?>" class="btn-regenerate" onclick="return confirm('Generate new reset link?')">
-                                                                <i class="fas fa-sync-alt me-1"></i> New
+                                                <div class="reset-link-box <?php echo $linkExpired ? 'expired' : ''; ?>">
+                                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                                        <span class="link">
+                                                            <i class="fas fa-link me-1"></i> 
+                                                            <?php echo htmlspecialchars($reset_link); ?>
+                                                        </span>
+                                                        <div class="d-flex gap-1">
+                                                            <?php if (!$linkExpired): ?>
+                                                                <button class="copy-btn" onclick="copyLink('<?php echo htmlspecialchars($reset_link); ?>')">
+                                                                    <i class="fas fa-copy me-1"></i> Copy
+                                                                </button>
+                                                            <?php endif; ?>
+                                                            <a href="?regenerate=<?php echo $request['request_id']; ?>" 
+                                                               class="btn-regenerate" 
+                                                               onclick="return confirm('Generate NEW reset link? The old link will stop working.')">
+                                                                <i class="fas fa-sync-alt me-1"></i> <?php echo $linkExpired ? 'Regenerate' : 'New'; ?>
                                                             </a>
                                                         </div>
                                                     </div>
                                                     <div class="text-muted small mt-1">
                                                         <i class="fas fa-clock me-1"></i>
                                                         Expires: <?php echo date('M d, Y h:i A', strtotime($request['token_expires_at'])); ?>
-                                                        <?php if (strtotime($request['token_expires_at']) < time()): ?>
-                                                            <span class="text-danger ms-2">(Expired!)</span>
+                                                        <?php if ($linkExpired): ?>
+                                                            <span class="expired-badge ms-2">
+                                                                <i class="fas fa-exclamation-triangle me-1"></i>EXPIRED
+                                                            </span>
                                                         <?php endif; ?>
                                                     </div>
                                                 </div>
@@ -809,11 +962,21 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                                 <?php endif; ?>
                                             </div>
                                         </div>
-                                        <div class="col-md-4 text-md-end">
-                                            <span class="badge <?php echo $badgeClass; ?>">
-                                                <i class="fas <?php echo $statusIcon; ?> me-1"></i>
-                                                <?php echo $isApproved ? 'Approved' : ($isCompleted ? 'Completed' : 'Denied'); ?>
-                                            </span>
+                                        <div class="col-md-3 text-md-end">
+                                            <div class="d-flex flex-column gap-2 align-items-end">
+                                                <span class="badge <?php echo $badgeClass; ?>">
+                                                    <i class="fas <?php echo $statusIcon; ?> me-1"></i>
+                                                    <?php echo $isApproved ? ($isActuallyExpired ? 'Expired' : 'Approved') : 
+                                                        ($isCompleted ? 'Completed' : 
+                                                        ($isExpired ? 'Expired' : 'Denied')); ?>
+                                                </span>
+                                                <!-- ✅ DELETE BUTTON -->
+                                                <a href="?delete=<?php echo $request['request_id']; ?>" 
+                                                   class="btn-delete"
+                                                   onclick="return confirm('⚠️ Delete this history record?\n\nStudent: <?php echo htmlspecialchars($request['full_name']); ?>\nStatus: <?php echo $statusText; ?>\n\nThis action CANNOT be undone!')">
+                                                    <i class="fas fa-trash me-1"></i> Delete
+                                                </a>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -833,6 +996,12 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                         <span class="text-warning ms-3">
                             <i class="fas fa-clock me-1"></i>
                             <?php echo $stats['pending']; ?> pending
+                        </span>
+                    <?php endif; ?>
+                    <?php if ($stats['expired'] > 0): ?>
+                        <span class="text-secondary ms-3">
+                            <i class="fas fa-hourglass-end me-1"></i>
+                            <?php echo $stats['expired']; ?> expired
                         </span>
                     <?php endif; ?>
                 </footer>
@@ -872,15 +1041,12 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                 hour12: true 
             });
             const updateElement = document.getElementById('lastUpdate');
-            if (updateElement) {
-                updateElement.textContent = 'Updated: ' + timeString;
-            }
+            if (updateElement) updateElement.textContent = 'Updated: ' + timeString;
+            
             const serverTimeElement = document.getElementById('serverTime');
             if (serverTimeElement) {
                 const dateString = now.toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric', 
-                    year: 'numeric' 
+                    month: 'long', day: 'numeric', year: 'numeric' 
                 });
                 serverTimeElement.textContent = 'Server Time: ' + dateString + ' ' + timeString;
             }
