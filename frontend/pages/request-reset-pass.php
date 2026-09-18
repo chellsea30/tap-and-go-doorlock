@@ -5,6 +5,7 @@
  * ✅ PERMANENT HISTORY (hindi nabubura)
  * ✅ AUTO-EXPIRE DETECTION
  * ✅ DELETE BUTTON sa history
+ * ✅ AUTO-FIX: Ensures 'expired' in enum
  */
 
 session_start();
@@ -25,15 +26,47 @@ $error = '';
 $generated_link = '';
 
 // ============================================================
-// AUTO-EXPIRE: Mark approved requests as expired kapag lagpas na sa token_expires_at
+// ✅ AUTO-FIX: Ensure 'expired' is in status enum
 // ============================================================
-$conn->query("
-    UPDATE password_reset_requests 
-    SET status = 'expired'
-    WHERE status = 'approved' 
-    AND token_expires_at IS NOT NULL 
-    AND token_expires_at < NOW()
-");
+try {
+    $checkEnum = $conn->query("
+        SELECT COLUMN_TYPE 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'password_reset_requests' 
+        AND COLUMN_NAME = 'status'
+    ");
+    
+    if ($checkEnum && $row = $checkEnum->fetch_assoc()) {
+        $columnType = $row['COLUMN_TYPE'];
+        
+        if (strpos($columnType, "'expired'") === false) {
+            $conn->query("
+                ALTER TABLE password_reset_requests 
+                MODIFY COLUMN status ENUM('pending', 'approved', 'denied', 'completed', 'expired') 
+                DEFAULT 'pending'
+            ");
+            error_log("✅ Added 'expired' to password_reset_requests.status enum");
+        }
+    }
+} catch (Exception $e) {
+    error_log("⚠️ Enum check failed: " . $e->getMessage());
+}
+
+// ============================================================
+// AUTO-EXPIRE: Mark approved requests as expired
+// ============================================================
+try {
+    $conn->query("
+        UPDATE password_reset_requests 
+        SET status = 'expired'
+        WHERE status = 'approved' 
+        AND token_expires_at IS NOT NULL 
+        AND token_expires_at < NOW()
+    ");
+} catch (Exception $e) {
+    error_log("⚠️ Auto-expire failed: " . $e->getMessage());
+}
 
 // ============================================================
 // FIXED: Get proper base URL for Railway
@@ -119,7 +152,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deny'])) {
 if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
     $delete_id = (int)$_GET['delete'];
     
-    // Only allow deleting non-pending requests
     $check = $conn->prepare("SELECT status FROM password_reset_requests WHERE request_id = ?");
     $check->bind_param("i", $delete_id);
     $check->execute();
@@ -145,7 +177,7 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
 }
 
 // ============================================================
-// HANDLE CLEAR ALL HISTORY (bulk delete)
+// HANDLE CLEAR ALL HISTORY
 // ============================================================
 if (isset($_GET['clear_history']) && $_GET['clear_history'] === '1') {
     $stmt = $conn->prepare("
@@ -224,7 +256,6 @@ if ($result) {
     }
 }
 
-// ✅ HISTORY - PERMANENT (kasama approved, denied, completed, expired)
 $result = $conn->query("
     SELECT r.*, s.full_name, s.username, s.email, s.student_id_number
     FROM password_reset_requests r
@@ -374,7 +405,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             border-left: 4px solid #f59e0b;
             border: 1px solid #1a2a4a;
             transition: all 0.3s ease;
-            position: relative;
         }
         .request-card:hover {
             transform: translateX(4px);
@@ -391,21 +421,11 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             font-size: 15px;
         }
         .request-card .student-name i { color: #8b5cf6 !important; }
-        .request-card .detail {
-            font-size: 13px;
-            color: #9ca3af !important;
-        }
+        .request-card .detail { font-size: 13px; color: #9ca3af !important; }
         .request-card .detail i { color: #6b7280 !important; }
-        .request-card .reason {
-            color: #d1d5db !important;
-            margin: 6px 0;
-            font-size: 13px;
-        }
+        .request-card .reason { color: #d1d5db !important; margin: 6px 0; font-size: 13px; }
         .request-card .reason i { color: #8b5cf6 !important; }
-        .request-card .meta {
-            font-size: 12px;
-            color: #6b7280 !important;
-        }
+        .request-card .meta { font-size: 12px; color: #6b7280 !important; }
         .request-card .meta i { color: #6b7280 !important; }
         
         .request-card .reset-link-box {
@@ -420,14 +440,8 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             border-color: #7a2a2a;
             background: #1a0a0a !important;
         }
-        .request-card .reset-link-box .link {
-            color: #93c5fd !important;
-            font-size: 13px;
-        }
-        .request-card .reset-link-box.expired .link {
-            color: #6b7280 !important;
-            text-decoration: line-through;
-        }
+        .request-card .reset-link-box .link { color: #93c5fd !important; font-size: 13px; }
+        .request-card .reset-link-box.expired .link { color: #6b7280 !important; text-decoration: line-through; }
         .request-card .reset-link-box .copy-btn {
             background: rgba(59, 130, 246, 0.2);
             color: #93c5fd;
@@ -438,9 +452,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        .request-card .reset-link-box .copy-btn:hover {
-            background: rgba(59, 130, 246, 0.3);
-        }
+        .request-card .reset-link-box .copy-btn:hover { background: rgba(59, 130, 246, 0.3); }
         
         .badge-pending { background: rgba(245, 158, 11, 0.2) !important; color: #fbbf24 !important; }
         .badge-approved { background: rgba(255, 215, 0, 0.2) !important; color: #ffd700 !important; }
@@ -458,11 +470,8 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             font-weight: 500;
             transition: all 0.3s ease;
         }
-        .btn-approve:hover {
-            background: rgba(16, 185, 129, 0.3) !important;
-            color: #6ee7b7 !important;
-            transform: translateY(-1px);
-        }
+        .btn-approve:hover { background: rgba(16, 185, 129, 0.3) !important; color: #6ee7b7 !important; transform: translateY(-1px); }
+        
         .btn-deny {
             background: rgba(239, 68, 68, 0.2) !important;
             color: #fca5a5 !important;
@@ -473,11 +482,8 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             font-weight: 500;
             transition: all 0.3s ease;
         }
-        .btn-deny:hover {
-            background: rgba(239, 68, 68, 0.3) !important;
-            color: #fca5a5 !important;
-            transform: translateY(-1px);
-        }
+        .btn-deny:hover { background: rgba(239, 68, 68, 0.3) !important; color: #fca5a5 !important; transform: translateY(-1px); }
+        
         .btn-regenerate {
             background: rgba(59, 130, 246, 0.2) !important;
             color: #93c5fd !important;
@@ -488,12 +494,8 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             transition: all 0.3s ease;
             text-decoration: none;
         }
-        .btn-regenerate:hover {
-            background: rgba(59, 130, 246, 0.3) !important;
-            color: #93c5fd !important;
-        }
+        .btn-regenerate:hover { background: rgba(59, 130, 246, 0.3) !important; color: #93c5fd !important; }
         
-        /* ✅ DELETE BUTTON */
         .btn-delete {
             background: rgba(239, 68, 68, 0.15) !important;
             color: #f87171 !important;
@@ -505,13 +507,8 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             text-decoration: none;
             cursor: pointer;
         }
-        .btn-delete:hover {
-            background: rgba(239, 68, 68, 0.3) !important;
-            color: #fca5a5 !important;
-            transform: scale(1.05);
-        }
+        .btn-delete:hover { background: rgba(239, 68, 68, 0.3) !important; color: #fca5a5 !important; transform: scale(1.05); }
         
-        /* ✅ EXPIRED BADGE */
         .expired-badge {
             background: rgba(239, 68, 68, 0.2) !important;
             color: #f87171 !important;
@@ -578,7 +575,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             100% { opacity: 1; transform: scale(1); }
         }
         
-        /* ✅ Clear History Button */
         .btn-clear-history {
             background: rgba(107, 114, 128, 0.2) !important;
             color: #9ca3af !important;
@@ -721,7 +717,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                             </div>
                         </div>
                     </div>
-                    <!-- ✅ EXPIRED STAT -->
                     <div class="col-6 col-sm-4 col-xl-2">
                         <div class="stat-card">
                             <div class="stat-icon" style="background: #6b7280;"><i class="fas fa-hourglass-end"></i></div>
@@ -819,7 +814,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                     </div>
                 </div>
 
-                <!-- ✅ HISTORY - PERMANENT WITH DELETE -->
+                <!-- HISTORY -->
                 <div class="card">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -860,7 +855,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                 $isDenied = $request['status'] == 'denied';
                                 $isExpired = $request['status'] == 'expired';
                                 
-                                // Check kung na-expire na kahit approved pa ang status
                                 $isActuallyExpired = false;
                                 if ($isApproved && !empty($request['token_expires_at'])) {
                                     $isActuallyExpired = strtotime($request['token_expires_at']) < time();
@@ -970,7 +964,6 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                                         ($isCompleted ? 'Completed' : 
                                                         ($isExpired ? 'Expired' : 'Denied')); ?>
                                                 </span>
-                                                <!-- ✅ DELETE BUTTON -->
                                                 <a href="?delete=<?php echo $request['request_id']; ?>" 
                                                    class="btn-delete"
                                                    onclick="return confirm('⚠️ Delete this history record?\n\nStudent: <?php echo htmlspecialchars($request['full_name']); ?>\nStatus: <?php echo $statusText; ?>\n\nThis action CANNOT be undone!')">
