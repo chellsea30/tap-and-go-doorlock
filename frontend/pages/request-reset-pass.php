@@ -1,11 +1,11 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Password Reset Requests (Admin)
- * FIXED: Proper URL generation for Railway
  * ✅ PERMANENT HISTORY (hindi nabubura)
- * ✅ AUTO-EXPIRE DETECTION
+ * ✅ SHOW ENTRIES + PAGINATION
+ * ✅ AUTO-EXPIRE DETECTION (nananatili pa rin sa history)
  * ✅ DELETE BUTTON sa history
- * ✅ AUTO-FIX: Ensures 'expired' in enum
+ * ✅ FILTER BY STATUS
  */
 
 session_start();
@@ -46,7 +46,6 @@ try {
                 MODIFY COLUMN status ENUM('pending', 'approved', 'denied', 'completed', 'expired') 
                 DEFAULT 'pending'
             ");
-            error_log("✅ Added 'expired' to password_reset_requests.status enum");
         }
     }
 } catch (Exception $e) {
@@ -55,6 +54,7 @@ try {
 
 // ============================================================
 // AUTO-EXPIRE: Mark approved requests as expired
+// PERO hindi nabubura sa history
 // ============================================================
 try {
     $conn->query("
@@ -69,7 +69,7 @@ try {
 }
 
 // ============================================================
-// FIXED: Get proper base URL for Railway
+// Get Base URL
 // ============================================================
 function getBaseUrl() {
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
@@ -77,6 +77,20 @@ function getBaseUrl() {
     $host = preg_replace('/:\d+$/', '', $host);
     return $protocol . $host;
 }
+
+// ============================================================
+// PAGINATION + SHOW ENTRIES SETTINGS
+// ============================================================
+$perPage = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 10;
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$perPageOptions = [10, 25, 50, 100];
+if (!in_array($perPage, $perPageOptions)) {
+    $perPage = 10;
+}
+
+// Filter by status
+$statusFilter = isset($_GET['status']) ? trim($_GET['status']) : '';
+$validStatuses = ['approved', 'denied', 'completed', 'expired'];
 
 // ============================================================
 // HANDLE APPROVE REQUEST
@@ -238,11 +252,9 @@ if (isset($_GET['regenerate']) && !empty($_GET['regenerate'])) {
 }
 
 // ============================================================
-// GET ALL REQUESTS
+// GET PENDING REQUESTS
 // ============================================================
 $pendingRequests = [];
-$historyRequests = [];
-
 $result = $conn->query("
     SELECT r.*, s.full_name, s.username, s.email, s.student_id_number
     FROM password_reset_requests r
@@ -256,30 +268,70 @@ if ($result) {
     }
 }
 
-$result = $conn->query("
+// ============================================================
+// ✅ GET HISTORY WITH PAGINATION + FILTER
+// ============================================================
+$historyRequests = [];
+$totalHistory = 0;
+
+// Count query with filter
+$countQuery = "
+    SELECT COUNT(*) as total
+    FROM password_reset_requests r
+    JOIN student_users s ON r.student_id = s.student_id
+    WHERE r.status != 'pending'
+";
+
+if (!empty($statusFilter) && in_array($statusFilter, $validStatuses)) {
+    $countQuery .= " AND r.status = '$statusFilter'";
+}
+
+$countResult = $conn->query($countQuery);
+if ($countResult && $row = $countResult->fetch_assoc()) {
+    $totalHistory = (int)$row['total'];
+}
+
+$totalPages = ceil($totalHistory / $perPage);
+if ($totalPages < 1) $totalPages = 1;
+if ($page > $totalPages) $page = $totalPages;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $perPage;
+
+// Main history query
+$historyQuery = "
     SELECT r.*, s.full_name, s.username, s.email, s.student_id_number
     FROM password_reset_requests r
     JOIN student_users s ON r.student_id = s.student_id
     WHERE r.status != 'pending'
-    ORDER BY 
-        CASE 
-            WHEN r.status = 'completed' THEN 0
-            WHEN r.status = 'expired' THEN 1
-            WHEN r.status = 'approved' THEN 2
-            WHEN r.status = 'denied' THEN 3
-            ELSE 4
-        END,
-        r.responded_at DESC
-    LIMIT 200
-");
+";
+
+if (!empty($statusFilter) && in_array($statusFilter, $validStatuses)) {
+    $historyQuery .= " AND r.status = '$statusFilter'";
+}
+
+$historyQuery .= " ORDER BY 
+    CASE 
+        WHEN r.status = 'expired' THEN 0
+        WHEN r.status = 'approved' THEN 1
+        WHEN r.status = 'completed' THEN 2
+        WHEN r.status = 'denied' THEN 3
+        ELSE 4
+    END,
+    r.responded_at DESC
+    LIMIT $perPage OFFSET $offset";
+
+$result = $conn->query($historyQuery);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
         $historyRequests[] = $row;
     }
 }
 
+// ============================================================
+// GET STATS
+// ============================================================
 $stats = [
-    'total' => count($pendingRequests) + count($historyRequests),
+    'total' => 0,
     'pending' => count($pendingRequests),
     'approved' => 0,
     'denied' => 0,
@@ -287,12 +339,20 @@ $stats = [
     'expired' => 0
 ];
 
-foreach ($historyRequests as $req) {
-    if ($req['status'] == 'approved') $stats['approved']++;
-    elseif ($req['status'] == 'denied') $stats['denied']++;
-    elseif ($req['status'] == 'completed') $stats['completed']++;
-    elseif ($req['status'] == 'expired') $stats['expired']++;
-}
+$result = $conn->query("SELECT COUNT(*) as c FROM password_reset_requests");
+if ($result && $row = $result->fetch_assoc()) $stats['total'] = (int)$row['c'];
+
+$result = $conn->query("SELECT COUNT(*) as c FROM password_reset_requests WHERE status = 'approved'");
+if ($result && $row = $result->fetch_assoc()) $stats['approved'] = (int)$row['c'];
+
+$result = $conn->query("SELECT COUNT(*) as c FROM password_reset_requests WHERE status = 'denied'");
+if ($result && $row = $result->fetch_assoc()) $stats['denied'] = (int)$row['c'];
+
+$result = $conn->query("SELECT COUNT(*) as c FROM password_reset_requests WHERE status = 'completed'");
+if ($result && $row = $result->fetch_assoc()) $stats['completed'] = (int)$row['c'];
+
+$result = $conn->query("SELECT COUNT(*) as c FROM password_reset_requests WHERE status = 'expired'");
+if ($result && $row = $result->fetch_assoc()) $stats['expired'] = (int)$row['c'];
 
 if (isset($_SESSION['generated_link']) && empty($generated_link)) {
     $generated_link = $_SESSION['generated_link'];
@@ -524,7 +584,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             50% { opacity: 0.6; }
         }
         
-        .form-control {
+        .form-control, .form-select {
             background: #0d1220 !important;
             border: 1px solid #1a2a4a !important;
             color: #e5e7eb !important;
@@ -532,13 +592,14 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             padding: 8px 12px;
             font-size: 13px;
         }
-        .form-control:focus {
+        .form-control:focus, .form-select:focus {
             border-color: #ffd700 !important;
             box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15) !important;
             background: #0d1220 !important;
             color: #e5e7eb !important;
         }
         .form-control::placeholder { color: #6b7280 !important; }
+        .form-select option { background: #131926 !important; color: #e5e7eb !important; }
         
         .alert-success {
             background: rgba(16, 185, 129, 0.15) !important;
@@ -591,6 +652,91 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             border-color: rgba(239, 68, 68, 0.3) !important;
         }
         
+        /* ✅ PAGINATION */
+        .pagination-container {
+            background: #0d1528 !important;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 12px !important;
+            padding: 12px 18px;
+            margin-top: 15px;
+        }
+        .pagination .page-link {
+            border-radius: 8px;
+            margin: 0 2px;
+            border: none;
+            color: #9090a0 !important;
+            background: transparent !important;
+            font-weight: 500;
+            padding: 6px 12px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+        .pagination .page-link:hover {
+            background: #2a2a4a !important;
+            color: #e0e0e0 !important;
+        }
+        .pagination .page-item.active .page-link {
+            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
+            color: white !important;
+            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
+        }
+        .pagination .page-item.disabled .page-link {
+            color: #4a4a5a !important;
+        }
+        .page-info { color: #808090 !important; font-size: 13px; }
+        .page-info strong { color: #93c5fd !important; }
+        
+        /* ✅ Show Entries Selector */
+        .per-page-selector select {
+            background: #1a1a2e !important;
+            border: 1px solid #2a2a4a !important;
+            color: #e0e0e0 !important;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .per-page-selector select:focus {
+            border-color: #ffd700 !important;
+            box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15);
+        }
+        .per-page-selector label { color: #808090 !important; font-size: 13px; margin: 0; }
+        
+        /* Filter Buttons */
+        .filter-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .filter-btn {
+            background: rgba(107, 114, 128, 0.15) !important;
+            color: #9ca3af !important;
+            border: 1px solid rgba(107, 114, 128, 0.25) !important;
+            padding: 5px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .filter-btn:hover {
+            background: rgba(107, 114, 128, 0.25) !important;
+            color: #e0e0e0 !important;
+        }
+        .filter-btn.active {
+            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
+            color: white !important;
+            border-color: transparent !important;
+        }
+        .filter-btn .count {
+            background: rgba(255,255,255,0.15);
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            margin-left: 4px;
+        }
+        
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a0e1a; }
         ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 4px; }
@@ -613,6 +759,9 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
             .stat-icon { width: 40px; height: 40px; font-size: 16px; }
+            .pagination-container .row { flex-direction: column; gap: 10px; }
+            .pagination-container .col-md-6 { width: 100%; text-align: center !important; }
+            .pagination { justify-content: center !important; }
         }
     </style>
 </head>
@@ -814,39 +963,74 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                     </div>
                 </div>
 
-                <!-- HISTORY -->
+                <!-- ✅ REQUEST HISTORY - PERMANENT STORAGE -->
                 <div class="card">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div>
-                                <h5><i class="fas fa-history me-2"></i>Request History 
-                                    <span class="badge bg-secondary ms-2"><?php echo count($historyRequests); ?></span>
+                                <h5>
+                                    <i class="fas fa-history me-2"></i>Request History 
+                                    <span class="badge bg-secondary ms-2"><?php echo $totalHistory; ?> total</span>
                                 </h5>
-                                <small class="text-muted">Permanent record - hindi nabubura</small>
+                                <small class="text-muted">
+                                    <i class="fas fa-database me-1"></i>
+                                    Permanent record — hindi nabubura
+                                </small>
                             </div>
                             <div class="d-flex align-items-center gap-2">
-                                <span class="text-muted small">
-                                    <?php echo $stats['approved']; ?> approved | 
-                                    <?php echo $stats['completed']; ?> completed | 
-                                    <?php echo $stats['expired']; ?> expired | 
-                                    <?php echo $stats['denied']; ?> denied
-                                </span>
-                                <?php if (!empty($historyRequests)): ?>
+                                <?php if ($totalHistory > 0): ?>
                                     <a href="?clear_history=1" 
                                        class="btn-clear-history"
                                        onclick="return confirm('⚠️ Are you sure you want to CLEAR ALL history?\n\nThis will delete ALL approved, denied, completed, and expired records.\nThis action CANNOT be undone!')">
-                                        <i class="fas fa-trash-alt me-1"></i> Clear All History
+                                        <i class="fas fa-trash-alt me-1"></i> Clear All
                                     </a>
                                 <?php endif; ?>
                             </div>
                         </div>
                     </div>
                     <div class="card-body">
+                        
+                        <!-- ✅ FILTER BUTTONS -->
+                        <div class="filter-buttons">
+                            <a href="?per_page=<?php echo $perPage; ?>" 
+                               class="filter-btn <?php echo empty($statusFilter) ? 'active' : ''; ?>">
+                                <i class="fas fa-list me-1"></i> All
+                                <span class="count"><?php echo $stats['approved'] + $stats['completed'] + $stats['expired'] + $stats['denied']; ?></span>
+                            </a>
+                            <a href="?status=approved&per_page=<?php echo $perPage; ?>" 
+                               class="filter-btn <?php echo $statusFilter == 'approved' ? 'active' : ''; ?>">
+                                <i class="fas fa-clock me-1"></i> Approved
+                                <span class="count"><?php echo $stats['approved']; ?></span>
+                            </a>
+                            <a href="?status=completed&per_page=<?php echo $perPage; ?>" 
+                               class="filter-btn <?php echo $statusFilter == 'completed' ? 'active' : ''; ?>">
+                                <i class="fas fa-check-double me-1"></i> Completed
+                                <span class="count"><?php echo $stats['completed']; ?></span>
+                            </a>
+                            <a href="?status=expired&per_page=<?php echo $perPage; ?>" 
+                               class="filter-btn <?php echo $statusFilter == 'expired' ? 'active' : ''; ?>">
+                                <i class="fas fa-hourglass-end me-1"></i> Expired
+                                <span class="count"><?php echo $stats['expired']; ?></span>
+                            </a>
+                            <a href="?status=denied&per_page=<?php echo $perPage; ?>" 
+                               class="filter-btn <?php echo $statusFilter == 'denied' ? 'active' : ''; ?>">
+                                <i class="fas fa-times-circle me-1"></i> Denied
+                                <span class="count"><?php echo $stats['denied']; ?></span>
+                            </a>
+                        </div>
+                        
                         <?php if (empty($historyRequests)): ?>
                             <div class="text-center py-4">
                                 <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
                                 <h5 class="text-muted">No history available</h5>
-                                <p class="text-muted small">Processed requests will appear here</p>
+                                <p class="text-muted small">
+                                    <?php if (!empty($statusFilter)): ?>
+                                        No <?php echo $statusFilter; ?> records found.
+                                        <a href="?" style="color: #93c5fd;">Show all</a>
+                                    <?php else: ?>
+                                        Processed requests will appear here
+                                    <?php endif; ?>
+                                </p>
                             </div>
                         <?php else: ?>
                             <?php foreach ($historyRequests as $request): 
@@ -855,24 +1039,19 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                 $isDenied = $request['status'] == 'denied';
                                 $isExpired = $request['status'] == 'expired';
                                 
-                                $isActuallyExpired = false;
-                                if ($isApproved && !empty($request['token_expires_at'])) {
-                                    $isActuallyExpired = strtotime($request['token_expires_at']) < time();
-                                }
-                                
                                 $badgeClass = $isApproved ? 'badge-approved' : 
                                               ($isCompleted ? 'badge-completed' : 
-                                              ($isExpired || $isActuallyExpired ? 'badge-expired' : 'badge-denied'));
+                                              ($isExpired ? 'badge-expired' : 'badge-denied'));
                                 
                                 $cardClass = $isApproved ? 'history-approved' : 
                                              ($isCompleted ? 'history-completed' : 
-                                             ($isExpired || $isActuallyExpired ? 'history-expired' : 'history-denied'));
+                                             ($isExpired ? 'history-expired' : 'history-denied'));
                                 
                                 $statusIcon = $isApproved ? 'fa-clock' : 
                                               ($isCompleted ? 'fa-check-double' : 
-                                              ($isExpired || $isActuallyExpired ? 'fa-hourglass-end' : 'fa-times-circle'));
+                                              ($isExpired ? 'fa-hourglass-end' : 'fa-times-circle'));
                                 
-                                $statusText = $isApproved ? ($isActuallyExpired ? 'Expired' : 'Approved - Waiting') : 
+                                $statusText = $isApproved ? 'Approved - Waiting' : 
                                               ($isCompleted ? 'Completed' : 
                                               ($isExpired ? 'Expired' : 'Denied'));
                             ?>
@@ -886,7 +1065,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                                     <i class="fas <?php echo $statusIcon; ?> me-1"></i>
                                                     <?php echo $statusText; ?>
                                                 </span>
-                                                <?php if ($isActuallyExpired): ?>
+                                                <?php if ($isExpired): ?>
                                                     <span class="expired-badge ms-2">
                                                         <i class="fas fa-exclamation-triangle me-1"></i>EXPIRED
                                                     </span>
@@ -904,10 +1083,10 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                                 <?php echo nl2br(htmlspecialchars($request['reason'] ?: 'No reason provided')); ?>
                                             </div>
                                             
-                                            <?php if (($isApproved || $isExpired || $isActuallyExpired) && !empty($request['reset_token'])): 
+                                            <?php if (($isApproved || $isExpired) && !empty($request['reset_token'])): 
                                                 $base_url = getBaseUrl();
                                                 $reset_link = $base_url . '/frontend/pages/student/reset-password.php?token=' . $request['reset_token'];
-                                                $linkExpired = $isActuallyExpired || $isExpired;
+                                                $linkExpired = $isExpired;
                                             ?>
                                                 <div class="reset-link-box <?php echo $linkExpired ? 'expired' : ''; ?>">
                                                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -923,7 +1102,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                                             <?php endif; ?>
                                                             <a href="?regenerate=<?php echo $request['request_id']; ?>" 
                                                                class="btn-regenerate" 
-                                                               onclick="return confirm('Generate NEW reset link? The old link will stop working.')">
+                                                               onclick="return confirm('Generate NEW reset link?')">
                                                                 <i class="fas fa-sync-alt me-1"></i> <?php echo $linkExpired ? 'Regenerate' : 'New'; ?>
                                                             </a>
                                                         </div>
@@ -960,9 +1139,7 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                             <div class="d-flex flex-column gap-2 align-items-end">
                                                 <span class="badge <?php echo $badgeClass; ?>">
                                                     <i class="fas <?php echo $statusIcon; ?> me-1"></i>
-                                                    <?php echo $isApproved ? ($isActuallyExpired ? 'Expired' : 'Approved') : 
-                                                        ($isCompleted ? 'Completed' : 
-                                                        ($isExpired ? 'Expired' : 'Denied')); ?>
+                                                    <?php echo $isApproved ? 'Approved' : ($isCompleted ? 'Completed' : ($isExpired ? 'Expired' : 'Denied')); ?>
                                                 </span>
                                                 <a href="?delete=<?php echo $request['request_id']; ?>" 
                                                    class="btn-delete"
@@ -974,6 +1151,93 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                                     </div>
                                 </div>
                             <?php endforeach; ?>
+                            
+                            <!-- ✅ PAGINATION + SHOW ENTRIES -->
+                            <?php if ($totalHistory > 0): ?>
+                            <div class="pagination-container">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <div class="page-info">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Showing <strong><?php echo $offset + 1; ?></strong> to 
+                                            <strong><?php echo min($offset + $perPage, $totalHistory); ?></strong> 
+                                            of <strong><?php echo $totalHistory; ?></strong> records
+                                            <span class="mx-1 text-muted">|</span>
+                                            Page <strong><?php echo $page; ?></strong> of <strong><?php echo $totalPages; ?></strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center justify-content-end gap-3 flex-wrap">
+                                            
+                                            <!-- ✅ SHOW ENTRIES SELECTOR -->
+                                            <div class="per-page-selector d-flex align-items-center gap-2">
+                                                <label>Show:</label>
+                                                <select onchange="changePerPage(this.value)">
+                                                    <?php foreach ($perPageOptions as $opt): ?>
+                                                        <option value="<?php echo $opt; ?>" <?php echo $opt == $perPage ? 'selected' : ''; ?>>
+                                                            <?php echo $opt; ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            
+                                            <!-- ✅ PAGINATION -->
+                                            <nav>
+                                                <ul class="pagination justify-content-end mb-0">
+                                                    <?php
+                                                    $baseParams = 'per_page=' . $perPage;
+                                                    if (!empty($statusFilter)) $baseParams .= '&status=' . urlencode($statusFilter);
+                                                    ?>
+                                                    
+                                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                                        <a class="page-link" href="?page=1&<?php echo $baseParams; ?>">
+                                                            <i class="fas fa-angle-double-left"></i>
+                                                        </a>
+                                                    </li>
+                                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                                        <a class="page-link" href="?page=<?php echo $page - 1; ?>&<?php echo $baseParams; ?>">
+                                                            <i class="fas fa-angle-left"></i>
+                                                        </a>
+                                                    </li>
+                                                    
+                                                    <?php
+                                                    $startPage = max(1, $page - 2);
+                                                    $endPage = min($totalPages, $page + 2);
+                                                    
+                                                    if ($startPage > 1) {
+                                                        echo '<li class="page-item"><span class="page-link">...</span></li>';
+                                                    }
+                                                    
+                                                    for ($i = $startPage; $i <= $endPage; $i++):
+                                                    ?>
+                                                        <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
+                                                            <a class="page-link" href="?page=<?php echo $i; ?>&<?php echo $baseParams; ?>">
+                                                                <?php echo $i; ?>
+                                                            </a>
+                                                        </li>
+                                                    <?php endfor; ?>
+                                                    
+                                                    <?php if ($endPage < $totalPages): ?>
+                                                        <li class="page-item"><span class="page-link">...</span></li>
+                                                    <?php endif; ?>
+                                                    
+                                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                                        <a class="page-link" href="?page=<?php echo $page + 1; ?>&<?php echo $baseParams; ?>">
+                                                            <i class="fas fa-angle-right"></i>
+                                                        </a>
+                                                    </li>
+                                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                                        <a class="page-link" href="?page=<?php echo $totalPages; ?>&<?php echo $baseParams; ?>">
+                                                            <i class="fas fa-angle-double-right"></i>
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </nav>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -1024,6 +1288,14 @@ if (isset($_SESSION['generated_link']) && empty($generated_link)) {
                 document.body.removeChild(input);
                 alert('Link copied to clipboard!');
             });
+        }
+
+        // ✅ Change Show Entries
+        function changePerPage(value) {
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('per_page', value);
+            urlParams.set('page', 1);
+            window.location.href = '?' + urlParams.toString();
         }
 
         function updateLastUpdateTime() {
