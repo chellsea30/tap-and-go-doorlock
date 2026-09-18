@@ -5,6 +5,7 @@
  * COMPLETE WITH AUTO-UPDATE (No refresh needed)
  * 13 ROOMS × 8 SLOTS EACH
  * PURE DARK MODE
+ * ✅ FIXED: Presence tracking base sa latest access log (hindi sa card status)
  */
 
 session_start();
@@ -80,9 +81,15 @@ if ($result && $row = $result->fetch_assoc()) {
     $stats['unauthorized_today'] = (int)$row['count'];
 }
 
+// ============================================================
 // 5 & 6. Residents Inside & Outside
+// ✅ FIXED: Base sa LATEST ACCESS LOG ng resident
+// ✅ HINDI naka-depende sa card status
+// ✅ Kapag ni-deactivate ang card, nananatili ang resident sa huling state niya
+// ============================================================
 $insideCount = 0;
 $outsideCount = 0;
+
 $result = $conn->query("
     SELECT 
         u.user_id, 
@@ -97,13 +104,16 @@ $result = $conn->query("
             SELECT MAX(timestamp) 
             FROM access_logs al2 
             WHERE al2.user_id = u.user_id
+            AND al2.access_status = 'granted'
         )
     WHERE u.status = 'active'
     AND u.room_number IS NOT NULL
     AND u.room_number != ''
 ");
+
 if ($result) {
     while ($row = $result->fetch_assoc()) {
+        // ✅ Default = OUTSIDE kung walang access log
         if ($row['last_access_type'] === 'entry') {
             $insideCount++;
         } else {
@@ -111,6 +121,7 @@ if ($result) {
         }
     }
 }
+
 $stats['residents_inside'] = $insideCount;
 $stats['residents_outside'] = $outsideCount;
 
@@ -247,6 +258,8 @@ if ($result) {
 
 // ============================================================
 // ROOM OCCUPANCY (1-13)
+// ✅ Base sa latest GRANTED access log ng resident
+// ✅ HINDI naka-depende sa card status
 // ============================================================
 $roomData = [];
 for ($i = 1; $i <= $totalRooms; $i++) {
@@ -269,6 +282,7 @@ for ($i = 1; $i <= $totalRooms; $i++) {
             SELECT MAX(timestamp) 
             FROM access_logs al2 
             WHERE al2.user_id = u.user_id
+            AND al2.access_status = 'granted'
         )
         ORDER BY u.full_name
     ");
@@ -287,6 +301,7 @@ for ($i = 1; $i <= $totalRooms; $i++) {
 
 // ============================================================
 // RESIDENTS OUTSIDE (with Room Number)
+// ✅ Base sa latest GRANTED access log na 'exit'
 // ============================================================
 $outsideResidents = [];
 $result = $conn->query("
@@ -307,6 +322,7 @@ $result = $conn->query("
             SELECT MAX(timestamp) 
             FROM access_logs al2 
             WHERE al2.user_id = u.user_id
+            AND al2.access_status = 'granted'
         )
     WHERE u.status = 'active'
     AND u.room_number IS NOT NULL
