@@ -4,6 +4,7 @@
  * COMPLETE - WITH REAL-TIME ALERT NOTIFICATIONS
  * WITH ACCESS CONTROL
  * WITH CARD STATUS VERIFICATION (DEACTIVATE/ACTIVATE SYNC)
+ * ✅ WITH FORCED DENY FOR DEACTIVATED CARDS
  */
 
 header('Content-Type: application/json');
@@ -113,7 +114,6 @@ switch ($action) {
     case 'get_cards':
         $cards = [];
         
-        // Kunin lang ang mga ACTIVE cards
         $result = $conn->query("
             SELECT 
                 c.card_uid, 
@@ -174,7 +174,6 @@ switch ($action) {
             }
         }
         
-        // ✅ VERSION HASH - para malaman ng ESP32 kung may nabago
         $versionResult = $conn->query("
             SELECT 
                 COUNT(*) as total,
@@ -198,7 +197,6 @@ switch ($action) {
     
     // ============================================================
     // ✅ CHECK SINGLE CARD STATUS - REAL-TIME VERIFICATION
-    // Ginagamit ng ESP32 bago mag-open ng lock
     // ============================================================
     case 'check_card_status':
         $uid = isset($input['uid']) ? strtoupper(trim($input['uid'])) : '';
@@ -226,7 +224,6 @@ switch ($action) {
         if ($row = $result->fetch_assoc()) {
             $is_active = ($row['status'] === 'active');
             
-            // For visitors, also check validity date
             $visitor_valid = true;
             if ($row['card_type'] === 'visitor') {
                 $vCheck = $conn->prepare("
@@ -268,7 +265,9 @@ switch ($action) {
         break;
     
     // ============================================================
-    // LOG ACCESS ATTEMPT - WITH REAL-TIME ALERT
+    // ✅ LOG ACCESS ATTEMPT - WITH FORCED DENY FOR DEACTIVATED CARDS
+    // ✅ Kahit sabihin ng ESP32 na "granted", kung deactivated ang card,
+    //    idi-deny pa rin ito ng server.
     // ============================================================
     case 'log_access':
         $uid = isset($input['uid']) ? strtoupper(trim($input['uid'])) : '';
@@ -291,9 +290,11 @@ switch ($action) {
         $resident_visited = null;
         $card_exists = false;
         $alert_created = false;
+        $card_status = 'unknown';        // ✅ BAGO: Track card status
+        $forced_deny = false;             // ✅ BAGO: Track if we forced deny
         
         // ------------------------------------------------------------
-        // STEP 1: Check rfid_cards table
+        // STEP 1: Check rfid_cards table - INCLUDING STATUS
         // ------------------------------------------------------------
         $stmt = $conn->prepare("
             SELECT 
@@ -321,10 +322,12 @@ switch ($action) {
             $card_exists = true;
             $cardType = $row['card_type'] ?? 'unknown';
             $cardStatus = $row['status'] ?? 'inactive';
+            $card_status = $cardStatus;    // ✅ Save for response
             $visitor_name = $row['visitor_name'] ?? '';
             $purpose = $row['purpose_of_visit'] ?? '';
             $resident_visited = $row['resident_visited'] ?? null;
             
+            // ✅ CRITICAL CHECK: Card must be ACTIVE
             if ($cardStatus == 'active') {
                 switch ($cardType) {
                     case 'visitor':
@@ -388,11 +391,12 @@ switch ($action) {
                         break;
                 }
             } else {
-                // ✅ DEACTIVATED / EXPIRED / LOST card - DENY ACCESS
+                // ✅ DEACTIVATED / EXPIRED / LOST card - FORCE DENY
                 $user_name = 'Inactive Card (' . ucfirst($cardStatus) . ')';
                 $cardType = $row['card_type'] ?? 'unknown';
                 $isAuthorized = false;
                 $granted = false;
+                $forced_deny = true;   // ✅ Mark as forced deny
                 
                 // Still set user info for logging
                 if ($cardType == 'visitor' && !empty($visitor_name)) {
@@ -403,6 +407,8 @@ switch ($action) {
                 $room_number = $row['room_number'] ?? 'N/A';
                 $student_id = $row['student_id'] ?? 'N/A';
                 $user_id = $row['user_id'];
+                
+                error_log("🚫 FORCED DENY: Card $uid is $cardStatus - blocking access");
             }
         }
         $stmt->close();
@@ -464,6 +470,18 @@ switch ($action) {
             $isAuthorized = false;
             $user_name = 'Unknown Card';
             $cardType = 'unknown';
+            $card_status = 'not_found';
+        }
+        
+        // ------------------------------------------------------------
+        // ✅ STEP 4: FINAL SAFETY CHECK
+        // If card exists and is NOT active, FORCE deny
+        // ------------------------------------------------------------
+        if ($card_exists && $card_status !== 'active' && $card_status !== 'not_found' && $card_status !== 'unknown') {
+            $granted = false;
+            $isAuthorized = false;
+            $forced_deny = true;
+            error_log("🚫 FINAL CHECK: Forcing deny for card $uid (status: $card_status)");
         }
         
         // ------------------------------------------------------------
@@ -568,7 +586,9 @@ switch ($action) {
                 'room_number' => $room_number,
                 'student_id' => $student_id,
                 'card_type' => $cardType,
+                'card_status' => $card_status,          // ✅ Ibalik ang status
                 'is_authorized' => $isAuthorized,
+                'forced_deny' => $forced_deny,          // ✅ Ibalik kung forced deny
                 'visitor_name' => $visitor_name,
                 'purpose' => $purpose,
                 'alert_created' => $alert_created,
