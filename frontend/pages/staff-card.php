@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Staff Card Management
  * DARK MODE - WITH CARD UID - FIXED LAYOUT SAME AS STAFF INFO
  * WITH PRINT ID BUTTON - WITH PROFILE PHOTO
+ * ✅ WITH LIVE RFID SCAN AUTO-FILL (from Slave ESP32)
  */
 
 session_start();
@@ -14,7 +15,6 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     exit();
 }
 
-// Include header
 include '../includes/header.php'; 
 
 $conn = getDBConnection();
@@ -59,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
     $email = trim($_POST['email'] ?? '');
     $department = trim($_POST['department'] ?? 'Staff');
     $card_uid = strtoupper(trim($_POST['card_uid'] ?? ''));
+    $scan_id = isset($_POST['scan_id']) ? (int)$_POST['scan_id'] : 0;
     
     if (empty($full_name) || empty($email)) {
         $error = 'Please fill in all required fields (Name and Email).';
@@ -93,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
                 if ($stmt->execute()) {
                     $new_id = $stmt->insert_id;
                     
-                    // If card_uid is provided and not available, insert into rfid_cards
+                    // If card_uid is provided, insert into rfid_cards
                     if (!empty($card_uid)) {
                         // Check if in available cards
                         $availCheck = $conn->prepare("SELECT card_id FROM available_rfid_cards WHERE card_uid = ? AND status = 'available'");
@@ -121,6 +122,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
                         }
                     }
                     
+                    // ✅ Mark scan as used
+                    if ($scan_id > 0) {
+                        $stmtScan = $conn->prepare("UPDATE live_scan SET status = 'used' WHERE scan_id = ?");
+                        $stmtScan->bind_param("i", $scan_id);
+                        $stmtScan->execute();
+                        $stmtScan->close();
+                    }
+                    
                     $success = "✅ Staff added successfully with Card UID: " . (!empty($card_uid) ? $card_uid : 'None');
                     logAudit($_SESSION['admin_id'], 'Add Staff', "Added staff: $full_name ($staff_id_number)");
                     header('Location: staff-card.php?success=1');
@@ -141,6 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_card'])) {
     $staff_id = (int)$_POST['staff_id'];
     $card_uid = strtoupper(trim($_POST['card_uid'] ?? ''));
+    $scan_id = isset($_POST['scan_id']) ? (int)$_POST['scan_id'] : 0;
     
     if (empty($card_uid)) {
         $error = 'Please enter a Card UID.';
@@ -182,6 +192,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_card'])) {
                 }
                 $rfidStmt->execute();
                 $rfidStmt->close();
+                
+                // ✅ Mark scan as used
+                if ($scan_id > 0) {
+                    $stmtScan = $conn->prepare("UPDATE live_scan SET status = 'used' WHERE scan_id = ?");
+                    $stmtScan->bind_param("i", $scan_id);
+                    $stmtScan->execute();
+                    $stmtScan->close();
+                }
                 
                 $success = "✅ Card UID updated successfully!";
                 logAudit($_SESSION['admin_id'], 'Update Staff Card', "Updated card for staff ID: $staff_id to $card_uid");
@@ -227,7 +245,6 @@ if (isset($_GET['remove_card']) && is_numeric($_GET['remove_card'])) {
 if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
     $delete_id = (int)$_GET['delete'];
     
-    // Get card_uid first
     $getCard = $conn->prepare("SELECT card_uid FROM staff_users WHERE staff_id = ?");
     $getCard->bind_param("i", $delete_id);
     $getCard->execute();
@@ -235,11 +252,9 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
     $staffData = $cardResult->fetch_assoc();
     $getCard->close();
     
-    // Delete from staff_users
     $stmt = $conn->prepare("DELETE FROM staff_users WHERE staff_id = ?");
     $stmt->bind_param("i", $delete_id);
     if ($stmt->execute()) {
-        // Deactivate rfid card
         if (!empty($staffData['card_uid'])) {
             $rfidStmt = $conn->prepare("UPDATE rfid_cards SET status = 'deactivated' WHERE card_uid = ?");
             $rfidStmt->bind_param("s", $staffData['card_uid']);
@@ -261,7 +276,6 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
 // ============================================================
 $staffList = [];
 
-// Check if avatar column exists
 $tableCheck = $conn->query("SHOW COLUMNS FROM staff_users LIKE 'avatar'");
 $hasAvatar = $tableCheck && $tableCheck->num_rows > 0;
 
@@ -310,9 +324,6 @@ $nextStaffId = getNextStaffId($conn);
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
-        /* ============================================================
-           GLOBAL DARK THEME - SAME AS STAFF INFO
-           ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
@@ -323,28 +334,14 @@ $nextStaffId = getNextStaffId($conn);
             padding-top: 70px !important;
         }
         
-        /* ============================================================
-           FIX: MAIN CONTENT OFFSET FOR FIXED NAVBAR
-           ============================================================ */
-        .container-fluid {
-            padding-top: 10px !important;
-        }
+        .container-fluid { padding-top: 10px !important; }
+        main { padding-top: 10px !important; margin-top: 0 !important; }
         
-        main {
-            padding-top: 10px !important;
-            margin-top: 0 !important;
-        }
-        
-        /* ============================================================
-           DARK NAVBAR OVERRIDE
-           ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
             position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
+            top: 0 !important; left: 0 !important; right: 0 !important;
             z-index: 1050 !important;
             height: 70px !important;
         }
@@ -353,32 +350,18 @@ $nextStaffId = getNextStaffId($conn);
         .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
-        /* ============================================================
-           DARK SIDEBAR
-           ============================================================ */
         .sidebar {
             background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
             padding-top: 80px !important;
             min-height: calc(100vh - 70px) !important;
         }
-        .sidebar .nav-link {
-            color: #9090a0 !important;
-        }
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.05) !important;
-            color: #e0e0e0 !important;
-        }
-        .sidebar .nav-link.active {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-        }
+        .sidebar .nav-link { color: #9090a0 !important; }
+        .sidebar .nav-link:hover { background: rgba(255,255,255,0.05) !important; color: #e0e0e0 !important; }
+        .sidebar .nav-link.active { background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important; color: white !important; }
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           STAFF CARD - DARK
-           ============================================================ */
         .staff-card {
             background: #111827 !important;
             border-radius: 16px;
@@ -390,87 +373,32 @@ $nextStaffId = getNextStaffId($conn);
             position: relative;
             border: 1px solid #1a2a4a;
         }
-        .staff-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important;
-        }
-        .staff-card .name {
-            font-weight: 700;
-            color: #ffd700 !important;
-            font-size: 18px;
-        }
-        .staff-card .department {
-            color: #9ca3af !important;
-            font-size: 14px;
-        }
-        .staff-card .staff-id {
-            color: #6b7280 !important;
-            font-size: 12px;
-        }
-        .staff-card .badge-active {
-            background: rgba(16, 185, 129, 0.2) !important;
-            color: #6ee7b7 !important;
-            font-size: 11px;
-            padding: 3px 12px;
-            border-radius: 20px;
-        }
+        .staff-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; }
+        .staff-card .name { font-weight: 700; color: #ffd700 !important; font-size: 18px; }
+        .staff-card .department { color: #9ca3af !important; font-size: 14px; }
+        .staff-card .staff-id { color: #6b7280 !important; font-size: 12px; }
+        .staff-card .badge-active { background: rgba(16, 185, 129, 0.2) !important; color: #6ee7b7 !important; font-size: 11px; padding: 3px 12px; border-radius: 20px; }
         .staff-card .text-muted { color: #6b7280 !important; }
         
-        /* ============================================================
-           STAFF AVATAR / ICON - WITH PROFILE PHOTO SUPPORT
-           ============================================================ */
         .staff-avatar {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 32px;
-            color: white;
-            margin: 0 auto 15px;
-            font-weight: 700;
-            overflow: hidden;
+            width: 80px; height: 80px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 32px; color: white; margin: 0 auto 15px;
+            font-weight: 700; overflow: hidden;
             border: 3px solid #1a2a4a;
             background: linear-gradient(135deg, #667eea, #764ba2);
         }
-        .staff-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .staff-avatar .no-photo {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            height: 100%;
-            font-size: 28px;
-            font-weight: 700;
-            color: white;
-        }
+        .staff-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .staff-avatar .no-photo { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 28px; font-weight: 700; color: white; }
         .staff-avatar .has-photo-badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #10b981;
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            font-size: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            position: absolute; top: -5px; right: -5px;
+            background: #10b981; color: white; border-radius: 50%;
+            width: 20px; height: 20px; font-size: 10px;
+            display: flex; align-items: center; justify-content: center;
             border: 2px solid #111827;
         }
+        .staff-avatar-wrapper { position: relative; display: inline-block; }
         
-        .staff-avatar-wrapper {
-            position: relative;
-            display: inline-block;
-        }
-        
-        /* Card UID Badge */
         .card-uid-badge {
             display: inline-block;
             padding: 4px 14px;
@@ -479,20 +407,9 @@ $nextStaffId = getNextStaffId($conn);
             font-weight: 600;
             font-family: 'Courier New', monospace;
         }
-        .card-uid-badge.has-card {
-            background: rgba(16, 185, 129, 0.2) !important;
-            color: #34d399 !important;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-        .card-uid-badge.no-card {
-            background: rgba(239, 68, 68, 0.15) !important;
-            color: #f87171 !important;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
+        .card-uid-badge.has-card { background: rgba(16, 185, 129, 0.2) !important; color: #34d399 !important; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .card-uid-badge.no-card { background: rgba(239, 68, 68, 0.15) !important; color: #f87171 !important; border: 1px solid rgba(239, 68, 68, 0.3); }
         
-        /* ============================================================
-           STAT CARDS
-           ============================================================ */
         .staff-stat {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -503,19 +420,9 @@ $nextStaffId = getNextStaffId($conn);
             text-align: center;
         }
         .staff-stat:hover { transform: translateY(-4px); }
-        .staff-stat .number {
-            font-size: 32px;
-            font-weight: 700;
-            color: #ffd700 !important;
-        }
-        .staff-stat .label {
-            font-size: 13px;
-            color: #6b7280 !important;
-        }
+        .staff-stat .number { font-size: 32px; font-weight: 700; color: #ffd700 !important; }
+        .staff-stat .label { font-size: 13px; color: #6b7280 !important; }
         
-        /* ============================================================
-           BUTTONS
-           ============================================================ */
         .btn-add {
             background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
             border: none !important;
@@ -527,11 +434,7 @@ $nextStaffId = getNextStaffId($conn);
             text-decoration: none;
             display: inline-block;
         }
-        .btn-add:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3) !important;
-            color: #0a0e1a !important;
-        }
+        .btn-add:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3) !important; color: #0a0e1a !important; }
         .btn-add i { margin-right: 8px; }
         
         .btn-card {
@@ -545,10 +448,7 @@ $nextStaffId = getNextStaffId($conn);
             text-decoration: none;
             display: inline-block;
         }
-        .btn-card:hover {
-            background: rgba(139, 92, 246, 0.3) !important;
-            color: #a78bfa !important;
-        }
+        .btn-card:hover { background: rgba(139, 92, 246, 0.3) !important; color: #a78bfa !important; }
         
         .btn-card-remove {
             background: rgba(239, 68, 68, 0.2) !important;
@@ -561,12 +461,8 @@ $nextStaffId = getNextStaffId($conn);
             text-decoration: none;
             display: inline-block;
         }
-        .btn-card-remove:hover {
-            background: rgba(239, 68, 68, 0.3) !important;
-            color: #fca5a5 !important;
-        }
+        .btn-card-remove:hover { background: rgba(239, 68, 68, 0.3) !important; color: #fca5a5 !important; }
         
-        /* PRINT ID BUTTON - NEW */
         .btn-print-id {
             background: rgba(59, 130, 246, 0.2) !important;
             color: #93c5fd !important;
@@ -578,27 +474,12 @@ $nextStaffId = getNextStaffId($conn);
             text-decoration: none;
             display: inline-block;
         }
-        .btn-print-id:hover {
-            background: rgba(59, 130, 246, 0.3) !important;
-            color: #93c5fd !important;
-        }
+        .btn-print-id:hover { background: rgba(59, 130, 246, 0.3) !important; color: #93c5fd !important; }
         
-        .btn-outline-primary {
-            color: #ffd700 !important;
-            border-color: rgba(255, 215, 0, 0.3) !important;
-        }
-        .btn-outline-primary:hover {
-            background: rgba(255, 215, 0, 0.15) !important;
-            color: #ffd700 !important;
-        }
-        .btn-outline-danger {
-            color: #fca5a5 !important;
-            border-color: rgba(239, 68, 68, 0.3) !important;
-        }
-        .btn-outline-danger:hover {
-            background: rgba(239, 68, 68, 0.15) !important;
-            color: #fca5a5 !important;
-        }
+        .btn-outline-primary { color: #ffd700 !important; border-color: rgba(255, 215, 0, 0.3) !important; }
+        .btn-outline-primary:hover { background: rgba(255, 215, 0, 0.15) !important; color: #ffd700 !important; }
+        .btn-outline-danger { color: #fca5a5 !important; border-color: rgba(239, 68, 68, 0.3) !important; }
+        .btn-outline-danger:hover { background: rgba(239, 68, 68, 0.15) !important; color: #fca5a5 !important; }
         
         .btn-primary {
             background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
@@ -606,28 +487,12 @@ $nextStaffId = getNextStaffId($conn);
             color: #0a0e1a !important;
             font-weight: 600;
         }
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-            color: #0a0e1a !important;
-        }
+        .btn-primary:hover { background: linear-gradient(135deg, #f59e0b, #d97706) !important; color: #0a0e1a !important; }
         
-        .btn-secondary {
-            background: #1a2a4a !important;
-            border: none !important;
-            color: #e5e7eb !important;
-        }
-        .btn-secondary:hover {
-            background: #2d3548 !important;
-            color: #e5e7eb !important;
-        }
+        .btn-secondary { background: #1a2a4a !important; border: none !important; color: #e5e7eb !important; }
+        .btn-secondary:hover { background: #2d3548 !important; color: #e5e7eb !important; }
         
-        .staff-actions {
-            display: flex;
-            justify-content: center;
-            gap: 5px;
-            flex-wrap: wrap;
-            margin-top: 8px;
-        }
+        .staff-actions { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
         
         .staff-id-badge {
             background: rgba(255, 215, 0, 0.1);
@@ -638,22 +503,12 @@ $nextStaffId = getNextStaffId($conn);
             border: 1px solid rgba(255, 215, 0, 0.15);
         }
         
-        /* ============================================================
-           MODAL - DARK
-           ============================================================ */
-        .modal-content {
-            background: #131926 !important;
-            border-radius: 16px;
-            border: 1px solid #1a2a4a;
-        }
+        .modal-content { background: #131926 !important; border-radius: 16px; border: 1px solid #1a2a4a; }
         .modal-header { border-bottom: 1px solid #1a2a4a; }
         .modal-footer { border-top: 1px solid #1a2a4a; }
         .modal-title { color: #ffd700 !important; }
         .modal-title i { color: #ffd700 !important; }
         
-        /* ============================================================
-           FORM ELEMENTS
-           ============================================================ */
         .form-control, .form-select {
             background: #0d1220 !important;
             border: 1px solid #1a2a4a !important;
@@ -669,18 +524,11 @@ $nextStaffId = getNextStaffId($conn);
             color: #e5e7eb !important;
         }
         .form-control::placeholder { color: #6b7280 !important; }
-        .form-label {
-            font-weight: 500;
-            font-size: 13px;
-            color: #d1d5db !important;
-        }
+        .form-label { font-weight: 500; font-size: 13px; color: #d1d5db !important; }
         .form-text { color: #6b7280 !important; }
         
-        /* Available cards list */
         .available-card-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
+            display: flex; flex-wrap: wrap; gap: 4px;
             padding: 8px 10px;
             background: #0d1220 !important;
             border-radius: 8px;
@@ -712,24 +560,10 @@ $nextStaffId = getNextStaffId($conn);
             box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.15);
         }
         
-        /* ============================================================
-           ALERTS
-           ============================================================ */
-        .alert-success {
-            background: rgba(16, 185, 129, 0.15) !important;
-            border-color: #10b981 !important;
-            color: #6ee7b7 !important;
-        }
-        .alert-danger {
-            background: rgba(239, 68, 68, 0.15) !important;
-            border-color: #ef4444 !important;
-            color: #fca5a5 !important;
-        }
+        .alert-success { background: rgba(16, 185, 129, 0.15) !important; border-color: #10b981 !important; color: #6ee7b7 !important; }
+        .alert-danger { background: rgba(239, 68, 68, 0.15) !important; border-color: #ef4444 !important; color: #fca5a5 !important; }
         .btn-close { filter: invert(1) !important; }
         
-        /* ============================================================
-           BORDER & MISC
-           ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
         .text-muted { color: #6b7280 !important; }
@@ -744,16 +578,11 @@ $nextStaffId = getNextStaffId($conn);
         .card .card-body { background: transparent !important; }
         .card h5 { color: #9ca3af !important; }
         
-        .section-header h5 {
-            margin: 0;
-            color: #ffd700 !important;
-            font-weight: 700;
-        }
+        .section-header h5 { margin: 0; color: #ffd700 !important; font-weight: 700; }
         
         .live-indicator {
             display: inline-block;
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             background: #34d399;
             animation: pulse 1.5s infinite;
@@ -765,31 +594,143 @@ $nextStaffId = getNextStaffId($conn);
             100% { opacity: 1; transform: scale(1); }
         }
         
-        /* ============================================================
-           SCROLLBAR
-           ============================================================ */
+        /* ✅ BAGO: Scan Button */
+        .btn-scan {
+            background: linear-gradient(135deg, #f59e0b, #dc2626) !important;
+            border: none !important;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 13px;
+            color: white !important;
+            transition: all 0.3s ease;
+            animation: pulse-scan 2s infinite;
+            width: 100%;
+        }
+        .btn-scan:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(245,158,11,0.5); color: white !important; }
+        @keyframes pulse-scan {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(245,158,11,0); }
+        }
+        
+        /* ✅ SCAN MODAL */
+        .scan-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 9999;
+            backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+        }
+        .scan-modal-overlay.show { display: flex; }
+        
+        .scan-modal {
+            background: linear-gradient(135deg, #0d1528, #1a2a4a);
+            border: 2px solid #2a5a9a;
+            border-radius: 24px;
+            padding: 40px 50px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.8), 0 0 60px rgba(42,90,154,0.5);
+            animation: modalPop 0.4s ease;
+        }
+        @keyframes modalPop {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .scan-modal .scan-icon {
+            font-size: 80px;
+            color: #f59e0b;
+            margin-bottom: 20px;
+            animation: scanPulse 1.5s infinite;
+            display: inline-block;
+        }
+        @keyframes scanPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+        }
+        
+        .scan-modal h3 { color: #ffd700 !important; font-weight: 700; font-size: 22px; margin-bottom: 10px; }
+        .scan-modal p { color: #b0b0c0 !important; font-size: 14px; margin-bottom: 20px; }
+        
+        .scan-modal .scan-status {
+            display: inline-block;
+            padding: 8px 20px;
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid #f59e0b;
+            border-radius: 30px;
+            color: #fbbf24 !important;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .scan-modal .scan-status.scanned {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: #10b981;
+            color: #34d399 !important;
+        }
+        
+        .scan-modal .scanned-uid {
+            font-family: monospace;
+            font-size: 32px;
+            font-weight: 700;
+            color: #34d399 !important;
+            background: rgba(16, 185, 129, 0.1);
+            padding: 15px 30px;
+            border-radius: 12px;
+            letter-spacing: 4px;
+            margin: 15px 0;
+            display: none;
+        }
+        .scan-modal .scanned-uid.show { display: block; animation: uidReveal 0.5s ease; }
+        @keyframes uidReveal {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .scan-modal .btn-cancel-scan {
+            background: transparent;
+            border: 1px solid #7a2a2a;
+            color: #f87171;
+            padding: 8px 24px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+        }
+        .scan-modal .btn-cancel-scan:hover { background: #7a2a2a; color: white; }
+        
+        .pulse-reader {
+            display: inline-block;
+            width: 12px; height: 12px;
+            background: #10b981;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: readerPulse 1s infinite;
+        }
+        @keyframes readerPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.3); }
+        }
+        
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a0e1a; }
         ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
         @media (max-width: 768px) {
-            body {
-                padding-top: 60px !important;
-            }
-            
-            .navbar {
-                height: 60px !important;
-            }
-            
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
-                top: 60px;
-                bottom: 0;
+                top: 60px; bottom: 0;
                 left: -280px;
                 width: 280px;
                 transition: left 0.3s ease;
@@ -797,21 +738,16 @@ $nextStaffId = getNextStaffId($conn);
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            
             .staff-card { padding: 15px; }
             .staff-card .name { font-size: 16px; }
             .staff-avatar { width: 60px; height: 60px; font-size: 24px; }
+            .scan-modal { padding: 30px 25px; }
+            .scan-modal .scan-icon { font-size: 60px; }
         }
         
         @media (max-width: 576px) {
-            .staff-actions {
-                flex-direction: column;
-                align-items: center;
-            }
-            .staff-actions .btn {
-                width: 100%;
-                text-align: center;
-            }
+            .staff-actions { flex-direction: column; align-items: center; }
+            .staff-actions .btn { width: 100%; text-align: center; }
         }
     </style>
 </head>
@@ -825,9 +761,7 @@ $nextStaffId = getNextStaffId($conn);
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 
-                <!-- ============================================================
-                HEADER
-                ============================================================ -->
+                <!-- HEADER -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-id-card me-2" style="color: #ffd700;"></i>
@@ -850,8 +784,7 @@ $nextStaffId = getNextStaffId($conn);
 
                 <?php if (!empty($success)): ?>
                     <div class="alert alert-success alert-dismissible fade show" role="alert">
-                        <i class="fas fa-check-circle me-2"></i> 
-                        <?php echo $success; ?>
+                        <i class="fas fa-check-circle me-2"></i> <?php echo $success; ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 <?php endif; ?>
@@ -863,9 +796,7 @@ $nextStaffId = getNextStaffId($conn);
                     </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                STATISTICS
-                ============================================================ -->
+                <!-- STATISTICS -->
                 <div class="row g-3 mb-4">
                     <div class="col-4 col-sm-4 col-xl-3">
                         <div class="staff-stat">
@@ -887,9 +818,7 @@ $nextStaffId = getNextStaffId($conn);
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STAFF LIST
-                ============================================================ -->
+                <!-- STAFF LIST -->
                 <div class="section-header mb-3">
                     <h5><i class="fas fa-list me-2"></i>Staff Cards</h5>
                     <small class="text-muted ms-2">
@@ -911,7 +840,6 @@ $nextStaffId = getNextStaffId($conn);
                 <?php else: ?>
                     <div class="row g-4">
                         <?php foreach ($staffList as $staff): 
-                            // Get initials for avatar fallback
                             $name = $staff['full_name'] ?? 'Staff';
                             $initials = '';
                             $parts = explode(' ', $name);
@@ -920,7 +848,6 @@ $nextStaffId = getNextStaffId($conn);
                             }
                             $initials = substr($initials, 0, 2) ?: 'ST';
                             
-                            // Check if profile photo exists
                             $photoPath = $staff['avatar'] ?? '';
                             $hasPhoto = false;
                             $fullPhotoPath = '';
@@ -931,24 +858,18 @@ $nextStaffId = getNextStaffId($conn);
                                 } else {
                                     $fullPhotoPath = '../../uploads/staff_photos/' . $photoPath;
                                 }
-                                
-                                if (file_exists($fullPhotoPath)) {
-                                    $hasPhoto = true;
-                                }
+                                if (file_exists($fullPhotoPath)) $hasPhoto = true;
                             }
                         ?>
                             <div class="col-md-4 col-lg-3">
                                 <div class="staff-card">
-                                    <!-- Staff Avatar with Profile Photo -->
                                     <div class="staff-avatar-wrapper">
                                         <div class="staff-avatar">
                                             <?php if ($hasPhoto): ?>
                                                 <img src="<?php echo $fullPhotoPath; ?>" 
                                                      alt="<?php echo htmlspecialchars($staff['full_name']); ?>"
                                                      onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
-                                                <span class="has-photo-badge">
-                                                    <i class="fas fa-check-circle"></i>
-                                                </span>
+                                                <span class="has-photo-badge"><i class="fas fa-check-circle"></i></span>
                                             <?php else: ?>
                                                 <div class="no-photo"><?php echo $initials; ?></div>
                                             <?php endif; ?>
@@ -963,7 +884,6 @@ $nextStaffId = getNextStaffId($conn);
                                         </span>
                                     </div>
                                     
-                                    <!-- Card UID Display -->
                                     <div class="mt-2">
                                         <?php if (!empty($staff['card_uid'])): ?>
                                             <span class="card-uid-badge has-card">
@@ -985,9 +905,7 @@ $nextStaffId = getNextStaffId($conn);
                                         </span>
                                     </div>
                                     
-                                    <!-- Staff Actions -->
                                     <div class="staff-actions">
-                                        <!-- PRINT ID BUTTON - NEW -->
                                         <?php if (!empty($staff['card_uid'])): ?>
                                             <a href="print-staff-id.php?uid=<?php echo $staff['card_uid']; ?>" 
                                                target="_blank" 
@@ -1021,9 +939,7 @@ $nextStaffId = getNextStaffId($conn);
                                 </div>
                             </div>
 
-                            <!-- ============================================================
-                            CARD UID MODAL
-                            ============================================================ -->
+                            <!-- ✅ CARD UID MODAL - WITH LIVE SCAN -->
                             <div class="modal fade" id="cardModal<?php echo $staff['staff_id']; ?>" tabindex="-1">
                                 <div class="modal-dialog modal-dialog-centered">
                                     <div class="modal-content">
@@ -1036,7 +952,6 @@ $nextStaffId = getNextStaffId($conn);
                                         </div>
                                         <div class="modal-body">
                                             <div class="mb-3 text-center">
-                                                <!-- Profile Photo in Modal -->
                                                 <div style="width:80px;height:80px;border-radius:50%;margin:0 auto;overflow:hidden;border:3px solid #1a2a4a;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:white;">
                                                     <?php if ($hasPhoto): ?>
                                                         <img src="<?php echo $fullPhotoPath; ?>" 
@@ -1057,9 +972,10 @@ $nextStaffId = getNextStaffId($conn);
                                             
                                             <hr>
                                             
-                                            <form method="POST" action="">
+                                            <form method="POST" action="" id="cardForm<?php echo $staff['staff_id']; ?>">
                                                 <input type="hidden" name="staff_id" value="<?php echo $staff['staff_id']; ?>">
                                                 <input type="hidden" name="update_card" value="1">
+                                                <input type="hidden" name="scan_id" id="scanId_<?php echo $staff['staff_id']; ?>" value="">
                                                 
                                                 <div class="mb-2">
                                                     <label class="form-label">Current Card UID</label>
@@ -1072,6 +988,19 @@ $nextStaffId = getNextStaffId($conn);
                                                     </div>
                                                 </div>
                                                 
+                                                <!-- ✅ LIVE SCAN BUTTON -->
+                                                <div class="mb-2">
+                                                    <label class="form-label">Live RFID Scan</label>
+                                                    <button type="button" 
+                                                            class="btn btn-scan" 
+                                                            onclick="startStaffScan(<?php echo $staff['staff_id']; ?>)">
+                                                        <i class="fas fa-wifi me-2"></i> Scan Card
+                                                    </button>
+                                                    <small class="text-muted d-block mt-1">
+                                                        <span class="pulse-reader"></span>Tap card on reader to auto-fill
+                                                    </small>
+                                                </div>
+                                                
                                                 <?php if (!empty($availableCards)): ?>
                                                     <div class="mb-2">
                                                         <label class="form-label">Available Cards (Click to auto-fill)</label>
@@ -1082,21 +1011,15 @@ $nextStaffId = getNextStaffId($conn);
                                                                 </span>
                                                             <?php endforeach; ?>
                                                         </div>
-                                                        <small class="text-muted">Click a card above to auto-fill the UID</small>
-                                                    </div>
-                                                <?php else: ?>
-                                                    <div class="alert alert-warning">
-                                                        <i class="fas fa-info-circle me-1"></i>
-                                                        No available cards in inventory.
                                                     </div>
                                                 <?php endif; ?>
                                                 
                                                 <div class="mb-2">
                                                     <label class="form-label">New Card UID</label>
                                                     <input type="text" class="form-control" name="card_uid" id="cardUid<?php echo $staff['staff_id']; ?>" placeholder="Enter new card UID">
-                                                    <div class="form-text text-muted small">
+                                                    <div class="form-text text-muted small" id="uidStatus_<?php echo $staff['staff_id']; ?>">
                                                         <i class="fas fa-info-circle me-1"></i>
-                                                        Enter UID or click an available card above
+                                                        Enter UID, click available card, or scan
                                                     </div>
                                                 </div>
                                                 
@@ -1112,9 +1035,7 @@ $nextStaffId = getNextStaffId($conn);
                     </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                FOOTER
-                ============================================================ -->
+                <!-- FOOTER -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
@@ -1127,7 +1048,7 @@ $nextStaffId = getNextStaffId($conn);
     </div>
 
     <!-- ============================================================
-    ADD STAFF MODAL
+    ADD STAFF MODAL - WITH LIVE SCAN
     ============================================================ -->
     <div class="modal fade" id="addStaffModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
@@ -1141,8 +1062,9 @@ $nextStaffId = getNextStaffId($conn);
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <form method="POST" action="">
+                    <form method="POST" action="" id="addStaffForm">
                         <input type="hidden" name="add_staff" value="1">
+                        <input type="hidden" name="scan_id" id="scanIdAdd" value="">
                         
                         <div class="mb-2">
                             <label class="form-label">Full Name <span class="text-danger">*</span></label>
@@ -1157,6 +1079,19 @@ $nextStaffId = getNextStaffId($conn);
                             <input type="text" class="form-control" name="department" placeholder="e.g., Security, Admin, Maintenance">
                         </div>
                         
+                        <!-- ✅ LIVE SCAN BUTTON -->
+                        <div class="mb-2">
+                            <label class="form-label">Live RFID Scan</label>
+                            <button type="button" 
+                                    class="btn btn-scan" 
+                                    onclick="startStaffScan('add')">
+                                <i class="fas fa-wifi me-2"></i> Scan Card
+                            </button>
+                            <small class="text-muted d-block mt-1">
+                                <span class="pulse-reader"></span>Tap card on reader to auto-fill
+                            </small>
+                        </div>
+                        
                         <?php if (!empty($availableCards)): ?>
                             <div class="mb-2">
                                 <label class="form-label">Available Cards (Click to auto-fill)</label>
@@ -1167,16 +1102,15 @@ $nextStaffId = getNextStaffId($conn);
                                         </span>
                                     <?php endforeach; ?>
                                 </div>
-                                <small class="text-muted">Click a card above to auto-fill the UID</small>
                             </div>
                         <?php endif; ?>
                         
                         <div class="mb-2">
                             <label class="form-label">Card UID</label>
                             <input type="text" class="form-control" name="card_uid" id="cardUidAdd" placeholder="Enter card UID (optional)">
-                            <div class="form-text text-muted small">
+                            <div class="form-text text-muted small" id="uidStatusAdd">
                                 <i class="fas fa-info-circle me-1"></i>
-                                Leave empty to add staff without card, or assign a card above
+                                Leave empty or assign a card
                             </div>
                         </div>
                         
@@ -1189,18 +1123,146 @@ $nextStaffId = getNextStaffId($conn);
         </div>
     </div>
 
+    <!-- ============================================================
+         ✅ SCAN MODAL
+         ============================================================ -->
+    <div class="scan-modal-overlay" id="scanModal">
+        <div class="scan-modal">
+            <div class="scan-icon">
+                <i class="fas fa-wifi"></i>
+            </div>
+            <h3>Scanning for RFID Card...</h3>
+            <p>Please tap your card on the RFID reader now</p>
+            
+            <div class="scan-status" id="scanStatus">
+                <span class="pulse-reader"></span>
+                Waiting for card...
+            </div>
+            
+            <div class="scanned-uid" id="scannedUid">----</div>
+            
+            <button type="button" class="btn-cancel-scan" onclick="cancelStaffScan()">
+                <i class="fas fa-times me-1"></i> Cancel Scan
+            </button>
+        </div>
+    </div>
+
     <?php include '../includes/footer.php'; ?>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ============================================================
-        // SELECT CARD FROM AVAILABLE LIST - AUTO-FILL
+        // GLOBAL STATE
+        // ============================================================
+        let scanPollingInterval = null;
+        let scanActive = false;
+        let currentScanTarget = null;
+        let lastScannedUid = '';
+        
+        const SCAN_API_URL = '../../backend/api/get_latest_scan.php';
+        
+        // ============================================================
+        // ✅ START SCAN
+        // ============================================================
+        function startStaffScan(target) {
+            scanActive = true;
+            currentScanTarget = target;
+            lastScannedUid = '';
+            
+            document.getElementById('scanStatus').innerHTML = '<span class="pulse-reader"></span> Waiting for card...';
+            document.getElementById('scanStatus').classList.remove('scanned');
+            document.getElementById('scannedUid').classList.remove('show');
+            document.getElementById('scannedUid').textContent = '----';
+            
+            document.getElementById('scanModal').classList.add('show');
+            
+            fetch(SCAN_API_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'clear_scans'})
+            }).then(() => {
+                scanPollingInterval = setInterval(pollForStaffScan, 1000);
+            });
+        }
+        
+        // ============================================================
+        // ✅ POLL FOR SCAN
+        // ============================================================
+        function pollForStaffScan() {
+            if (!scanActive) return;
+            
+            fetch(SCAN_API_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: 'get_latest_scan'})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) return;
+                
+                if (data.has_scan && data.scan && data.scan.uid !== lastScannedUid) {
+                    lastScannedUid = data.scan.uid;
+                    
+                    document.getElementById('scanStatus').innerHTML = '<i class="fas fa-check-circle me-1"></i> Card Detected!';
+                    document.getElementById('scanStatus').classList.add('scanned');
+                    
+                    const uidEl = document.getElementById('scannedUid');
+                    uidEl.textContent = data.scan.uid;
+                    uidEl.classList.add('show');
+                    
+                    // Determine target input
+                    if (currentScanTarget === 'add') {
+                        document.getElementById('cardUidAdd').value = data.scan.uid;
+                        document.getElementById('scanIdAdd').value = data.scan.scan_id;
+                        
+                        const statusEl = document.getElementById('uidStatusAdd');
+                        statusEl.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i> Scanned from reader!';
+                        statusEl.style.color = '#34d399';
+                    } else {
+                        const inputId = 'cardUid' + currentScanTarget;
+                        const scanIdField = 'scanId_' + currentScanTarget;
+                        const statusId = 'uidStatus_' + currentScanTarget;
+                        
+                        document.getElementById(inputId).value = data.scan.uid;
+                        document.getElementById(scanIdField).value = data.scan.scan_id;
+                        
+                        const statusEl = document.getElementById(statusId);
+                        if (statusEl) {
+                            statusEl.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i> Scanned from reader!';
+                            statusEl.style.color = '#34d399';
+                        }
+                    }
+                    
+                    setTimeout(() => {
+                        cancelStaffScan();
+                    }, 1500);
+                }
+            })
+            .catch(err => console.warn('Scan polling error:', err));
+        }
+        
+        // ============================================================
+        // ✅ CANCEL SCAN
+        // ============================================================
+        function cancelStaffScan() {
+            scanActive = false;
+            currentScanTarget = null;
+            
+            if (scanPollingInterval) {
+                clearInterval(scanPollingInterval);
+                scanPollingInterval = null;
+            }
+            
+            document.getElementById('scanModal').classList.remove('show');
+        }
+        
+        // ============================================================
+        // SELECT CARD FROM AVAILABLE LIST
         // ============================================================
         function selectCard(element, inputId) {
             const uid = element.dataset.uid;
             document.getElementById(inputId).value = uid;
             
-            // Remove selected class from all cards in the same list
             const parentList = element.closest('.available-card-list');
             parentList.querySelectorAll('.card-item-mini').forEach(el => {
                 el.classList.remove('selected');
@@ -1213,22 +1275,13 @@ $nextStaffId = getNextStaffId($conn);
         // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
-            const timeString = now.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: true 
-            });
+            const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
             const updateElement = document.getElementById('lastUpdate');
-            if (updateElement) {
-                updateElement.textContent = 'Updated: ' + timeString;
-            }
+            if (updateElement) updateElement.textContent = 'Updated: ' + timeString;
+            
             const serverTimeElement = document.getElementById('serverTime');
             if (serverTimeElement) {
-                const dateString = now.toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                });
+                const dateString = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
                 serverTimeElement.textContent = 'Server Time: ' + dateString + ' ' + timeString;
             }
         }
@@ -1236,9 +1289,11 @@ $nextStaffId = getNextStaffId($conn);
         setInterval(updateLastUpdateTime, 10000);
         document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
         
-        // ============================================================
-        // SIDEBAR TOGGLE
-        // ============================================================
+        // ESC to close
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && scanActive) cancelStaffScan();
+        });
+        
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
