@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Dashboard Live Data API
  * Location: backend/api/dashboard_data.php
  * Returns JSON data for auto-updating dashboard
+ * ✅ FIXED: Presence tracking base sa GRANTED access logs only
  */
 
 session_start();
@@ -69,7 +70,12 @@ $result = $conn->query("
 ");
 $data['stats']['unauthorized_today'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
 
+// ============================================================
 // 5 & 6. RESIDENTS INSIDE/OUTSIDE
+// ✅ FIXED: Base sa latest GRANTED access log ng resident
+// ✅ HINDI naka-depende sa card status
+// ✅ Kapag ni-deactivate ang card, nananatili ang resident sa huling state
+// ============================================================
 $insideCount = 0;
 $outsideCount = 0;
 
@@ -87,6 +93,7 @@ $result = $conn->query("
             SELECT MAX(timestamp) 
             FROM access_logs al2 
             WHERE al2.user_id = u.user_id
+            AND al2.access_status = 'granted'
         )
     WHERE u.status = 'active'
     AND u.room_number IS NOT NULL
@@ -96,6 +103,7 @@ $result = $conn->query("
 $outsideResidents = [];
 if ($result) {
     while ($row = $result->fetch_assoc()) {
+        // ✅ Default = OUTSIDE kung walang granted access log
         if ($row['last_access_type'] === 'entry') {
             $insideCount++;
         } else {
@@ -143,7 +151,11 @@ $criticalCount = $result ? (int)$result->fetch_assoc()['count'] : 0;
 $data['stats']['critical_alerts'] = $criticalCount;
 $data['critical_alerts_count'] = $criticalCount;
 
+// ============================================================
 // 9. ROOM OCCUPANCY (13 Rooms)
+// ✅ FIXED: Base sa latest GRANTED access log ng resident
+// ✅ HINDI naka-depende sa card status
+// ============================================================
 for ($i = 1; $i <= $totalRooms; $i++) {
     $roomInfo = [
         'room_number' => $i,
@@ -162,6 +174,7 @@ for ($i = 1; $i <= $totalRooms; $i++) {
             SELECT MAX(timestamp) 
             FROM access_logs al2 
             WHERE al2.user_id = u.user_id
+            AND al2.access_status = 'granted'
         )
         ORDER BY u.full_name
     ");
