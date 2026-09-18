@@ -5,6 +5,7 @@
  * PURE DARK MODE - Fixed navbar, sidebar, footer
  * WITH PROFILE PHOTO DISPLAY IN TABLE
  * WITH STAFF LOGS TABLE
+ * ✅ WITH CARD STATUS DISPLAY (Deactivated/Active/Lost/Expired)
  */
 
 session_start();
@@ -110,7 +111,8 @@ if ($result) {
 }
 
 // ============================================================
-// GET RESIDENT ACCESS LOGS WITH COUNT (EXCLUDING STAFF)
+// ✅ GET RESIDENT ACCESS LOGS - WITH CARD STATUS
+// Note: Lahat ng logs ay ipinapakita (kasama ang granted at denied)
 // ============================================================
 $residentLogs = [];
 $residentCountQuery = "
@@ -118,7 +120,6 @@ $residentCountQuery = "
     FROM access_logs al
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
     LEFT JOIN users u ON c.user_id = u.user_id
-    LEFT JOIN users ru ON c.resident_visited = ru.user_id
     LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
     WHERE (c.card_type = 'resident' OR c.card_type IS NULL)
 ";
@@ -153,6 +154,7 @@ $residentQuery = "
         al.*,
         c.card_uid,
         c.card_type,
+        c.status as card_status,
         c.visitor_name,
         c.purpose_of_visit,
         c.resident_visited,
@@ -202,6 +204,7 @@ $visitorQuery = "
         al.*,
         c.card_uid,
         c.card_type,
+        c.status as card_status,
         c.visitor_name,
         c.purpose_of_visit,
         c.resident_visited,
@@ -246,6 +249,7 @@ $staffQuery = "
         al.*,
         c.card_uid,
         c.card_type,
+        c.status as card_status,
         s.full_name as staff_name,
         s.staff_id_number,
         s.department,
@@ -288,6 +292,7 @@ $unauthorizedQuery = "
         al.*,
         c.card_uid,
         c.card_type,
+        c.status as card_status,
         c.visitor_name,
         u.full_name as user_name,
         u.room_number,
@@ -526,22 +531,14 @@ if ($result && $row = $result->fetch_assoc()) {
             padding-top: 70px !important;
         }
         
-        .container-fluid {
-            padding-top: 10px !important;
-        }
-        
-        main {
-            padding-top: 10px !important;
-            margin-top: 0 !important;
-        }
+        .container-fluid { padding-top: 10px !important; }
+        main { padding-top: 10px !important; margin-top: 0 !important; }
         
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
             position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
+            top: 0 !important; left: 0 !important; right: 0 !important;
             z-index: 1050 !important;
             height: 70px !important;
         }
@@ -556,17 +553,9 @@ if ($result && $row = $result->fetch_assoc()) {
             padding-top: 80px !important;
             min-height: calc(100vh - 70px) !important;
         }
-        .sidebar .nav-link {
-            color: #9090a0 !important;
-        }
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.05) !important;
-            color: #e0e0e0 !important;
-        }
-        .sidebar .nav-link.active {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-        }
+        .sidebar .nav-link { color: #9090a0 !important; }
+        .sidebar .nav-link:hover { background: rgba(255,255,255,0.05) !important; color: #e0e0e0 !important; }
+        .sidebar .nav-link.active { background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important; color: white !important; }
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
@@ -762,6 +751,12 @@ if ($result && $row = $result->fetch_assoc()) {
         .badge-primary { background: #1a3a6a !important; color: #93c5fd !important; }
         .badge-info { background: #1a3a6a !important; color: #93c5fd !important; }
         .badge-light { background: #2a2a4a !important; color: #b0b0c0 !important; }
+        
+        /* ✅ BAGO: Card Status Badges */
+        .badge-card-active { background: #065f46 !important; color: #34d399 !important; font-size: 9px; }
+        .badge-card-deactivated { background: #2a2a3a !important; color: #808090 !important; font-size: 9px; }
+        .badge-card-expired { background: #7a2a2a !important; color: #f87171 !important; font-size: 9px; }
+        .badge-card-lost { background: #7a2a2a !important; color: #f87171 !important; font-size: 9px; }
         
         .alert-item {
             background: #111827 !important;
@@ -985,19 +980,12 @@ if ($result && $row = $result->fetch_assoc()) {
         }
         
         @media (max-width: 768px) {
-            body {
-                padding-top: 60px !important;
-            }
-            
-            .navbar {
-                height: 60px !important;
-            }
-            
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
-                top: 60px;
-                bottom: 0;
+                top: 60px; bottom: 0;
                 left: -280px;
                 width: 280px;
                 transition: left 0.3s ease;
@@ -1005,46 +993,21 @@ if ($result && $row = $result->fetch_assoc()) {
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
             .stat-icon { width: 40px; height: 40px; font-size: 16px; }
-            
-            .pagination-container .row {
-                flex-direction: column;
-                gap: 10px;
-            }
-            .pagination-container .col-md-6 {
-                width: 100%;
-                text-align: center !important;
-            }
-            .pagination {
-                justify-content: center !important;
-            }
+            .pagination-container .row { flex-direction: column; gap: 10px; }
+            .pagination-container .col-md-6 { width: 100%; text-align: center !important; }
+            .pagination { justify-content: center !important; }
         }
         
         @media (max-width: 576px) {
             .filter-section .row .col-md-2,
-            .filter-section .row .col-md-3 {
-                margin-bottom: 8px;
-            }
-            
-            .log-table {
-                font-size: 11px;
-            }
-            .log-table th,
-            .log-table td {
-                padding: 6px 8px;
-            }
-            .log-table .user-avatar {
-                width: 24px;
-                height: 24px;
-                font-size: 9px;
-            }
-            .log-table .uid-cell {
-                font-size: 10px;
-                padding: 1px 4px;
-            }
+            .filter-section .row .col-md-3 { margin-bottom: 8px; }
+            .log-table { font-size: 11px; }
+            .log-table th, .log-table td { padding: 6px 8px; }
+            .log-table .user-avatar { width: 24px; height: 24px; font-size: 9px; }
+            .log-table .uid-cell { font-size: 10px; padding: 1px 4px; }
         }
         <?php endif; ?>
     </style>
@@ -1275,9 +1238,7 @@ if ($result && $row = $result->fetch_assoc()) {
             <main class="<?php echo ($printResidents || $printVisitors || $printStaff) ? 'col-12' : 'col-md-9 ms-sm-auto col-lg-10 px-md-4'; ?>">
                 
                 <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
-                <!-- ============================================================
-                HEADER - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- HEADER - SAME AS DASHBOARD -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-history me-2" style="color: #1a3a6a;"></i>
@@ -1306,9 +1267,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STATS ROW 1 - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- STATS ROW 1 -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
@@ -1371,9 +1330,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STATS ROW 2 - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- STATS ROW 2 -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
@@ -1443,9 +1400,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                FILTERS
-                ============================================================ -->
+                <!-- FILTERS -->
                 <div class="filter-section">
                     <form method="GET" action="" class="row g-2 align-items-end">
                         <div class="col-md-2">
@@ -1482,9 +1437,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </form>
                 </div>
 
-                <!-- ============================================================
-                ALERTS TABLE
-                ============================================================ -->
+                <!-- ALERTS TABLE -->
                 <div class="card mb-4">
                     <div class="card-header">
                         <div class="log-header-actions">
@@ -1590,11 +1543,9 @@ if ($result && $row = $result->fetch_assoc()) {
                         <?php endif; ?>
                     </div>
                 </div>
-                <?php endif; // end !printResidents && !printVisitors && !printStaff ?>
+                <?php endif; ?>
 
-                <!-- ============================================================
-                RESIDENTS TABLE
-                ============================================================ -->
+                <!-- RESIDENTS TABLE -->
                 <div class="card">
                     <div class="card-header">
                         <div class="log-header-actions">
@@ -1630,13 +1581,14 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <th>Room</th>
                                         <th>Type</th>
                                         <th>Status</th>
+                                        <th>Card</th>
                                         <th>Power</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($residentLogs)): ?>
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted py-4">
+                                            <td colspan="8" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                                 No resident access logs found
                                             </td>
@@ -1645,6 +1597,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <?php foreach ($residentLogs as $log): 
                                             $displayName = $log['user_name'] ?? 'Unknown';
                                             $roomDisplay = $log['room_number'] ?? 'N/A';
+                                            $cardStatus = $log['card_status'] ?? null;
                                             
                                             $initials = '';
                                             $nameParts = explode(' ', $displayName);
@@ -1655,10 +1608,10 @@ if ($result && $row = $result->fetch_assoc()) {
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
-                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                                                <td><span class="uid-cell <?php echo $log['access_status'] == 'denied' ? 'denied-uid' : ''; ?>"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
                                                 <td>
                                                     <div class="user-cell">
-                                                        <div class="user-avatar">
+                                                        <div class="user-avatar <?php echo $log['access_status'] == 'denied' ? 'denied' : ''; ?>">
                                                             <?php if (!empty($log['profile_photo']) && file_exists('../../' . $log['profile_photo'])): ?>
                                                                 <img src="../../<?php echo htmlspecialchars($log['profile_photo']); ?>" alt="Photo">
                                                             <?php else: ?>
@@ -1669,9 +1622,6 @@ if ($result && $row = $result->fetch_assoc()) {
                                                             <div><?php echo htmlspecialchars($displayName); ?> <span class="resident-tag">Resident</span></div>
                                                             <?php if (!empty($log['student_id'])): ?>
                                                                 <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['student_id']); ?></div>
-                                                            <?php endif; ?>
-                                                            <?php if (!empty($log['course'])): ?>
-                                                                <div style="font-size: 10px; color: #808090;"><?php echo htmlspecialchars($log['course']); ?></div>
                                                             <?php endif; ?>
                                                         </div>
                                                     </div>
@@ -1688,6 +1638,15 @@ if ($result && $row = $result->fetch_assoc()) {
                                                         <i class="fas <?php echo $log['access_status'] == 'granted' ? 'fa-check-circle' : 'fa-times-circle'; ?> me-1"></i>
                                                         <?php echo ucfirst($log['access_status'] ?? 'N/A'); ?>
                                                     </span>
+                                                </td>
+                                                <td>
+                                                    <?php if ($cardStatus): ?>
+                                                        <span class="badge badge-card-<?php echo $cardStatus; ?>">
+                                                            <?php echo ucfirst($cardStatus); ?>
+                                                        </span>
+                                                    <?php else: ?>
+                                                        <span class="badge badge-secondary" style="font-size: 9px;">N/A</span>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td>
                                                     <span class="badge <?php echo isset($log['power_source']) && $log['power_source'] == 'main' ? 'badge-main' : 'badge-battery'; ?>">
@@ -1775,9 +1734,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STAFF LOGS TABLE
-                ============================================================ -->
+                <!-- STAFF LOGS TABLE -->
                 <div class="card">
                     <div class="card-header">
                         <div class="log-header-actions">
@@ -1812,13 +1769,14 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <th>Department</th>
                                         <th>Type</th>
                                         <th>Status</th>
+                                        <th>Card</th>
                                         <th>Power</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($staffLogs)): ?>
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted py-4">
+                                            <td colspan="8" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                                 No staff access logs found
                                             </td>
@@ -1827,6 +1785,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                         <?php foreach ($staffLogs as $log): 
                                             $staffName = $log['staff_name'] ?? 'Unknown Staff';
                                             $department = $log['department'] ?? 'N/A';
+                                            $cardStatus = $log['card_status'] ?? null;
                                             
                                             $initials = '';
                                             $nameParts = explode(' ', $staffName);
@@ -1856,7 +1815,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                                                <td><span class="uid-cell <?php echo $log['access_status'] == 'denied' ? 'denied-uid' : ''; ?>"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
                                                 <td>
                                                     <span style="font-size: 12px; color: #fbbf24;"><?php echo htmlspecialchars($department); ?></span>
                                                 </td>
@@ -1873,6 +1832,15 @@ if ($result && $row = $result->fetch_assoc()) {
                                                     </span>
                                                 </td>
                                                 <td>
+                                                    <?php if ($cardStatus): ?>
+                                                        <span class="badge badge-card-<?php echo $cardStatus; ?>">
+                                                            <?php echo ucfirst($cardStatus); ?>
+                                                        </span>
+                                                    <?php else: ?>
+                                                        <span class="badge badge-secondary" style="font-size: 9px;">N/A</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
                                                     <span class="badge <?php echo isset($log['power_source']) && $log['power_source'] == 'main' ? 'badge-main' : 'badge-battery'; ?>">
                                                         <i class="fas <?php echo isset($log['power_source']) && $log['power_source'] == 'main' ? 'fa-bolt' : 'fa-battery-quarter'; ?> me-1"></i>
                                                         <?php echo isset($log['power_source']) ? ucfirst($log['power_source']) : 'N/A'; ?>
@@ -1887,9 +1855,7 @@ if ($result && $row = $result->fetch_assoc()) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                VISITORS TABLE
-                ============================================================ -->
+                <!-- VISITORS TABLE -->
                 <div class="card">
                     <div class="card-header">
                         <div class="log-header-actions">
@@ -1952,7 +1918,7 @@ if ($result && $row = $result->fetch_assoc()) {
                                         ?>
                                             <tr>
                                                 <td><?php echo date('M d, Y h:i A', strtotime($log['timestamp'])); ?></td>
-                                                <td><span class="uid-cell"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
+                                                <td><span class="uid-cell <?php echo $log['access_status'] == 'denied' ? 'denied-uid' : ''; ?>"><?php echo htmlspecialchars($log['card_uid'] ?? 'N/A'); ?></span></td>
                                                 <td>
                                                     <div class="user-cell">
                                                         <div class="user-avatar visitor">
@@ -1999,9 +1965,7 @@ if ($result && $row = $result->fetch_assoc()) {
                 </div>
 
                 <?php if (!$printResidents && !$printVisitors && !$printStaff): ?>
-                <!-- ============================================================
-                FOOTER - SAME AS DASHBOARD
-                ============================================================ -->
+                <!-- FOOTER -->
                 <footer class="pt-4 pb-2 text-muted text-center small border-top mt-3">
                     &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System. All rights reserved.
                     <span class="mx-2">|</span>
@@ -2033,9 +1997,6 @@ if ($result && $row = $result->fetch_assoc()) {
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // CHANGE PER PAGE
-        // ============================================================
         function changePerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
@@ -2043,9 +2004,6 @@ if ($result && $row = $result->fetch_assoc()) {
             window.location.href = '?' + urlParams.toString();
         }
         
-        // ============================================================
-        // UPDATE TIME - SAME AS DASHBOARD
-        // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
             const timeString = now.toLocaleTimeString('en-US', { 
@@ -2071,9 +2029,6 @@ if ($result && $row = $result->fetch_assoc()) {
         setInterval(updateLastUpdateTime, 10000);
         document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
         
-        // ============================================================
-        // SIDEBAR TOGGLE (mobile)
-        // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
