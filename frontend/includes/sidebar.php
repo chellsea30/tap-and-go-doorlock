@@ -476,17 +476,6 @@ SIDEBAR OVERLAY - for mobile close
                         </a>
                     </li>
                     
-                    <!-- PENDING APPROVALS LINK -->
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'residents.php' && isset($_GET['status']) && $_GET['status'] == 'pending' ? 'active' : ''; ?>" 
-                           href="residents.php?status=pending">
-                            <i class="fas fa-clock"></i> Pending Approval
-                            <?php if ($pendingApprovals > 0): ?>
-                                <span class="badge badge-pending-pulse"><?php echo $pendingApprovals; ?></span>
-                            <?php endif; ?>
-                        </a>
-                    </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'student-registration.php' ? 'active' : ''; ?>" href="student-registration.php">
                             <i class="fas fa-user-graduate"></i> Student Portal
@@ -497,18 +486,6 @@ SIDEBAR OVERLAY - for mobile close
                         <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'room-assign.php' ? 'active' : ''; ?>" href="room-assign.php">
                             <i class="fas fa-bed"></i> Room Assign
                             <span class="badge bg-warning rounded-pill" id="roomCount">0</span>
-                        </a>
-                    </li>
-                    
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'new-resident.php' ? 'active' : ''; ?>" href="new-resident.php">
-                            <i class="fas fa-plus-circle"></i> New Resident
-                        </a>
-                    </li>
-                    
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'admission-form.php' ? 'active' : ''; ?>" href="admission-form.php">
-                            <i class="fas fa-clipboard-list"></i> Admission Form
                         </a>
                     </li>
                 </ul>
