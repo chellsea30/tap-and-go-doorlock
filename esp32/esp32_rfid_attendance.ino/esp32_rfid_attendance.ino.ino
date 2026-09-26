@@ -35,7 +35,7 @@ const char* WIFI_PASSWORD = "1234567890@@@";
 // ============================================================
 // SERVER CONFIGURATION - RAILWAY URL
 // ============================================================
-const char* SERVER_URL = "https://tap-and-go-doorlock-copy-production.up.railway.app/backend/api/v1/rfid_access.php";
+const char* SERVER_URL = "https://isu-e-ladies-dormitory.up.railway.app/backend/api/v1/rfid_access.php";
 
 // ============================================================
 // PIN DEFINITIONS
@@ -1273,7 +1273,7 @@ void loop() {
         } else {
             if (wifiConnected) {
                 wifiConnected = false;
-                digitalWrite(LED_BUILTIN, LOW);
+                digitalWrite(LED_BUILTIN, LOW); 
                 Serial.println("⚠️ WiFi Lost - Switching to OFFLINE MODE");
                 Serial.println("   Using " + String(cardCount) + " saved cards");
                 Serial.println("   📝 " + String(logCount) + " logs pending sync");
