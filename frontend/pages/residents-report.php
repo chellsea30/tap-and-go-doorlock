@@ -4,6 +4,9 @@
  * PERMANENT STORAGE - NO DELETE OPTION
  * PURE DARK MODE - WITH PROFILE PHOTO
  * ALL RESIDENTS (ACTIVE & INACTIVE)
+ * ✅ WITH VIEW PROFILE BUTTON
+ * ✅ WITH SHOW ENTRIES (TOP + BOTTOM)
+ * ✅ 13 ROOMS
  */
 
 session_start();
@@ -11,7 +14,6 @@ session_start();
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
 
-// Check authentication
 if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
@@ -20,6 +22,11 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
 $conn = getDBConnection();
 $error = '';
 $success = '';
+
+// ============================================================
+// ROOM CONFIGURATION - 13 ROOMS
+// ============================================================
+$totalRooms = 13;
 
 // ============================================================
 // PAGINATION SETTINGS
@@ -37,10 +44,10 @@ if (!in_array($perPage, $perPageOptions)) {
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 $searchFilter = isset($_GET['search']) ? trim($_GET['search']) : '';
 $roomFilter = isset($_GET['room']) ? (int)$_GET['room'] : 0;
-$yearFilter = isset($_GET['year']) ? (int)$_GET['year'] : 0;
+$yearFilter = isset($_GET['year']) ? $_GET['year'] : '';
 
 // ============================================================
-// GET TOTAL RESIDENTS FOR PAGINATION (ALL USERS - PERMANENT)
+// GET TOTAL RESIDENTS FOR PAGINATION
 // ============================================================
 $countQuery = "
     SELECT COUNT(*) as total
@@ -58,8 +65,8 @@ if (!empty($searchFilter)) {
 if ($roomFilter > 0) {
     $countQuery .= " AND u.room_number = $roomFilter";
 }
-if ($yearFilter > 0) {
-    $countQuery .= " AND rp.year_level = $yearFilter";
+if (!empty($yearFilter)) {
+    $countQuery .= " AND rp.year_level = '$yearFilter'";
 }
 
 $countResult = $conn->query($countQuery);
@@ -75,7 +82,7 @@ if ($page < 1) $page = 1;
 $offset = ($page - 1) * $perPage;
 
 // ============================================================
-// GET RESIDENTS DATA - PERMANENT (ALL STATUS)
+// GET RESIDENTS DATA
 // ============================================================
 $residents = [];
 $query = "
@@ -103,8 +110,8 @@ if (!empty($searchFilter)) {
 if ($roomFilter > 0) {
     $query .= " AND u.room_number = $roomFilter";
 }
-if ($yearFilter > 0) {
-    $query .= " AND rp.year_level = $yearFilter";
+if (!empty($yearFilter)) {
+    $query .= " AND rp.year_level = '$yearFilter'";
 }
 
 $query .= " ORDER BY u.created_at DESC LIMIT $perPage OFFSET $offset";
@@ -117,7 +124,7 @@ if ($result) {
 }
 
 // ============================================================
-// GET STATS - PERMANENT COUNT
+// GET STATS
 // ============================================================
 $stats = [
     'total' => 0,
@@ -129,11 +136,7 @@ $stats = [
     'male' => 0,
     'female' => 0,
     'rooms_used' => 0,
-    'total_rooms' => 5,
-    'year1' => 0,
-    'year2' => 0,
-    'year3' => 0,
-    'year4' => 0
+    'total_rooms' => $totalRooms
 ];
 
 $result = $conn->query("SELECT COUNT(*) as count FROM users WHERE status != 'deleted'");
@@ -167,7 +170,7 @@ if ($result && $row = $result->fetch_assoc()) {
 }
 $stats['no_card'] = $stats['total'] - $stats['with_card'];
 
-// Gender stats - check if column exists
+// Gender stats
 $genderCheck = $conn->query("SHOW COLUMNS FROM resident_profiles LIKE 'gender'");
 if ($genderCheck && $genderCheck->num_rows > 0) {
     $result = $conn->query("
@@ -196,55 +199,9 @@ if ($result && $row = $result->fetch_assoc()) {
     $stats['rooms_used'] = (int)$row['count'];
 }
 
-// Year level stats - check if column exists
-$yearCheck = $conn->query("SHOW COLUMNS FROM resident_profiles LIKE 'year_level'");
-if ($yearCheck && $yearCheck->num_rows > 0) {
-    $result = $conn->query("
-        SELECT COUNT(*) as count 
-        FROM users u
-        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-        WHERE rp.year_level = 1 AND u.status != 'deleted'
-    ");
-    if ($result && $row = $result->fetch_assoc()) {
-        $stats['year1'] = (int)$row['count'];
-    }
-
-    $result = $conn->query("
-        SELECT COUNT(*) as count 
-        FROM users u
-        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-        WHERE rp.year_level = 2 AND u.status != 'deleted'
-    ");
-    if ($result && $row = $result->fetch_assoc()) {
-        $stats['year2'] = (int)$row['count'];
-    }
-
-    $result = $conn->query("
-        SELECT COUNT(*) as count 
-        FROM users u
-        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-        WHERE rp.year_level = 3 AND u.status != 'deleted'
-    ");
-    if ($result && $row = $result->fetch_assoc()) {
-        $stats['year3'] = (int)$row['count'];
-    }
-
-    $result = $conn->query("
-        SELECT COUNT(*) as count 
-        FROM users u
-        INNER JOIN resident_profiles rp ON u.user_id = rp.user_id
-        WHERE rp.year_level = 4 AND u.status != 'deleted'
-    ");
-    if ($result && $row = $result->fetch_assoc()) {
-        $stats['year4'] = (int)$row['count'];
-    }
-}
-
-// ============================================================
-// GET ROOM OCCUPANCY FOR FILTER
-// ============================================================
+// Room occupancy for filter
 $rooms = [];
-for ($i = 1; $i <= 5; $i++) {
+for ($i = 1; $i <= $totalRooms; $i++) {
     $stmt = $conn->prepare("SELECT COUNT(*) as count FROM users WHERE room_number = ? AND status != 'deleted'");
     $stmt->bind_param("i", $i);
     $stmt->execute();
@@ -254,7 +211,7 @@ for ($i = 1; $i <= 5; $i++) {
     $stmt->close();
 }
 
-// Get dark mode
+// Dark mode
 $darkModeClass = '';
 $darkModeFromDb = 'false';
 if (isset($_SESSION['admin_id'])) {
@@ -270,9 +227,7 @@ if (isset($_SESSION['admin_id'])) {
             }
         }
         $stmt->close();
-    } catch (Exception $e) {
-        // Silently fail
-    }
+    } catch (Exception $e) {}
 }
 ?>
 <!DOCTYPE html>
@@ -286,9 +241,6 @@ if (isset($_SESSION['admin_id'])) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
-        /* ============================================================
-           GLOBAL DARK THEME - SAME AS DASHBOARD
-           ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
@@ -299,22 +251,14 @@ if (isset($_SESSION['admin_id'])) {
             padding-top: 70px !important;
         }
         
-        .container-fluid {
-            padding-top: 10px !important;
-        }
-        
-        main {
-            padding-top: 10px !important;
-            margin-top: 0 !important;
-        }
+        .container-fluid { padding-top: 10px !important; }
+        main { padding-top: 10px !important; margin-top: 0 !important; }
         
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
             position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
+            top: 0 !important; left: 0 !important; right: 0 !important;
             z-index: 1050 !important;
             height: 70px !important;
         }
@@ -329,23 +273,12 @@ if (isset($_SESSION['admin_id'])) {
             padding-top: 80px !important;
             min-height: calc(100vh - 70px) !important;
         }
-        .sidebar .nav-link {
-            color: #9090a0 !important;
-        }
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.05) !important;
-            color: #e0e0e0 !important;
-        }
-        .sidebar .nav-link.active {
-            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
-            color: white !important;
-        }
+        .sidebar .nav-link { color: #9090a0 !important; }
+        .sidebar .nav-link:hover { background: rgba(255,255,255,0.05) !important; color: #e0e0e0 !important; }
+        .sidebar .nav-link.active { background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important; color: white !important; }
         .sidebar-footer { border-top-color: #1a2a4a !important; }
         .sidebar-footer .text-muted { color: #606070 !important; }
         
-        /* ============================================================
-           DARK STAT CARDS
-           ============================================================ */
         .stat-card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -371,9 +304,6 @@ if (isset($_SESSION['admin_id'])) {
         .stat-number.text-warning { color: #fbbf24 !important; }
         .stat-number.text-success { color: #34d399 !important; }
         
-        /* ============================================================
-           DARK CARDS
-           ============================================================ */
         .card {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -391,8 +321,58 @@ if (isset($_SESSION['admin_id'])) {
         .card-body { padding: 20px; background: #111827 !important; }
         
         /* ============================================================
-           DARK TABLE - PURE DARK
+           ✅ SHOW ENTRIES SELECTOR - TOP & BOTTOM
            ============================================================ */
+        .show-entries-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #1a2a4a;
+        }
+        .show-entries-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #808090;
+        }
+        .show-entries-left label {
+            margin: 0;
+            color: #808090 !important;
+            font-size: 13px;
+        }
+        .show-entries-left select {
+            background: #1a1a2e !important;
+            border: 1px solid #2a2a4a !important;
+            color: #e0e0e0 !important;
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .show-entries-left select:focus {
+            border-color: #2a5a9a !important;
+            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
+            outline: none;
+        }
+        .show-entries-left select:hover {
+            border-color: #2a5a9a !important;
+        }
+        .show-entries-left .info-text {
+            color: #6b7280 !important;
+            font-size: 12px;
+        }
+        .show-entries-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
         .resident-table { font-size: 13px; }
         .resident-table th {
             font-weight: 600;
@@ -411,55 +391,54 @@ if (isset($_SESSION['admin_id'])) {
             border-bottom: 1px solid #1a2a4a;
             background: transparent !important;
         }
-        .resident-table tr {
-            background: transparent !important;
-        }
-        .resident-table tr:hover td {
-            background: rgba(255,255,255,0.02) !important;
-        }
+        .resident-table tr { background: transparent !important; }
+        .resident-table tr:hover td { background: rgba(255,255,255,0.02) !important; }
         .resident-table .user-cell { display: flex; align-items: center; gap: 10px; }
         .resident-table .user-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 12px;
-            flex-shrink: 0;
-            overflow: hidden;
+            width: 32px; height: 32px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 700; font-size: 12px;
+            flex-shrink: 0; overflow: hidden;
             background: linear-gradient(135deg, #4a5a8a, #5a3a7a);
         }
-        .resident-table .user-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
+        .resident-table .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
         .resident-table .user-avatar .no-photo {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            height: 100%;
-            font-size: 12px;
-            font-weight: 700;
-            color: white;
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%; font-size: 12px;
+            font-weight: 700; color: white;
         }
         
-        /* ============================================================
-           DARK BADGES
-           ============================================================ */
+        .btn-view-profile {
+            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
+            color: white !important;
+            border: none !important;
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        .btn-view-profile:hover {
+            background: linear-gradient(135deg, #2a5a9a, #3a6aaa) !important;
+            color: white !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(26,58,106,0.4);
+        }
+        .btn-view-profile i { font-size: 10px; }
+        
+        .action-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
+        
         .badge-active { background: #065f46 !important; color: #34d399 !important; }
         .badge-inactive { background: #4a3a1a !important; color: #fbbf24 !important; }
         .badge-archived { background: #2a2a3a !important; color: #808090 !important; }
         .badge-gender { background: #1a2a4a !important; color: #93c5fd !important; }
         .badge-room { background: #1a3a6a !important; color: #93c5fd !important; }
         
-        /* ============================================================
-           DARK FILTERS
-           ============================================================ */
         .filter-section {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -495,9 +474,6 @@ if (isset($_SESSION['admin_id'])) {
             box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
         
-        /* ============================================================
-           PAGINATION
-           ============================================================ */
         .pagination-container {
             background: #111827 !important;
             border: 1px solid #1a2a4a !important;
@@ -516,18 +492,13 @@ if (isset($_SESSION['admin_id'])) {
             padding: 8px 16px;
             transition: all 0.3s ease;
         }
-        .pagination .page-link:hover {
-            background: #2a2a4a !important;
-            color: #e0e0e0 !important;
-        }
+        .pagination .page-link:hover { background: #2a2a4a !important; color: #e0e0e0 !important; }
         .pagination .page-item.active .page-link {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             color: white !important;
             box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
-        .pagination .page-item.disabled .page-link {
-            color: #4a4a5a !important;
-        }
+        .pagination .page-item.disabled .page-link { color: #4a4a5a !important; }
         .page-info { color: #808090 !important; font-size: 14px; }
         .page-info strong { color: #93c5fd !important; }
         
@@ -545,9 +516,6 @@ if (isset($_SESSION['admin_id'])) {
         }
         .per-page-selector label { color: #808090 !important; font-size: 13px; margin: 0; }
         
-        /* ============================================================
-           NO DELETE BANNER
-           ============================================================ */
         .no-delete-banner {
             background: rgba(16, 185, 129, 0.1) !important;
             border: 1px solid rgba(16, 185, 129, 0.2) !important;
@@ -559,14 +527,8 @@ if (isset($_SESSION['admin_id'])) {
             align-items: center;
             gap: 10px;
         }
-        .no-delete-banner i {
-            font-size: 18px;
-            color: #34d399;
-        }
+        .no-delete-banner i { font-size: 18px; color: #34d399; }
         
-        /* ============================================================
-           BORDER & MISC
-           ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .h1, .h2, h1, h2 { color: #e0e0e0 !important; }
         .text-muted { color: #808090 !important; }
@@ -577,8 +539,7 @@ if (isset($_SESSION['admin_id'])) {
         
         .live-indicator {
             display: inline-block;
-            width: 8px;
-            height: 8px;
+            width: 8px; height: 8px;
             border-radius: 50%;
             background: #34d399;
             animation: pulse 1.5s infinite;
@@ -590,23 +551,13 @@ if (isset($_SESSION['admin_id'])) {
             100% { opacity: 1; transform: scale(1); }
         }
         
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
         @media (max-width: 768px) {
-            body {
-                padding-top: 60px !important;
-            }
-            
-            .navbar {
-                height: 60px !important;
-            }
-            
+            body { padding-top: 60px !important; }
+            .navbar { height: 60px !important; }
             .sidebar {
                 padding-top: 70px !important;
                 position: fixed;
-                top: 60px;
-                bottom: 0;
+                top: 60px; bottom: 0;
                 left: -280px;
                 width: 280px;
                 transition: left 0.3s ease;
@@ -614,28 +565,16 @@ if (isset($_SESSION['admin_id'])) {
                 min-height: calc(100vh - 60px) !important;
             }
             .sidebar.show { left: 0; }
-            
             .stat-card { padding: 15px; }
             .stat-number { font-size: 20px; }
             .stat-icon { width: 40px; height: 40px; font-size: 16px; }
-            .pagination-container .row {
-                flex-direction: column;
-                gap: 10px;
-            }
-            .pagination-container .col-md-6 {
-                width: 100%;
-                text-align: center !important;
-            }
-            .pagination {
-                justify-content: center !important;
-            }
-            .resident-table {
-                font-size: 11px;
-            }
-            .resident-table .user-cell {
-                flex-direction: column;
-                align-items: flex-start;
-            }
+            .pagination-container .row { flex-direction: column; gap: 10px; }
+            .pagination-container .col-md-6 { width: 100%; text-align: center !important; }
+            .pagination { justify-content: center !important; }
+            .resident-table { font-size: 11px; }
+            .resident-table .user-cell { flex-direction: column; align-items: flex-start; }
+            .action-buttons { flex-direction: column; }
+            .show-entries-bar { flex-direction: column; align-items: flex-start; }
         }
     </style>
 </head>
@@ -649,9 +588,7 @@ if (isset($_SESSION['admin_id'])) {
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 
-                <!-- ============================================================
-                HEADER
-                ============================================================ -->
+                <!-- HEADER -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
                         <i class="fas fa-users me-2" style="color: #1a3a6a;"></i>
@@ -669,9 +606,7 @@ if (isset($_SESSION['admin_id'])) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                NO DELETE BANNER
-                ============================================================ -->
+                <!-- NO DELETE BANNER -->
                 <div class="no-delete-banner mb-3">
                     <i class="fas fa-database"></i>
                     <div>
@@ -681,9 +616,7 @@ if (isset($_SESSION['admin_id'])) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                STATS CARDS
-                ============================================================ -->
+                <!-- STATS CARDS -->
                 <div class="row g-3 mb-4">
                     <div class="col-6 col-sm-6 col-xl-2">
                         <div class="stat-card">
@@ -741,9 +674,7 @@ if (isset($_SESSION['admin_id'])) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                FILTERS
-                ============================================================ -->
+                <!-- FILTERS -->
                 <div class="filter-section">
                     <form method="GET" action="" class="row g-2 align-items-end">
                         <div class="col-md-2">
@@ -759,7 +690,7 @@ if (isset($_SESSION['admin_id'])) {
                             <label class="form-label">Room</label>
                             <select class="form-select" name="room">
                                 <option value="0">All Rooms</option>
-                                <?php for ($i = 1; $i <= 5; $i++): ?>
+                                <?php for ($i = 1; $i <= $totalRooms; $i++): ?>
                                     <option value="<?php echo $i; ?>" <?php echo $roomFilter == $i ? 'selected' : ''; ?>>
                                         Room <?php echo $i; ?> (<?php echo $rooms[$i] ?? 0; ?>)
                                     </option>
@@ -769,11 +700,12 @@ if (isset($_SESSION['admin_id'])) {
                         <div class="col-md-2">
                             <label class="form-label">Year Level</label>
                             <select class="form-select" name="year">
-                                <option value="0">All Years</option>
-                                <option value="1" <?php echo $yearFilter == 1 ? 'selected' : ''; ?>>1st Year</option>
-                                <option value="2" <?php echo $yearFilter == 2 ? 'selected' : ''; ?>>2nd Year</option>
-                                <option value="3" <?php echo $yearFilter == 3 ? 'selected' : ''; ?>>3rd Year</option>
-                                <option value="4" <?php echo $yearFilter == 4 ? 'selected' : ''; ?>>4th Year</option>
+                                <option value="">All Years</option>
+                                <option value="1st Year" <?php echo $yearFilter == '1st Year' ? 'selected' : ''; ?>>1st Year</option>
+                                <option value="2nd Year" <?php echo $yearFilter == '2nd Year' ? 'selected' : ''; ?>>2nd Year</option>
+                                <option value="3rd Year" <?php echo $yearFilter == '3rd Year' ? 'selected' : ''; ?>>3rd Year</option>
+                                <option value="4th Year" <?php echo $yearFilter == '4th Year' ? 'selected' : ''; ?>>4th Year</option>
+                                <option value="5th Year" <?php echo $yearFilter == '5th Year' ? 'selected' : ''; ?>>5th Year</option>
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -790,9 +722,7 @@ if (isset($_SESSION['admin_id'])) {
                     </form>
                 </div>
 
-                <!-- ============================================================
-                RESIDENTS LIST - PERMANENT (NO DELETE)
-                ============================================================ -->
+                <!-- RESIDENTS LIST -->
                 <div class="card">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -817,6 +747,51 @@ if (isset($_SESSION['admin_id'])) {
                         </div>
                     </div>
                     <div class="card-body">
+                        
+                        <!-- ============================================================
+                             ✅ SHOW ENTRIES - TOP
+                             ============================================================ -->
+                        <div class="show-entries-bar">
+                            <div class="show-entries-left">
+                                <label for="perPageTop">Show</label>
+                                <select id="perPageTop" onchange="changePerPage(this.value)">
+                                    <?php foreach ($perPageOptions as $option): ?>
+                                        <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
+                                            <?php echo $option; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <label>entries</label>
+                                <span class="info-text ms-2">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalResidents); ?> of <?php echo $totalResidents; ?> residents
+                                </span>
+                            </div>
+                            <div class="show-entries-right">
+                                <?php if ($totalPages > 1): ?>
+                                    <nav aria-label="Top page navigation">
+                                        <ul class="pagination pagination-sm mb-0">
+                                            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                                <a class="page-link" href="?page=<?php echo max(1, $page - 1); ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo !empty($yearFilter) ? '&year=' . urlencode($yearFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <i class="fas fa-angle-left"></i>
+                                                </a>
+                                            </li>
+                                            <li class="page-item disabled">
+                                                <span class="page-link">
+                                                    <?php echo $page; ?> / <?php echo $totalPages; ?>
+                                                </span>
+                                            </li>
+                                            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                                <a class="page-link" href="?page=<?php echo min($totalPages, $page + 1); ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo !empty($yearFilter) ? '&year=' . urlencode($yearFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <i class="fas fa-angle-right"></i>
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </nav>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        
                         <div class="table-responsive">
                             <table class="table table-hover resident-table">
                                 <thead>
@@ -830,12 +805,13 @@ if (isset($_SESSION['admin_id'])) {
                                         <th>Gender</th>
                                         <th>Card</th>
                                         <th>Status</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($residents)): ?>
                                         <tr>
-                                            <td colspan="9" class="text-center text-muted py-4">
+                                            <td colspan="10" class="text-center text-muted py-4">
                                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                                 No residents found
                                             </td>
@@ -852,8 +828,8 @@ if (isset($_SESSION['admin_id'])) {
                                             $status = $resident['status'] ?? 'unknown';
                                             $cardUid = $resident['card_uid'] ?? null;
                                             $hasCard = !empty($cardUid);
+                                            $userId = $resident['user_id'];
                                             
-                                            // Get profile photo
                                             $photoPath = $resident['profile_photo'] ?? null;
                                             $hasPhoto = false;
                                             $photoUrl = '';
@@ -911,11 +887,8 @@ if (isset($_SESSION['admin_id'])) {
                                                 </td>
                                                 <td><?php echo htmlspecialchars($course); ?></td>
                                                 <td>
-                                                    <?php if ($year != 'N/A' && $year > 0): ?>
-                                                        <?php 
-                                                            $yearLabels = ['', '1st', '2nd', '3rd', '4th'];
-                                                            echo $yearLabels[$year] ?? $year . 'th';
-                                                        ?>
+                                                    <?php if ($year != 'N/A' && !empty($year)): ?>
+                                                        <span class="badge badge-gender"><?php echo htmlspecialchars($year); ?></span>
                                                     <?php else: ?>
                                                         <span class="text-muted">N/A</span>
                                                     <?php endif; ?>
@@ -949,6 +922,16 @@ if (isset($_SESSION['admin_id'])) {
                                                         <?php echo ucfirst($status); ?>
                                                     </span>
                                                 </td>
+                                                <td>
+                                                    <div class="action-buttons">
+                                                        <a href="view-resident.php?id=<?php echo $userId; ?>" 
+                                                           class="btn-view-profile"
+                                                           title="View Full Profile">
+                                                            <i class="fas fa-eye"></i>
+                                                            View Profile
+                                                        </a>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
@@ -957,9 +940,9 @@ if (isset($_SESSION['admin_id'])) {
                         </div>
                         
                         <!-- ============================================================
-                        PAGINATION WITH SHOW ENTRIES
-                        ============================================================ -->
-                        <?php if ($totalPages > 1): ?>
+                             ✅ SHOW ENTRIES - BOTTOM (kasama ng pagination)
+                             ============================================================ -->
+                        <?php if ($totalResidents > 0): ?>
                         <div class="pagination-container">
                             <div class="row align-items-center">
                                 <div class="col-md-6">
@@ -982,15 +965,17 @@ if (isset($_SESSION['admin_id'])) {
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
+                                        
+                                        <?php if ($totalPages > 1): ?>
                                         <nav aria-label="Page navigation">
                                             <ul class="pagination justify-content-end mb-0">
                                                 <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=1<?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo $yearFilter > 0 ? '&year=' . $yearFilter : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <a class="page-link" href="?page=1<?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo !empty($yearFilter) ? '&year=' . urlencode($yearFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                         <i class="fas fa-angle-double-left"></i>
                                                     </a>
                                                 </li>
                                                 <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo $yearFilter > 0 ? '&year=' . $yearFilter : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo !empty($yearFilter) ? '&year=' . urlencode($yearFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                         <i class="fas fa-angle-left"></i>
                                                     </a>
                                                 </li>
@@ -1003,7 +988,7 @@ if (isset($_SESSION['admin_id'])) {
                                                 for ($i = $startPage; $i <= $endPage; $i++):
                                                 ?>
                                                     <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                        <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo $yearFilter > 0 ? '&year=' . $yearFilter : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                        <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo !empty($yearFilter) ? '&year=' . urlencode($yearFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                             <?php echo $i; ?>
                                                         </a>
                                                     </li>
@@ -1012,17 +997,18 @@ if (isset($_SESSION['admin_id'])) {
                                                     <li class="page-item"><span class="page-link">...</span></li>
                                                 <?php endif; ?>
                                                 <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo $yearFilter > 0 ? '&year=' . $yearFilter : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo !empty($yearFilter) ? '&year=' . urlencode($yearFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                         <i class="fas fa-angle-right"></i>
                                                     </a>
                                                 </li>
                                                 <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo $yearFilter > 0 ? '&year=' . $yearFilter : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?><?php echo $roomFilter > 0 ? '&room=' . $roomFilter : ''; ?><?php echo !empty($yearFilter) ? '&year=' . urlencode($yearFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
                                                         <i class="fas fa-angle-double-right"></i>
                                                     </a>
                                                 </li>
                                             </ul>
                                         </nav>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -1031,9 +1017,7 @@ if (isset($_SESSION['admin_id'])) {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                SUMMARY
-                ============================================================ -->
+                <!-- SUMMARY -->
                 <div class="text-center text-muted small mt-2">
                     <i class="fas fa-database me-1"></i>
                     Total: <?php echo $stats['total']; ?> residents recorded
@@ -1061,9 +1045,6 @@ if (isset($_SESSION['admin_id'])) {
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // CHANGE PER PAGE
-        // ============================================================
         function changePerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
@@ -1071,28 +1052,18 @@ if (isset($_SESSION['admin_id'])) {
             window.location.href = '?' + urlParams.toString();
         }
         
-        // ============================================================
-        // UPDATE TIME
-        // ============================================================
         function updateLastUpdateTime() {
             const now = new Date();
             const timeString = now.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: true 
+                hour: '2-digit', minute: '2-digit', hour12: true 
             });
             const updateElement = document.getElementById('lastUpdate');
-            if (updateElement) {
-                updateElement.textContent = 'Updated: ' + timeString;
-            }
+            if (updateElement) updateElement.textContent = 'Updated: ' + timeString;
         }
 
         setInterval(updateLastUpdateTime, 10000);
         document.addEventListener('DOMContentLoaded', updateLastUpdateTime);
         
-        // ============================================================
-        // SIDEBAR TOGGLE
-        // ============================================================
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
