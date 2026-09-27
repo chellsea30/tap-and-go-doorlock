@@ -2,7 +2,8 @@
 /**
  * Tap-and-Go Doorlock - View Resident
  * FULL DARK MODE - With Fixed Action Bar
- * ✅ SHOWS ALL FILLED DATA from self-registration form
+ * ✅ FIXED: Safety check para sa undefined $resident
+ * ✅ FIXED: Fallback kung walang admission_records table
  */
 
 session_start();
@@ -25,51 +26,87 @@ if ($user_id <= 0) {
 }
 
 $error = '';
+$resident = null;  // ✅ Initialize sa null para safe
 
 try {
     $conn = getDBConnection();
     
-    $query = "
-        SELECT 
-            u.*,
-            u.profile_photo,
-            rp.*,
-            c.card_uid,
-            c.status as card_status,
-            c.issued_date as card_issued_date,
-            c.expiry_date as card_expiry_date,
-            ar.status as admission_status,
-            ar.semester_sy,
-            ar.guardian_name,
-            ar.guardian_contact,
-            ar.room_assignment,
-            ar.student_signature,
-            ar.strand_track,
-            ar.course_taken,
-            ar.former_bh,
-            ar.age as admission_age,
-            ar.birth_date as admission_birth_date,
-            ar.home_address as admission_home_address,
-            ar.school_last as admission_school_last,
-            ar.school_address as admission_school_address,
-            ar.year_level_old,
-            ar.former_address,
-            ar.plan_transfer as admission_plan_transfer,
-            ar.plan_transfer_yes as admission_plan_transfer_yes,
-            ar.plan_transfer_no as admission_plan_transfer_no
-        FROM users u
-        LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-        LEFT JOIN rfid_cards c ON u.user_id = c.user_id AND c.status = 'active'
-        LEFT JOIN admission_records ar ON u.user_id = ar.user_id
-        WHERE u.user_id = ? AND u.status != 'deleted'
-    ";
+    // ============================================================
+    // ✅ CHECK IF admission_records TABLE EXISTS
+    // ============================================================
+    $hasAdmissionTable = false;
+    $tableCheck = $conn->query("SHOW TABLES LIKE 'admission_records'");
+    if ($tableCheck && $tableCheck->num_rows > 0) {
+        $hasAdmissionTable = true;
+    }
+    
+    // ============================================================
+    // BUILD QUERY BASED ON AVAILABLE TABLES
+    // ============================================================
+    if ($hasAdmissionTable) {
+        $query = "
+            SELECT 
+                u.*,
+                u.profile_photo,
+                rp.*,
+                c.card_uid,
+                c.status as card_status,
+                c.issued_date as card_issued_date,
+                c.expiry_date as card_expiry_date,
+                ar.status as admission_status,
+                ar.semester_sy,
+                ar.guardian_name,
+                ar.guardian_contact,
+                ar.room_assignment,
+                ar.student_signature,
+                ar.strand_track,
+                ar.course_taken,
+                ar.former_bh
+            FROM users u
+            LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+            LEFT JOIN rfid_cards c ON u.user_id = c.user_id AND c.status = 'active'
+            LEFT JOIN admission_records ar ON u.user_id = ar.user_id
+            WHERE u.user_id = ? AND u.status != 'deleted'
+        ";
+    } else {
+        // ✅ Fallback: Walang admission_records table
+        $query = "
+            SELECT 
+                u.*,
+                u.profile_photo,
+                rp.*,
+                c.card_uid,
+                c.status as card_status,
+                c.issued_date as card_issued_date,
+                c.expiry_date as card_expiry_date,
+                NULL as admission_status,
+                NULL as semester_sy,
+                NULL as guardian_name,
+                NULL as guardian_contact,
+                NULL as room_assignment,
+                NULL as student_signature,
+                NULL as strand_track,
+                NULL as course_taken,
+                NULL as former_bh
+            FROM users u
+            LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+            LEFT JOIN rfid_cards c ON u.user_id = c.user_id AND c.status = 'active'
+            WHERE u.user_id = ? AND u.status != 'deleted'
+        ";
+    }
     
     $stmt = $conn->prepare($query);
+    
+    if (!$stmt) {
+        throw new Exception("Query preparation failed: " . $conn->error);
+    }
+    
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
     
     if ($result->num_rows == 0) {
+        $stmt->close();
         header('Location: residents.php');
         exit();
     }
@@ -79,6 +116,14 @@ try {
     
 } catch (Exception $e) {
     $error = "Error loading resident: " . $e->getMessage();
+}
+
+// ============================================================
+// ✅ SAFETY CHECK: Kung walang resident, mag-redirect
+// ============================================================
+if (!$resident) {
+    header('Location: residents.php?error=not_found');
+    exit();
 }
 
 // ============================================================
@@ -141,7 +186,6 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
             --bg-primary: #0a0e17;
             --bg-card: #111927;
             --bg-card-hover: #1a2335;
-            --bg-header: linear-gradient(135deg, #0a1628, #0d1f3c);
             --text-primary: #e8edf5;
             --text-secondary: #8899bb;
             --text-muted: #4a5a7a;
@@ -149,7 +193,6 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
             --gold: #ffd700;
             --gold-dark: #b8960f;
             --shadow: 0 4px 24px rgba(0,0,0,0.4);
-            --shadow-hover: 0 6px 32px rgba(0,0,0,0.6);
             --success-bg: #0d3b2e;
             --success-text: #6ee7b7;
             --warning-bg: #3d2e0a;
@@ -253,9 +296,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
             box-shadow: var(--shadow);
             border: 1px solid var(--border-color);
             margin-bottom: 25px;
-            transition: all 0.3s ease;
         }
-        .profile-header:hover { box-shadow: var(--shadow-hover); }
 
         .profile-avatar {
             width: 120px; height: 120px; border-radius: 50%;
@@ -277,9 +318,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
             padding: 15px 20px;
             box-shadow: none; margin-bottom: 10px;
             border: 1px solid var(--border-color);
-            transition: all 0.3s ease;
         }
-        .info-card:hover { border-color: var(--gold-dark); }
         .info-card .label {
             font-size: 11px; color: var(--text-secondary) !important;
             font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;
@@ -295,9 +334,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
             border: 1px solid var(--border-color) !important;
             border-radius: 16px !important;
             box-shadow: var(--shadow);
-            transition: all 0.3s ease;
         }
-        .card:hover { box-shadow: var(--shadow-hover); }
         .card-body {
             background: var(--bg-card) !important;
             color: var(--text-primary) !important;
@@ -310,7 +347,6 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
             padding-bottom: 10px; margin-bottom: 20px;
         }
 
-        /* ✅ DATA ROW STYLES */
         .data-row {
             display: flex;
             padding: 8px 0;
@@ -345,31 +381,11 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
             font-size: 11px; font-weight: 600;
             display: inline-block; letter-spacing: 0.3px;
         }
-        .badge-active {
-            background: var(--success-bg) !important;
-            color: var(--success-text) !important;
-            border: 1px solid rgba(110, 231, 183, 0.2);
-        }
-        .badge-pending {
-            background: var(--warning-bg) !important;
-            color: var(--warning-text) !important;
-            border: 1px solid rgba(252, 211, 77, 0.2);
-        }
-        .badge-inactive {
-            background: var(--secondary-bg) !important;
-            color: var(--secondary-text) !important;
-            border: 1px solid rgba(136, 153, 187, 0.2);
-        }
-        .badge-denied {
-            background: var(--danger-bg) !important;
-            color: var(--danger-text) !important;
-            border: 1px solid rgba(252, 165, 165, 0.2);
-        }
-        .badge-completed {
-            background: var(--info-bg) !important;
-            color: var(--info-text) !important;
-            border: 1px solid rgba(125, 211, 252, 0.2);
-        }
+        .badge-active { background: var(--success-bg) !important; color: var(--success-text) !important; border: 1px solid rgba(110, 231, 183, 0.2); }
+        .badge-pending { background: var(--warning-bg) !important; color: var(--warning-text) !important; border: 1px solid rgba(252, 211, 77, 0.2); }
+        .badge-inactive { background: var(--secondary-bg) !important; color: var(--secondary-text) !important; border: 1px solid rgba(136, 153, 187, 0.2); }
+        .badge-denied { background: var(--danger-bg) !important; color: var(--danger-text) !important; border: 1px solid rgba(252, 165, 165, 0.2); }
+        .badge-completed { background: var(--info-bg) !important; color: var(--info-text) !important; border: 1px solid rgba(125, 211, 252, 0.2); }
 
         .alert-danger {
             background: var(--danger-bg) !important;
@@ -442,11 +458,6 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
             background: var(--bg-card-hover) !important;
         }
 
-        @media (min-width: 768px) {
-            .col-md-9 { padding-left: 20px !important; padding-right: 20px !important; }
-        }
-
-        /* ✅ PHOTO IN MODAL */
         .photo-full {
             width: 100%;
             max-width: 300px;
@@ -468,16 +479,6 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                 border: 1px solid #1a2a44 !important;
                 margin: 0 !important;
             }
-            .card { background: #0a0e17 !important; border: 1px solid #1a2a44 !important; }
-            .card-body { background: #0a0e17 !important; }
-            .profile-avatar { border: 2px solid var(--gold-dark) !important; }
-            .info-card { background: #111927 !important; border: 1px solid #1a2a44 !important; }
-            .badge-status {
-                border: 1px solid var(--gold-dark) !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-            .section-title { color: var(--gold) !important; border-bottom-color: var(--gold-dark) !important; }
         }
     </style>
 </head>
@@ -609,9 +610,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     PERSONAL INFORMATION
-                     ============================================================ -->
+                <!-- PERSONAL INFORMATION -->
                 <div class="row g-3">
                     <div class="col-lg-6">
                         <div class="card">
@@ -684,7 +683,6 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                         </div>
                     </div>
 
-                    <!-- CONTACT INFORMATION -->
                     <div class="col-lg-6">
                         <div class="card">
                             <div class="card-body">
@@ -727,7 +725,6 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                             </div>
                         </div>
 
-                        <!-- ACADEMIC INFORMATION -->
                         <div class="card mt-3">
                             <div class="card-body">
                                 <h5 class="section-title"><i class="fas fa-graduation-cap me-2"></i>Academic Information</h5>
@@ -769,9 +766,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     FAMILY INFORMATION
-                     ============================================================ -->
+                <!-- FAMILY INFORMATION -->
                 <div class="card mt-3">
                     <div class="card-body">
                         <h5 class="section-title"><i class="fas fa-users me-2"></i>Family Information</h5>
@@ -817,9 +812,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     EMERGENCY CONTACT
-                     ============================================================ -->
+                <!-- EMERGENCY CONTACT -->
                 <div class="card mt-3">
                     <div class="card-body">
                         <h5 class="section-title"><i class="fas fa-phone-alt me-2"></i>Emergency Contact</h5>
@@ -865,9 +858,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     BOARDING HISTORY
-                     ============================================================ -->
+                <!-- BOARDING HISTORY -->
                 <div class="card mt-3">
                     <div class="card-body">
                         <h5 class="section-title"><i class="fas fa-home me-2"></i>Boarding History</h5>
@@ -890,7 +881,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <?php if (!empty($resident['plan_transfer_yes']) || $resident['plan_transfer'] == 'Yes'): ?>
+                        <?php if (!empty($resident['plan_transfer_yes']) || (isset($resident['plan_transfer']) && $resident['plan_transfer'] == 'Yes')): ?>
                         <div class="data-row">
                             <div class="data-label">Reason (If Yes)</div>
                             <div class="data-value <?php echo empty($resident['plan_transfer_yes']) ? 'empty' : ''; ?>">
@@ -898,7 +889,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                             </div>
                         </div>
                         <?php endif; ?>
-                        <?php if (!empty($resident['plan_transfer_no']) || $resident['plan_transfer'] == 'No'): ?>
+                        <?php if (!empty($resident['plan_transfer_no']) || (isset($resident['plan_transfer']) && $resident['plan_transfer'] == 'No')): ?>
                         <div class="data-row">
                             <div class="data-label">Reason (If No)</div>
                             <div class="data-value <?php echo empty($resident['plan_transfer_no']) ? 'empty' : ''; ?>">
@@ -909,9 +900,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     ADMISSION INFORMATION
-                     ============================================================ -->
+                <!-- ADMISSION INFORMATION -->
                 <?php if (!empty($resident['semester_sy']) || !empty($resident['guardian_name']) || !empty($resident['student_signature'])): ?>
                 <div class="card mt-3">
                     <div class="card-body">
@@ -984,9 +973,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                 </div>
                 <?php endif; ?>
 
-                <!-- ============================================================
-                     RFID CARD INFORMATION
-                     ============================================================ -->
+                <!-- RFID CARD INFORMATION -->
                 <div class="card mt-3 mb-4">
                     <div class="card-body">
                         <h5 class="section-title"><i class="fas fa-id-card me-2"></i>RFID Card Information</h5>
@@ -1039,9 +1026,7 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                     </div>
                 </div>
 
-                <!-- ============================================================
-                     SYSTEM INFORMATION
-                     ============================================================ -->
+                <!-- SYSTEM INFORMATION -->
                 <div class="card mt-3 mb-4">
                     <div class="card-body">
                         <h5 class="section-title"><i class="fas fa-info-circle me-2"></i>System Information</h5>
@@ -1064,12 +1049,12 @@ function formatDateTime($date, $format = 'F d, Y h:i A') {
                             <div class="col-md-6">
                                 <div class="data-row">
                                     <div class="data-label">User ID</div>
-                                    <div class="data-value">#<?php echo $resident['user_id']; ?></div>
+                                    <div class="data-value">#<?php echo $resident['user_id'] ?? 'N/A'; ?></div>
                                 </div>
                                 <div class="data-row">
                                     <div class="data-label">Account Status</div>
                                     <div class="data-value">
-                                        <span class="badge-status badge-<?php echo getStatusBadge($resident['status']); ?>">
+                                        <span class="badge-status badge-<?php echo getStatusBadge($resident['status'] ?? 'pending'); ?>">
                                             <?php echo ucfirst(displayVal($resident['status'])); ?>
                                         </span>
                                     </div>
