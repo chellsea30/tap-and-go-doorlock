@@ -4,9 +4,8 @@
  * WITH APPROVAL SYSTEM (Pending/Approved/Rejected)
  * WITH PROFILE PHOTO UPLOAD AND DISPLAY
  * PURE DARK MODE - No white backgrounds
- * WITH SHOW ENTRIES PAGINATION
+ * ✅ FIXED: Sidebar not covered by main content
  * Location: frontend/pages/residents.php
- * ✅ FIXED: Sidebar layout - hindi na natatakpan
  */
 
 session_start();
@@ -20,8 +19,10 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
 }
 
 // ============================================================
-// HANDLE DELETE REQUEST
+// HANDLE REDIRECTS (BEFORE HEADER)
 // ============================================================
+
+// Handle Delete Request
 if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
     $delete_id = (int)$_GET['delete'];
     
@@ -35,14 +36,10 @@ if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
             exit();
         }
         $stmt->close();
-    } catch (Exception $e) {
-        // Log error
-    }
+    } catch (Exception $e) {}
 }
 
-// ============================================================
-// HANDLE PROFILE PHOTO UPLOAD
-// ============================================================
+// Handle Photo Upload
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && isset($_POST['user_id'])) {
     $user_id = (int)$_POST['user_id'];
     
@@ -78,9 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo']) && is
     }
 }
 
-// ============================================================
-// HANDLE PHOTO REMOVE
-// ============================================================
+// Handle Photo Remove
 if (isset($_GET['remove_photo']) && is_numeric($_GET['remove_photo'])) {
     $user_id = (int)$_GET['remove_photo'];
     
@@ -113,11 +108,12 @@ if (isset($_GET['remove_photo']) && is_numeric($_GET['remove_photo'])) {
         
         header('Location: residents.php?msg=photo_removed');
         exit();
-    } catch (Exception $e) {
-        // Silently fail
-    }
+    } catch (Exception $e) {}
 }
 
+// ============================================================
+// NOW INCLUDE HEADER
+// ============================================================
 include '../includes/header.php'; 
 
 // ============================================================
@@ -138,7 +134,7 @@ if (!in_array($perPage, $perPageOptions)) {
     $perPage = 10;
 }
 
-// Get dark mode
+// Dark mode
 $darkModeClass = '';
 $darkModeFromDb = 'false';
 if (isset($_SESSION['admin_id'])) {
@@ -155,18 +151,15 @@ if (isset($_SESSION['admin_id'])) {
             }
         }
         $stmt->close();
-    } catch (Exception $e) {
-        // Silently fail
-    }
+    } catch (Exception $e) {}
 }
 
 // ============================================================
-// GET RESIDENTS LIST WITH APPROVAL STATUS
+// GET RESIDENTS LIST
 // ============================================================
 try {
     $conn = getDBConnection();
     
-    // Build count query
     $countQuery = "SELECT COUNT(*) as total FROM users WHERE status != 'deleted'";
     $countParams = [];
     $types = "";
@@ -202,7 +195,6 @@ try {
     if ($page < 1) $page = 1;
     $offset = ($page - 1) * $perPage;
     
-    // Get residents with approval status
     $query = "
         SELECT 
             u.*,
@@ -215,12 +207,6 @@ try {
             rp.gender,
             rp.birth_date,
             rp.age,
-            rp.religion,
-            rp.dialect,
-            rp.emergency_name,
-            rp.emergency_relationship,
-            rp.emergency_address,
-            rp.date_registered,
             c.card_uid,
             c.status as card_status
         FROM users u
@@ -271,7 +257,6 @@ try {
     }
     $stmt->close();
     
-    // Get counts for tabs
     $pendingCount = 0;
     $approvedCount = 0;
     $rejectedCount = 0;
@@ -293,33 +278,18 @@ try {
     $error = 'Error loading residents: ' . $e->getMessage();
 }
 
-// Handle success messages
+// Success messages
 if (isset($_GET['msg'])) {
     switch ($_GET['msg']) {
-        case 'deleted':
-            $success = 'Resident deleted successfully!';
-            break;
-        case 'approved':
-            $success = 'Student registration APPROVED successfully!';
-            break;
-        case 'rejected':
-            $success = 'Student registration REJECTED.';
-            break;
-        case 'photo_uploaded':
-            $success = 'Profile photo uploaded successfully!';
-            break;
-        case 'photo_removed':
-            $success = 'Profile photo removed successfully!';
-            break;
-        case 'error':
-            $error = 'An error occurred. Please try again.';
-            break;
+        case 'deleted': $success = 'Resident deleted successfully!'; break;
+        case 'approved': $success = 'Student registration APPROVED successfully!'; break;
+        case 'rejected': $success = 'Student registration REJECTED.'; break;
+        case 'photo_uploaded': $success = 'Profile photo uploaded successfully!'; break;
+        case 'photo_removed': $success = 'Profile photo removed successfully!'; break;
+        case 'error': $error = 'An error occurred. Please try again.'; break;
     }
 }
 
-// ============================================================
-// HELPER FUNCTIONS
-// ============================================================
 function getProfilePhotoPath($photoPath) {
     if (empty($photoPath)) return null;
     
@@ -359,9 +329,10 @@ function getInitials($name) {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
         /* ============================================================
-           GLOBAL DARK THEME
+           RESET & GLOBAL
            ============================================================ */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         html, body {
             height: 100%;
             font-family: 'Inter', sans-serif;
@@ -370,7 +341,7 @@ function getInitials($name) {
         }
         
         /* ============================================================
-           FIXED NAVBAR
+           FIXED NAVBAR - HEIGHT 56px
            ============================================================ */
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
@@ -388,7 +359,7 @@ function getInitials($name) {
         .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
         
         /* ============================================================
-           ✅ SIDEBAR - FIXED (HINDI NA TAKPAN)
+           ✅ FIXED SIDEBAR - Z-INDEX HIGHER THAN MAIN
            ============================================================ */
         .sidebar {
             position: fixed !important;
@@ -421,7 +392,7 @@ function getInitials($name) {
             width: 18px;
             text-align: center;
         }
-        .sidebar-footer {
+        .sidebar-footer { 
             border-top-color: #1a2a4a !important;
             padding: 12px 16px !important;
             margin-top: 10px !important;
@@ -429,37 +400,20 @@ function getInitials($name) {
         .sidebar-footer .text-muted { color: #606070 !important; font-size: 11px !important; }
         
         /* ============================================================
-           ✅ PAGE WRAPPER - TAMANG LAYOUT
-           ============================================================ */
-        .page-wrapper {
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            width: 100%;
-        }
-        
-        .content-wrapper {
-            display: flex;
-            flex: 1;
-            width: 100%;
-        }
-        
-        /* ============================================================
-           ✅ MAIN CONTENT - MAY LEFT MARGIN PARA SA SIDEBAR
+           ✅ FIXED MAIN CONTENT - LEFT MARGIN FOR SIDEBAR
            ============================================================ */
         .main-content {
             margin-left: 220px !important;
             margin-top: 56px !important;
             padding: 15px 25px !important;
-            flex: 1;
-            width: calc(100% - 220px) !important;
-            min-height: calc(100vh - 56px - 50px) !important;
+            min-height: calc(100vh - 56px) !important;
             background: #0a0e1a !important;
-            overflow-x: hidden;
+            position: relative;
+            z-index: 1;
         }
         
         /* ============================================================
-           ✅ FOOTER - MAY LEFT MARGIN DIN
+           FOOTER
            ============================================================ */
         .footer {
             margin-left: 220px !important;
@@ -469,8 +423,6 @@ function getInitials($name) {
             color: #606070 !important;
             font-size: 12px !important;
             text-align: center !important;
-            flex-shrink: 0;
-            width: calc(100% - 220px) !important;
         }
         
         /* ============================================================
@@ -546,7 +498,7 @@ function getInitials($name) {
         }
         
         /* ============================================================
-           DARK CARDS
+           CARDS
            ============================================================ */
         .card {
             background: #111827 !important;
@@ -559,7 +511,7 @@ function getInitials($name) {
         .card h5 { color: #e0e0e0 !important; }
         
         /* ============================================================
-           RESIDENT CARD - DARK
+           RESIDENT CARD
            ============================================================ */
         .resident-card {
             background: #111827 !important;
@@ -661,7 +613,7 @@ function getInitials($name) {
         .resident-info .text-muted { color: #808090 !important; font-size: 11px; }
         
         /* ============================================================
-           BUTTON STYLES - DARK
+           BUTTONS
            ============================================================ */
         .btn-action {
             border-radius: 8px;
@@ -683,7 +635,6 @@ function getInitials($name) {
         .btn-approve:hover {
             background: #10b981 !important;
             color: #0a0e1a !important;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
         }
         
         .btn-reject {
@@ -695,56 +646,27 @@ function getInitials($name) {
         .btn-reject:hover {
             background: #ef4444 !important;
             color: #0a0e1a !important;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
         }
         
-        .btn-admission { 
-            background: #1a2a4a !important; 
-            color: #93c5fd !important; 
-            border-color: #1a3a6a !important; 
-        }
+        .btn-admission { background: #1a2a4a !important; color: #93c5fd !important; border-color: #1a3a6a !important; }
         .btn-admission:hover { background: #1a3a6a !important; color: #bfdbfe !important; }
         
-        .btn-profile { 
-            background: #1a2a3a !important; 
-            color: #6ee7b7 !important; 
-            border-color: #065f46 !important; 
-        }
+        .btn-profile { background: #1a2a3a !important; color: #6ee7b7 !important; border-color: #065f46 !important; }
         .btn-profile:hover { background: #065f46 !important; color: #a7f3d0 !important; }
         
-        .btn-edit { 
-            background: #2a1a0a !important; 
-            color: #fcd34d !important; 
-            border-color: #92400e !important; 
-        }
+        .btn-edit { background: #2a1a0a !important; color: #fcd34d !important; border-color: #92400e !important; }
         .btn-edit:hover { background: #92400e !important; color: #fde68a !important; }
         
-        .btn-view { 
-            background: #1a1a3a !important; 
-            color: #a5b4fc !important; 
-            border-color: #3730a3 !important; 
-        }
+        .btn-view { background: #1a1a3a !important; color: #a5b4fc !important; border-color: #3730a3 !important; }
         .btn-view:hover { background: #3730a3 !important; color: #c7d2fe !important; }
         
-        .btn-delete { 
-            background: #2a1a1a !important; 
-            color: #f87171 !important; 
-            border-color: #991b1b !important; 
-        }
+        .btn-delete { background: #2a1a1a !important; color: #f87171 !important; border-color: #991b1b !important; }
         .btn-delete:hover { background: #991b1b !important; color: #fca5a5 !important; }
         
-        .btn-upload-photo { 
-            background: #5b3a9a !important; 
-            color: #e0d0ff !important; 
-            border-color: #7c3aed !important; 
-        }
+        .btn-upload-photo { background: #5b3a9a !important; color: #e0d0ff !important; border-color: #7c3aed !important; }
         .btn-upload-photo:hover { background: #7c3aed !important; color: white !important; }
         
-        .btn-remove-photo { 
-            background: #7a3a0a !important; 
-            color: #fbbf24 !important; 
-            border-color: #d97706 !important; 
-        }
+        .btn-remove-photo { background: #7a3a0a !important; color: #fbbf24 !important; border-color: #d97706 !important; }
         .btn-remove-photo:hover { background: #d97706 !important; color: white !important; }
         
         .btn-primary {
@@ -772,7 +694,7 @@ function getInitials($name) {
         }
         
         /* ============================================================
-           BADGES - DARK
+           BADGES
            ============================================================ */
         .badge-status { padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 500; }
         .badge-active { background: #065f46 !important; color: #6ee7b7 !important; }
@@ -790,7 +712,7 @@ function getInitials($name) {
         .badge-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
         
         /* ============================================================
-           SEARCH BOX - DARK
+           SEARCH BOX
            ============================================================ */
         .search-box { max-width: 380px; }
         .search-box .form-control {
@@ -831,7 +753,7 @@ function getInitials($name) {
         }
         
         /* ============================================================
-           PAGINATION - DARK
+           PAGINATION
            ============================================================ */
         .pagination-container {
             background: #111827 !important;
@@ -859,16 +781,13 @@ function getInitials($name) {
         .pagination .page-item.active .page-link {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
             color: white !important;
-            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
-        .pagination .page-item.disabled .page-link {
-            color: #4a4a5a !important;
-        }
+        .pagination .page-item.disabled .page-link { color: #4a4a5a !important; }
         .page-info { color: #808090 !important; font-size: 12px; }
         .page-info strong { color: #93c5fd !important; }
         
         /* ============================================================
-           PER PAGE SELECTOR - DARK
+           PER PAGE SELECTOR
            ============================================================ */
         .per-page-selector select {
             background: #1a1a2e !important;
@@ -878,14 +797,10 @@ function getInitials($name) {
             padding: 3px 6px;
             font-size: 12px;
         }
-        .per-page-selector select:focus {
-            border-color: #2a5a9a !important;
-            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
-        }
         .per-page-selector label { color: #808090 !important; font-size: 12px; margin: 0; }
         
         /* ============================================================
-           MODAL - DARK
+           MODALS
            ============================================================ */
         .modal-content {
             background: #111827 !important;
@@ -910,7 +825,6 @@ function getInitials($name) {
             box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
         }
         .modal-body .form-text { color: #808090 !important; font-size: 11px; }
-        .modal-body .text-muted { color: #808090 !important; }
         .btn-close { filter: invert(1) !important; }
         .btn-secondary {
             background: #2a2a4a !important;
@@ -920,10 +834,7 @@ function getInitials($name) {
             padding: 5px 14px !important;
             border-radius: 8px !important;
         }
-        .btn-secondary:hover {
-            background: #3a3a5a !important;
-            color: white !important;
-        }
+        .btn-secondary:hover { background: #3a3a5a !important; color: white !important; }
         .btn-danger {
             background: #7a2a2a !important;
             border-color: #7a2a2a !important;
@@ -932,12 +843,10 @@ function getInitials($name) {
             padding: 5px 14px !important;
             border-radius: 8px !important;
         }
-        .btn-danger:hover {
-            background: #8a3a3a !important;
-        }
+        .btn-danger:hover { background: #8a3a3a !important; }
         
         /* ============================================================
-           ALERT - DARK
+           ALERTS
            ============================================================ */
         .alert-success {
             background: #065f46 !important;
@@ -966,7 +875,7 @@ function getInitials($name) {
         .alert .btn-close { filter: invert(1) !important; }
         
         /* ============================================================
-           PAGE HEADER STYLES
+           PAGE HEADER
            ============================================================ */
         .page-header {
             padding-bottom: 10px;
@@ -978,11 +887,9 @@ function getInitials($name) {
             font-weight: 600;
             color: #e0e0e0;
         }
-        .page-header h1 i {
-            color: #1a3a6a;
-        }
+        .page-header h1 i { color: #1a3a6a; }
         
-        /* NEW BUTTON STYLES */
+        /* NEW BUTTONS */
         .btn-new-resident {
             background: linear-gradient(135deg, #10b981, #059669) !important;
             border-color: #10b981 !important;
@@ -1016,7 +923,7 @@ function getInitials($name) {
         }
         
         /* ============================================================
-           RESPONSIVE
+           ✅ RESPONSIVE - MOBILE
            ============================================================ */
         @media (max-width: 768px) {
             .sidebar {
@@ -1032,19 +939,14 @@ function getInitials($name) {
             
             .main-content {
                 margin-left: 0 !important;
-                width: 100% !important;
                 padding: 12px 15px !important;
-                min-height: calc(100vh - 56px - 40px) !important;
             }
-            
             .footer {
                 margin-left: 0 !important;
                 padding: 8px 15px !important;
-                width: 100% !important;
             }
             
             .resident-card { padding: 12px; }
-            .resident-actions { margin-top: 8px; }
             .resident-actions .btn-action {
                 margin-bottom: 3px;
                 font-size: 10px;
@@ -1066,7 +968,7 @@ function getInitials($name) {
         }
         
         /* ============================================================
-           MISC DARK
+           MISC
            ============================================================ */
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .border-top { border-top-color: #1a2a4a !important; }
@@ -1077,616 +979,592 @@ function getInitials($name) {
         .text-success { color: #34d399 !important; }
         .text-warning { color: #fbbf24 !important; }
         .small { font-size: 11px !important; }
+        
+        /* ============================================================
+           SCROLLBAR
+           ============================================================ */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0e1a; }
+        ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
     </style>
 </head>
 <body class="<?php echo $darkModeClass; ?>">
     <?php include '../includes/navbar.php'; ?>
     
-    <div class="page-wrapper">
-        <div class="content-wrapper">
-            <?php include '../includes/sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
+    
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+        <!-- Page Header -->
+        <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
+            <h1><i class="fas fa-users me-2"></i>Residents</h1>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="new-resident.php" class="btn btn-new-resident">
+                    <i class="fas fa-user-plus me-1"></i> New Resident Form
+                </a>
+                <a href="admission-form.php" class="btn btn-admission-form">
+                    <i class="fas fa-clipboard-list me-1"></i> Admission Form
+                </a>
+            </div>
+        </div>
+
+        <?php if (!empty($success)): ?>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i> <?php echo $success; ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!empty($error)): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i> <?php echo $error; ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
+
+        <!-- APPROVAL TABS -->
+        <div class="approval-tabs">
+            <a href="residents.php<?php echo !empty($search) ? '?search=' . urlencode($search) : ''; ?>" 
+               class="approval-tab <?php echo empty($statusFilter) ? 'active' : ''; ?>">
+                <i class="fas fa-list"></i>
+                All Residents
+                <span class="badge"><?php echo $allCount; ?></span>
+            </a>
             
-            <!-- MAIN CONTENT -->
-            <main class="main-content">
-                <!-- Page Header -->
-                <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
-                    <h1><i class="fas fa-users me-2"></i>Residents</h1>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <a href="new-resident.php" class="btn btn-new-resident">
-                            <i class="fas fa-user-plus me-1"></i> New Resident Form
-                        </a>
-                        <a href="admission-form.php" class="btn btn-admission-form">
-                            <i class="fas fa-clipboard-list me-1"></i> Admission Form
-                        </a>
-                    </div>
-                </div>
-
-                <?php if (!empty($success)): ?>
-                    <div class="alert alert-success alert-dismissible fade show" role="alert">
-                        <i class="fas fa-check-circle me-2"></i> <?php echo $success; ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
-
-                <?php if (!empty($error)): ?>
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        <i class="fas fa-exclamation-circle me-2"></i> <?php echo $error; ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
-
-                <!-- APPROVAL STATUS TABS -->
-                <div class="approval-tabs">
-                    <a href="residents.php<?php echo !empty($search) ? '?search=' . urlencode($search) : ''; ?>" 
-                       class="approval-tab <?php echo empty($statusFilter) ? 'active' : ''; ?>">
-                        <i class="fas fa-list"></i>
-                        All Residents
-                        <span class="badge"><?php echo $allCount; ?></span>
-                    </a>
-                    
-                    <a href="residents.php?status=pending<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" 
-                       class="approval-tab tab-pending <?php echo $statusFilter == 'pending' ? 'active' : ''; ?>">
-                        <i class="fas fa-clock"></i>
-                        Pending Approval
-                        <?php if ($pendingCount > 0): ?>
-                            <span class="badge"><?php echo $pendingCount; ?></span>
-                        <?php else: ?>
-                            <span class="badge" style="background: rgba(255,255,255,0.1);">0</span>
-                        <?php endif; ?>
-                    </a>
-                    
-                    <a href="residents.php?status=approved<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" 
-                       class="approval-tab tab-approved <?php echo $statusFilter == 'approved' ? 'active' : ''; ?>">
-                        <i class="fas fa-check-circle"></i>
-                        Approved
-                        <span class="badge"><?php echo $approvedCount; ?></span>
-                    </a>
-                    
-                    <a href="residents.php?status=rejected<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" 
-                       class="approval-tab tab-rejected <?php echo $statusFilter == 'rejected' ? 'active' : ''; ?>">
-                        <i class="fas fa-times-circle"></i>
-                        Rejected
-                        <span class="badge"><?php echo $rejectedCount; ?></span>
-                    </a>
-                </div>
-
-                <?php if ($pendingCount > 0 && empty($statusFilter)): ?>
-                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong><?php echo $pendingCount; ?> student registration(s)</strong> are waiting for your approval.
-                        <a href="residents.php?status=pending" class="ms-2 text-warning">
-                            <u>Review now</u> <i class="fas fa-arrow-right ms-1"></i>
-                        </a>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Search Bar -->
-                <div class="row mb-3">
-                    <div class="col-md-8">
-                        <form method="GET" action="" class="search-box d-flex">
-                            <?php if (!empty($statusFilter)): ?>
-                                <input type="hidden" name="status" value="<?php echo htmlspecialchars($statusFilter); ?>">
-                            <?php endif; ?>
-                            <input type="text" 
-                                   class="form-control" 
-                                   name="search" 
-                                   placeholder="Search by name, ID, or room..." 
-                                   value="<?php echo htmlspecialchars($search); ?>">
-                            <button type="submit" class="btn">
-                                <i class="fas fa-search"></i>
-                            </button>
-                            <?php if (!empty($search)): ?>
-                                <a href="residents.php<?php echo !empty($statusFilter) ? '?status=' . urlencode($statusFilter) : ''; ?>" 
-                                   class="btn btn-outline-secondary ms-2">
-                                    <i class="fas fa-times"></i> Clear
-                                </a>
-                            <?php endif; ?>
-                        </form>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        <span class="text-muted small">
-                            <i class="fas fa-users me-1"></i>
-                            Showing <?php echo count($residents); ?> of <?php echo $totalResidents; ?> residents
-                            <?php if (!empty($search)): ?>
-                                <br><span class="text-muted">(filtered)</span>
-                            <?php endif; ?>
-                        </span>
-                    </div>
-                </div>
-
-                <!-- RESIDENTS LIST -->
-                <?php if (empty($residents)): ?>
-                    <div class="card">
-                        <div class="card-body text-center py-4">
-                            <i class="fas fa-users fa-3x text-muted mb-2"></i>
-                            <h5 class="text-muted">
-                                <?php if (!empty($statusFilter)): ?>
-                                    No <?php echo htmlspecialchars($statusFilter); ?> residents found
-                                <?php else: ?>
-                                    No residents found
-                                <?php endif; ?>
-                            </h5>
-                            <?php if (!empty($search)): ?>
-                                <p class="text-muted small">Try adjusting your search criteria</p>
-                                <a href="residents.php<?php echo !empty($statusFilter) ? '?status=' . urlencode($statusFilter) : ''; ?>" 
-                                   class="btn btn-outline-secondary btn-sm">Clear Search</a>
-                            <?php else: ?>
-                                <p class="text-muted small">Start by adding your first resident</p>
-                                <div class="d-flex gap-2 justify-content-center mt-2">
-                                    <a href="new-resident.php" class="btn btn-new-resident btn-sm">
-                                        <i class="fas fa-user-plus me-1"></i> New Resident Form
-                                    </a>
-                                    <a href="admission-form.php" class="btn btn-admission-form btn-sm">
-                                        <i class="fas fa-clipboard-list me-1"></i> Admission Form
-                                    </a>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
+            <a href="residents.php?status=pending<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" 
+               class="approval-tab tab-pending <?php echo $statusFilter == 'pending' ? 'active' : ''; ?>">
+                <i class="fas fa-clock"></i>
+                Pending Approval
+                <?php if ($pendingCount > 0): ?>
+                    <span class="badge"><?php echo $pendingCount; ?></span>
                 <?php else: ?>
-                    <?php foreach ($residents as $resident): 
-                        $photoPath = $resident['profile_photo'] ?? '';
-                        $hasPhoto = false;
-                        $fullPhotoPath = '';
-                        
-                        if (!empty($photoPath)) {
-                            if (strpos($photoPath, 'uploads/') === 0) {
-                                $fullPhotoPath = '../../' . $photoPath;
-                            } else {
-                                $fullPhotoPath = '../../uploads/resident_photos/' . $photoPath;
-                            }
-                            
-                            if (file_exists($fullPhotoPath)) {
-                                $hasPhoto = true;
-                            }
-                        }
-                        
-                        $initials = getInitials($resident['full_name'] ?? '');
-                        $approvalStatus = $resident['approval_status'] ?? 'pending';
-                        
-                        $cardClass = '';
-                        if ($approvalStatus === 'pending') $cardClass = 'pending-status';
-                        elseif ($approvalStatus === 'approved') $cardClass = 'approved-status';
-                        elseif ($approvalStatus === 'rejected') $cardClass = 'rejected-status';
-                    ?>
-                        <div class="resident-card <?php echo $cardClass; ?>">
-                            <div class="row align-items-center">
-                                <!-- Avatar & Name -->
-                                <div class="col-md-4 col-lg-3">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <div class="resident-avatar" 
-                                             data-bs-toggle="modal" 
-                                             data-bs-target="#photoModal<?php echo $resident['user_id']; ?>"
-                                             title="Click to upload/change photo">
-                                            <?php if ($hasPhoto): ?>
-                                                <img src="<?php echo $fullPhotoPath; ?>" 
-                                                     alt="Photo of <?php echo htmlspecialchars($resident['full_name'] ?? ''); ?>"
-                                                     onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
-                                                <span class="has-photo-overlay">
-                                                    <i class="fas fa-check-circle"></i>
-                                                </span>
-                                            <?php else: ?>
-                                                <div class="no-photo"><?php echo $initials; ?></div>
-                                            <?php endif; ?>
-                                            <div class="upload-overlay">
-                                                <i class="fas fa-camera me-1"></i> Upload
-                                            </div>
-                                        </div>
-                                        <div class="resident-info">
-                                            <h5><?php echo htmlspecialchars($resident['full_name'] ?? 'Unknown'); ?></h5>
-                                            <span class="text-muted">
-                                                <i class="fas fa-id-card me-1"></i>
-                                                <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
-                                            </span>
-                                            <br>
-                                            <span class="text-muted">
-                                                <i class="fas fa-graduation-cap me-1"></i>
-                                                <?php echo htmlspecialchars($resident['course'] ?? 'N/A'); ?>
-                                                <?php if (!empty($resident['year_level'])): ?>
-                                                    - <?php echo htmlspecialchars($resident['year_level']); ?>
-                                                <?php endif; ?>
-                                            </span>
-                                        </div>
+                    <span class="badge" style="background: rgba(255,255,255,0.1);">0</span>
+                <?php endif; ?>
+            </a>
+            
+            <a href="residents.php?status=approved<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" 
+               class="approval-tab tab-approved <?php echo $statusFilter == 'approved' ? 'active' : ''; ?>">
+                <i class="fas fa-check-circle"></i>
+                Approved
+                <span class="badge"><?php echo $approvedCount; ?></span>
+            </a>
+            
+            <a href="residents.php?status=rejected<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" 
+               class="approval-tab tab-rejected <?php echo $statusFilter == 'rejected' ? 'active' : ''; ?>">
+                <i class="fas fa-times-circle"></i>
+                Rejected
+                <span class="badge"><?php echo $rejectedCount; ?></span>
+            </a>
+        </div>
+
+        <?php if ($pendingCount > 0 && empty($statusFilter)): ?>
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong><?php echo $pendingCount; ?> student registration(s)</strong> are waiting for your approval.
+                <a href="residents.php?status=pending" class="ms-2 text-warning">
+                    <u>Review now</u> <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
+
+        <!-- Search Bar -->
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <form method="GET" action="" class="search-box d-flex">
+                    <?php if (!empty($statusFilter)): ?>
+                        <input type="hidden" name="status" value="<?php echo htmlspecialchars($statusFilter); ?>">
+                    <?php endif; ?>
+                    <input type="text" 
+                           class="form-control" 
+                           name="search" 
+                           placeholder="Search by name, ID, or room..." 
+                           value="<?php echo htmlspecialchars($search); ?>">
+                    <button type="submit" class="btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <?php if (!empty($search)): ?>
+                        <a href="residents.php<?php echo !empty($statusFilter) ? '?status=' . urlencode($statusFilter) : ''; ?>" 
+                           class="btn btn-outline-secondary ms-2">
+                            <i class="fas fa-times"></i> Clear
+                        </a>
+                    <?php endif; ?>
+                </form>
+            </div>
+            <div class="col-md-4 text-end">
+                <span class="text-muted small">
+                    <i class="fas fa-users me-1"></i>
+                    Showing <?php echo count($residents); ?> of <?php echo $totalResidents; ?> residents
+                    <?php if (!empty($search)): ?>
+                        <br><span class="text-muted">(filtered)</span>
+                    <?php endif; ?>
+                </span>
+            </div>
+        </div>
+
+        <!-- RESIDENTS LIST -->
+        <?php if (empty($residents)): ?>
+            <div class="card">
+                <div class="card-body text-center py-4">
+                    <i class="fas fa-users fa-3x text-muted mb-2"></i>
+                    <h5 class="text-muted">
+                        <?php if (!empty($statusFilter)): ?>
+                            No <?php echo htmlspecialchars($statusFilter); ?> residents found
+                        <?php else: ?>
+                            No residents found
+                        <?php endif; ?>
+                    </h5>
+                    <?php if (!empty($search)): ?>
+                        <p class="text-muted small">Try adjusting your search criteria</p>
+                        <a href="residents.php<?php echo !empty($statusFilter) ? '?status=' . urlencode($statusFilter) : ''; ?>" 
+                           class="btn btn-outline-secondary btn-sm">Clear Search</a>
+                    <?php else: ?>
+                        <p class="text-muted small">Start by adding your first resident</p>
+                        <div class="d-flex gap-2 justify-content-center mt-2">
+                            <a href="new-resident.php" class="btn btn-new-resident btn-sm">
+                                <i class="fas fa-user-plus me-1"></i> New Resident Form
+                            </a>
+                            <a href="admission-form.php" class="btn btn-admission-form btn-sm">
+                                <i class="fas fa-clipboard-list me-1"></i> Admission Form
+                            </a>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php else: ?>
+            <?php foreach ($residents as $resident): 
+                $photoPath = $resident['profile_photo'] ?? '';
+                $hasPhoto = false;
+                $fullPhotoPath = '';
+                
+                if (!empty($photoPath)) {
+                    if (strpos($photoPath, 'uploads/') === 0) {
+                        $fullPhotoPath = '../../' . $photoPath;
+                    } else {
+                        $fullPhotoPath = '../../uploads/resident_photos/' . $photoPath;
+                    }
+                    
+                    if (file_exists($fullPhotoPath)) {
+                        $hasPhoto = true;
+                    }
+                }
+                
+                $initials = getInitials($resident['full_name'] ?? '');
+                $approvalStatus = $resident['approval_status'] ?? 'pending';
+                
+                $cardClass = '';
+                if ($approvalStatus === 'pending') $cardClass = 'pending-status';
+                elseif ($approvalStatus === 'approved') $cardClass = 'approved-status';
+                elseif ($approvalStatus === 'rejected') $cardClass = 'rejected-status';
+            ?>
+                <div class="resident-card <?php echo $cardClass; ?>">
+                    <div class="row align-items-center">
+                        <!-- Avatar & Name -->
+                        <div class="col-md-4 col-lg-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="resident-avatar" 
+                                     data-bs-toggle="modal" 
+                                     data-bs-target="#photoModal<?php echo $resident['user_id']; ?>"
+                                     title="Click to upload/change photo">
+                                    <?php if ($hasPhoto): ?>
+                                        <img src="<?php echo $fullPhotoPath; ?>" 
+                                             alt="Photo of <?php echo htmlspecialchars($resident['full_name'] ?? ''); ?>"
+                                             onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
+                                        <span class="has-photo-overlay">
+                                            <i class="fas fa-check-circle"></i>
+                                        </span>
+                                    <?php else: ?>
+                                        <div class="no-photo"><?php echo $initials; ?></div>
+                                    <?php endif; ?>
+                                    <div class="upload-overlay">
+                                        <i class="fas fa-camera me-1"></i> Upload
                                     </div>
                                 </div>
-
-                                <!-- Room & Status -->
-                                <div class="col-md-3 col-lg-3">
-                                    <div>
-                                        <span class="text-muted small">Room</span>
-                                        <br>
-                                        <strong><?php echo htmlspecialchars($resident['room_number'] ?? 'Not Assigned'); ?></strong>
-                                    </div>
-                                    <div class="mt-1">
-                                        <span class="text-muted small">Card Status</span>
-                                        <br>
-                                        <?php if (!empty($resident['card_uid'])): ?>
-                                            <span class="badge-status badge-active">
-                                                <i class="fas fa-check-circle me-1"></i> Active
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="badge-status badge-no-card">
-                                                <i class="fas fa-times-circle me-1"></i> No Card
-                                            </span>
+                                <div class="resident-info">
+                                    <h5><?php echo htmlspecialchars($resident['full_name'] ?? 'Unknown'); ?></h5>
+                                    <span class="text-muted">
+                                        <i class="fas fa-id-card me-1"></i>
+                                        <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
+                                    </span>
+                                    <br>
+                                    <span class="text-muted">
+                                        <i class="fas fa-graduation-cap me-1"></i>
+                                        <?php echo htmlspecialchars($resident['course'] ?? 'N/A'); ?>
+                                        <?php if (!empty($resident['year_level'])): ?>
+                                            - <?php echo htmlspecialchars($resident['year_level']); ?>
                                         <?php endif; ?>
-                                    </div>
-                                </div>
-
-                                <!-- Approval Status -->
-                                <div class="col-md-2 col-lg-2">
-                                    <div>
-                                        <span class="text-muted small">Approval</span>
-                                        <br>
-                                        <?php if ($approvalStatus === 'pending'): ?>
-                                            <span class="badge-status badge-pending">
-                                                <i class="fas fa-clock me-1"></i> Pending
-                                            </span>
-                                        <?php elseif ($approvalStatus === 'approved'): ?>
-                                            <span class="badge-status badge-active">
-                                                <i class="fas fa-check-circle me-1"></i> Approved
-                                            </span>
-                                            <?php if (!empty($resident['portal_email'])): ?>
-                                                <br><span class="badge-status badge-info mt-1" style="font-size: 9px;">
-                                                    <i class="fas fa-user-check me-1"></i> Portal Active
-                                                </span>
-                                            <?php else: ?>
-                                                <br><span class="badge-status badge-warning mt-1" style="font-size: 9px;">
-                                                    <i class="fas fa-hourglass-half me-1"></i> No Portal
-                                                </span>
-                                            <?php endif; ?>
-                                        <?php else: ?>
-                                            <span class="badge-status badge-rejected">
-                                                <i class="fas fa-times-circle me-1"></i> Rejected
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-
-                                <!-- Action Buttons -->
-                                <div class="col-md-3 col-lg-4">
-                                    <div class="resident-actions d-flex flex-wrap gap-1">
-                                        
-                                        <?php if ($approvalStatus === 'pending'): ?>
-                                            <!-- APPROVE / REJECT BUTTONS -->
-                                            <a href="approve-resident.php?approve=<?php echo $resident['user_id']; ?>" 
-                                               class="btn btn-action btn-approve"
-                                               onclick="return confirm('Approve this student registration?\n\nStudent: <?php echo htmlspecialchars(addslashes($resident['full_name'])); ?>\nID: <?php echo htmlspecialchars($resident['student_id']); ?>')">
-                                                <i class="fas fa-check me-1"></i> Approve
-                                            </a>
-                                            <a href="#" 
-                                               class="btn btn-action btn-reject"
-                                               data-bs-toggle="modal"
-                                               data-bs-target="#rejectModal<?php echo $resident['user_id']; ?>">
-                                                <i class="fas fa-times me-1"></i> Reject
-                                            </a>
-                                            <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                               class="btn btn-action btn-view">
-                                                <i class="fas fa-eye me-1"></i> View
-                                            </a>
-                                            
-                                        <?php elseif ($approvalStatus === 'approved'): ?>
-                                            <!-- APPROVED ACTIONS -->
-                                            <button type="button" 
-                                                    class="btn btn-action btn-upload-photo"
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#photoModal<?php echo $resident['user_id']; ?>">
-                                                <i class="fas fa-camera me-1"></i> Photo
-                                            </button>
-                                            
-                                            <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                               class="btn btn-action btn-view">
-                                                <i class="fas fa-eye me-1"></i> View
-                                            </a>
-                                            
-                                            <a href="edit-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                               class="btn btn-action btn-edit">
-                                                <i class="fas fa-edit me-1"></i> Edit
-                                            </a>
-                                            
-                                            <a href="admission-form.php?id=<?php echo $resident['user_id']; ?>" 
-                                               class="btn btn-action btn-admission">
-                                                <i class="fas fa-clipboard-list me-1"></i> Admission
-                                            </a>
-                                            
-                                            <button type="button" 
-                                                    class="btn btn-action btn-delete" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
-                                                <i class="fas fa-trash me-1"></i> Delete
-                                            </button>
-                                            
-                                        <?php else: ?>
-                                            <!-- REJECTED ACTIONS -->
-                                            <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
-                                               class="btn btn-action btn-view">
-                                                <i class="fas fa-eye me-1"></i> View
-                                            </a>
-                                            <a href="approve-resident.php?approve=<?php echo $resident['user_id']; ?>" 
-                                               class="btn btn-action btn-approve"
-                                               onclick="return confirm('Re-approve this student?')">
-                                                <i class="fas fa-redo me-1"></i> Re-Approve
-                                            </a>
-                                            <button type="button" 
-                                                    class="btn btn-action btn-delete" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
-                                                <i class="fas fa-trash me-1"></i> Delete
-                                            </button>
-                                        <?php endif; ?>
-                                        
-                                    </div>
+                                    </span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- ============================================================
-                             PHOTO UPLOAD MODAL
-                             ============================================================ -->
-                        <div class="modal fade" id="photoModal<?php echo $resident['user_id']; ?>" tabindex="-1">
-                            <div class="modal-dialog modal-dialog-centered">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title">
-                                            <i class="fas fa-camera me-2"></i>
-                                            Profile Photo - <?php echo htmlspecialchars($resident['full_name']); ?>
-                                        </h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <div class="modal-body text-center">
-                                        <div class="mb-3">
-                                            <?php 
-                                                $photoPath = $resident['profile_photo'] ?? '';
-                                                $hasModalPhoto = false;
-                                                $fullModalPhotoPath = '';
-                                                
-                                                if (!empty($photoPath)) {
-                                                    if (strpos($photoPath, 'uploads/') === 0) {
-                                                        $fullModalPhotoPath = '../../' . $photoPath;
-                                                    } else {
-                                                        $fullModalPhotoPath = '../../uploads/resident_photos/' . $photoPath;
-                                                    }
-                                                    
-                                                    if (file_exists($fullModalPhotoPath)) {
-                                                        $hasModalPhoto = true;
-                                                    }
-                                                }
-                                            ?>
-                                            
-                                            <?php if ($hasModalPhoto): ?>
-                                                <img src="<?php echo $fullModalPhotoPath; ?>" 
-                                                     alt="Current Photo"
-                                                     style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #2a2a4a;">
-                                                <div class="mt-2">
-                                                    <a href="?remove_photo=<?php echo $resident['user_id']; ?>" 
-                                                       class="btn btn-sm btn-remove-photo"
-                                                       onclick="return confirm('Remove this photo?')">
-                                                        <i class="fas fa-trash me-1"></i> Remove Photo
-                                                    </a>
-                                                </div>
-                                            <?php else: ?>
-                                                <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#1a3a6a,#2a5a9a);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:40px;font-weight:700;color:white;">
-                                                    <?php echo $initials; ?>
-                                                </div>
-                                                <div class="mt-2 text-muted small">
-                                                    <i class="fas fa-info-circle me-1"></i>
-                                                    No photo uploaded yet
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                        
-                                        <hr>
-                                        
-                                        <form method="POST" enctype="multipart/form-data">
-                                            <input type="hidden" name="user_id" value="<?php echo $resident['user_id']; ?>">
-                                            <div class="mb-3">
-                                                <label class="form-label">Upload New Photo</label>
-                                                <input type="file" 
-                                                       class="form-control" 
-                                                       name="profile_photo" 
-                                                       accept="image/*"
-                                                       required>
-                                                <div class="form-text text-muted">
-                                                    <i class="fas fa-info-circle me-1"></i>
-                                                    Max size: 2MB. Allowed: JPG, PNG, GIF, WEBP
-                                                </div>
-                                            </div>
-                                            <button type="submit" name="upload_photo" class="btn btn-primary">
-                                                <i class="fas fa-upload me-1"></i> Upload Photo
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
+                        <!-- Room & Status -->
+                        <div class="col-md-3 col-lg-3">
+                            <div>
+                                <span class="text-muted small">Room</span>
+                                <br>
+                                <strong><?php echo htmlspecialchars($resident['room_number'] ?? 'Not Assigned'); ?></strong>
+                            </div>
+                            <div class="mt-1">
+                                <span class="text-muted small">Card Status</span>
+                                <br>
+                                <?php if (!empty($resident['card_uid'])): ?>
+                                    <span class="badge-status badge-active">
+                                        <i class="fas fa-check-circle me-1"></i> Active
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge-status badge-no-card">
+                                        <i class="fas fa-times-circle me-1"></i> No Card
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </div>
 
-                        <!-- ============================================================
-                             REJECT MODAL
-                             ============================================================ -->
-                        <div class="modal fade" id="rejectModal<?php echo $resident['user_id']; ?>" tabindex="-1">
-                            <div class="modal-dialog modal-dialog-centered">
-                                <div class="modal-content">
-                                    <div class="modal-header" style="border-bottom-color: #7a2a2a !important;">
-                                        <h5 class="modal-title text-danger">
-                                            <i class="fas fa-times-circle me-2"></i>
-                                            Reject Registration
-                                        </h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <form method="GET" action="approve-resident.php">
-                                        <div class="modal-body">
-                                            <input type="hidden" name="reject" value="<?php echo $resident['user_id']; ?>">
-                                            
-                                            <div class="text-center mb-3">
-                                                <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#7a2a2a,#ef4444);display:flex;align-items:center;justify-content:center;margin:0 auto 15px;font-size:24px;color:white;">
-                                                    <i class="fas fa-user-times"></i>
-                                                </div>
-                                                <p style="color: #e0e0e0; margin-bottom: 5px;">
-                                                    Are you sure you want to <strong class="text-danger">REJECT</strong> this registration?
-                                                </p>
-                                                <p style="color: #fbbf24; font-weight: 600; margin-bottom: 15px;">
-                                                    <?php echo htmlspecialchars($resident['full_name']); ?>
-                                                </p>
-                                                <p class="text-muted small">
-                                                    <i class="fas fa-id-card me-1"></i>
-                                                    <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
-                                                </p>
-                                            </div>
-                                            
-                                            <hr style="border-color: #1a2a4a;">
-                                            
-                                            <div class="mb-2">
-                                                <label class="form-label" style="color: #d1d5db; font-size: 13px;">
-                                                    Reason for Rejection (Optional)
-                                                </label>
-                                                <textarea class="form-control" 
-                                                          name="reason" 
-                                                          rows="3" 
-                                                          placeholder="e.g., Incomplete requirements, Invalid information..."
-                                                          style="background: #1a1a2e; border: 1px solid #2a2a4a; color: #e0e0e0;"></textarea>
-                                            </div>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                                <i class="fas fa-times me-1"></i> Cancel
-                                            </button>
-                                            <button type="submit" class="btn btn-danger">
-                                                <i class="fas fa-times-circle me-1"></i> Yes, Reject
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
+                        <!-- Approval Status -->
+                        <div class="col-md-2 col-lg-2">
+                            <div>
+                                <span class="text-muted small">Approval</span>
+                                <br>
+                                <?php if ($approvalStatus === 'pending'): ?>
+                                    <span class="badge-status badge-pending">
+                                        <i class="fas fa-clock me-1"></i> Pending
+                                    </span>
+                                <?php elseif ($approvalStatus === 'approved'): ?>
+                                    <span class="badge-status badge-active">
+                                        <i class="fas fa-check-circle me-1"></i> Approved
+                                    </span>
+                                    <?php if (!empty($resident['portal_email'])): ?>
+                                        <br><span class="badge-status badge-info mt-1" style="font-size: 9px;">
+                                            <i class="fas fa-user-check me-1"></i> Portal Active
+                                        </span>
+                                    <?php else: ?>
+                                        <br><span class="badge-status badge-warning mt-1" style="font-size: 9px;">
+                                            <i class="fas fa-hourglass-half me-1"></i> No Portal
+                                        </span>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <span class="badge-status badge-rejected">
+                                        <i class="fas fa-times-circle me-1"></i> Rejected
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </div>
 
-                        <!-- ============================================================
-                             DELETE CONFIRMATION MODAL
-                             ============================================================ -->
-                        <div class="modal fade" id="deleteModal<?php echo $resident['user_id']; ?>" tabindex="-1">
-                            <div class="modal-dialog modal-dialog-centered">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title text-danger">
-                                            <i class="fas fa-exclamation-triangle me-2"></i>Confirm Delete
-                                        </h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <div class="text-center py-2">
-                                            <i class="fas fa-user-times fa-3x text-danger mb-2"></i>
-                                            <p class="mb-1">
-                                                Are you sure you want to delete 
-                                                <strong><?php echo htmlspecialchars($resident['full_name']); ?></strong>?
-                                            </p>
-                                            <p class="text-muted small">
-                                                <i class="fas fa-info-circle me-1"></i>
-                                                Student ID: <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
-                                            </p>
-                                            <p class="text-danger small">
-                                                <i class="fas fa-exclamation-circle me-1"></i>
-                                                This action cannot be undone.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer justify-content-center">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                            <i class="fas fa-times me-1"></i> Cancel
-                                        </button>
-                                        <a href="?delete=<?php echo $resident['user_id']; ?>&page=<?php echo $page; ?>" class="btn btn-danger">
-                                            <i class="fas fa-trash me-1"></i> Yes, Delete
-                                        </a>
-                                    </div>
-                                </div>
+                        <!-- Action Buttons -->
+                        <div class="col-md-3 col-lg-4">
+                            <div class="resident-actions d-flex flex-wrap gap-1">
+                                
+                                <?php if ($approvalStatus === 'pending'): ?>
+                                    <a href="approve-resident.php?approve=<?php echo $resident['user_id']; ?>" 
+                                       class="btn btn-action btn-approve"
+                                       onclick="return confirm('Approve this student registration?\n\nStudent: <?php echo htmlspecialchars(addslashes($resident['full_name'])); ?>\nID: <?php echo htmlspecialchars($resident['student_id']); ?>')">
+                                        <i class="fas fa-check me-1"></i> Approve
+                                    </a>
+                                    <a href="#" 
+                                       class="btn btn-action btn-reject"
+                                       data-bs-toggle="modal"
+                                       data-bs-target="#rejectModal<?php echo $resident['user_id']; ?>">
+                                        <i class="fas fa-times me-1"></i> Reject
+                                    </a>
+                                    <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
+                                       class="btn btn-action btn-view">
+                                        <i class="fas fa-eye me-1"></i> View
+                                    </a>
+                                    
+                                <?php elseif ($approvalStatus === 'approved'): ?>
+                                    <button type="button" 
+                                            class="btn btn-action btn-upload-photo"
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#photoModal<?php echo $resident['user_id']; ?>">
+                                        <i class="fas fa-camera me-1"></i> Photo
+                                    </button>
+                                    
+                                    <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
+                                       class="btn btn-action btn-view">
+                                        <i class="fas fa-eye me-1"></i> View
+                                    </a>
+                                    
+                                    <a href="edit-resident.php?id=<?php echo $resident['user_id']; ?>" 
+                                       class="btn btn-action btn-edit">
+                                        <i class="fas fa-edit me-1"></i> Edit
+                                    </a>
+                                    
+                                    <a href="admission-form.php?id=<?php echo $resident['user_id']; ?>" 
+                                       class="btn btn-action btn-admission">
+                                        <i class="fas fa-clipboard-list me-1"></i> Admission
+                                    </a>
+                                    
+                                    <button type="button" 
+                                            class="btn btn-action btn-delete" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
+                                        <i class="fas fa-trash me-1"></i> Delete
+                                    </button>
+                                    
+                                <?php else: ?>
+                                    <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>" 
+                                       class="btn btn-action btn-view">
+                                        <i class="fas fa-eye me-1"></i> View
+                                    </a>
+                                    <a href="approve-resident.php?approve=<?php echo $resident['user_id']; ?>" 
+                                       class="btn btn-action btn-approve"
+                                       onclick="return confirm('Re-approve this student?')">
+                                        <i class="fas fa-redo me-1"></i> Re-Approve
+                                    </a>
+                                    <button type="button" 
+                                            class="btn btn-action btn-delete" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
+                                        <i class="fas fa-trash me-1"></i> Delete
+                                    </button>
+                                <?php endif; ?>
+                                
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                    </div>
+                </div>
 
-                    <!-- PAGINATION -->
-                    <?php if ($totalPages > 1 || $totalResidents > 0): ?>
-                    <div class="pagination-container">
-                        <div class="row align-items-center">
-                            <div class="col-md-6">
-                                <div class="page-info">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalResidents); ?> of <?php echo $totalResidents; ?> residents
-                                    <span class="mx-1 text-muted">|</span>
-                                    <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
-                                </div>
+                <!-- PHOTO UPLOAD MODAL -->
+                <div class="modal fade" id="photoModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-camera me-2"></i>
+                                    Profile Photo - <?php echo htmlspecialchars($resident['full_name']); ?>
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                             </div>
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
-                                    <div class="per-page-selector d-flex align-items-center gap-1">
-                                        <label>Show:</label>
-                                        <select onchange="changePerPage(this.value)">
-                                            <?php foreach ($perPageOptions as $option): ?>
-                                                <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                                    <?php echo $option; ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
+                            <div class="modal-body text-center">
+                                <div class="mb-3">
+                                    <?php if ($hasPhoto): ?>
+                                        <img src="<?php echo $fullPhotoPath; ?>" 
+                                             alt="Current Photo"
+                                             style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #2a2a4a;">
+                                        <div class="mt-2">
+                                            <a href="?remove_photo=<?php echo $resident['user_id']; ?>" 
+                                               class="btn btn-sm btn-remove-photo"
+                                               onclick="return confirm('Remove this photo?')">
+                                                <i class="fas fa-trash me-1"></i> Remove Photo
+                                            </a>
+                                        </div>
+                                    <?php else: ?>
+                                        <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#1a3a6a,#2a5a9a);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:40px;font-weight:700;color:white;">
+                                            <?php echo $initials; ?>
+                                        </div>
+                                        <div class="mt-2 text-muted small">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            No photo uploaded yet
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <hr>
+                                
+                                <form method="POST" enctype="multipart/form-data">
+                                    <input type="hidden" name="user_id" value="<?php echo $resident['user_id']; ?>">
+                                    <div class="mb-3">
+                                        <label class="form-label">Upload New Photo</label>
+                                        <input type="file" 
+                                               class="form-control" 
+                                               name="profile_photo" 
+                                               accept="image/*"
+                                               required>
+                                        <div class="form-text text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            Max size: 2MB. Allowed: JPG, PNG, GIF, WEBP
+                                        </div>
+                                    </div>
+                                    <button type="submit" name="upload_photo" class="btn btn-primary">
+                                        <i class="fas fa-upload me-1"></i> Upload Photo
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- REJECT MODAL -->
+                <div class="modal fade" id="rejectModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header" style="border-bottom-color: #7a2a2a !important;">
+                                <h5 class="modal-title text-danger">
+                                    <i class="fas fa-times-circle me-2"></i>
+                                    Reject Registration
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <form method="GET" action="approve-resident.php">
+                                <div class="modal-body">
+                                    <input type="hidden" name="reject" value="<?php echo $resident['user_id']; ?>">
+                                    
+                                    <div class="text-center mb-3">
+                                        <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#7a2a2a,#ef4444);display:flex;align-items:center;justify-content:center;margin:0 auto 15px;font-size:24px;color:white;">
+                                            <i class="fas fa-user-times"></i>
+                                        </div>
+                                        <p style="color: #e0e0e0; margin-bottom: 5px;">
+                                            Are you sure you want to <strong class="text-danger">REJECT</strong> this registration?
+                                        </p>
+                                        <p style="color: #fbbf24; font-weight: 600; margin-bottom: 15px;">
+                                            <?php echo htmlspecialchars($resident['full_name']); ?>
+                                        </p>
+                                        <p class="text-muted small">
+                                            <i class="fas fa-id-card me-1"></i>
+                                            <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
+                                        </p>
                                     </div>
                                     
-                                    <nav aria-label="Page navigation">
-                                        <ul class="pagination justify-content-end mb-0">
-                                            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                    <i class="fas fa-angle-double-left"></i>
-                                                </a>
-                                            </li>
-                                            <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                                <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                    <i class="fas fa-angle-left"></i>
-                                                </a>
-                                            </li>
-                                            
-                                            <?php
-                                            $startPage = max(1, $page - 2);
-                                            $endPage = min($totalPages, $page + 2);
-                                            if ($startPage > 1) {
-                                                echo '<li class="page-item"><span class="page-link">...</span></li>';
-                                            }
-                                            for ($i = $startPage; $i <= $endPage; $i++):
-                                            ?>
-                                                <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                    <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                        <?php echo $i; ?>
-                                                    </a>
-                                                </li>
-                                            <?php endfor; ?>
-                                            <?php if ($endPage < $totalPages): ?>
-                                                <li class="page-item"><span class="page-link">...</span></li>
-                                            <?php endif; ?>
-                                            
-                                            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                                <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                    <i class="fas fa-angle-right"></i>
-                                                </a>
-                                            </li>
-                                            <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                                <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                    <i class="fas fa-angle-double-right"></i>
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </nav>
+                                    <hr style="border-color: #1a2a4a;">
+                                    
+                                    <div class="mb-2">
+                                        <label class="form-label" style="color: #d1d5db; font-size: 13px;">
+                                            Reason for Rejection (Optional)
+                                        </label>
+                                        <textarea class="form-control" 
+                                                  name="reason" 
+                                                  rows="3" 
+                                                  placeholder="e.g., Incomplete requirements, Invalid information..."
+                                                  style="background: #1a1a2e; border: 1px solid #2a2a4a; color: #e0e0e0;"></textarea>
+                                    </div>
                                 </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                        <i class="fas fa-times me-1"></i> Cancel
+                                    </button>
+                                    <button type="submit" class="btn btn-danger">
+                                        <i class="fas fa-times-circle me-1"></i> Yes, Reject
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DELETE MODAL -->
+                <div class="modal fade" id="deleteModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title text-danger">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Confirm Delete
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="text-center py-2">
+                                    <i class="fas fa-user-times fa-3x text-danger mb-2"></i>
+                                    <p class="mb-1">
+                                        Are you sure you want to delete 
+                                        <strong><?php echo htmlspecialchars($resident['full_name']); ?></strong>?
+                                    </p>
+                                    <p class="text-muted small">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Student ID: <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
+                                    </p>
+                                    <p class="text-danger small">
+                                        <i class="fas fa-exclamation-circle me-1"></i>
+                                        This action cannot be undone.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="modal-footer justify-content-center">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="fas fa-times me-1"></i> Cancel
+                                </button>
+                                <a href="?delete=<?php echo $resident['user_id']; ?>&page=<?php echo $page; ?>" class="btn btn-danger">
+                                    <i class="fas fa-trash me-1"></i> Yes, Delete
+                                </a>
                             </div>
                         </div>
                     </div>
-                    <?php endif; ?>
-                <?php endif; ?>
-            </main>
-        </div>
-        
-        <!-- FOOTER -->
-        <footer class="footer">
-            &copy; <?php echo date('Y'); ?> <span style="color: #ffd700;">Tap-and-Go Doorlock</span> System - ISU-Echague Dormitory. All rights reserved.
-        </footer>
-    </div>
+                </div>
+            <?php endforeach; ?>
+
+            <!-- PAGINATION -->
+            <?php if ($totalPages > 1 || $totalResidents > 0): ?>
+            <div class="pagination-container">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="page-info">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalResidents); ?> of <?php echo $totalResidents; ?> residents
+                            <span class="mx-1 text-muted">|</span>
+                            <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
+                            <div class="per-page-selector d-flex align-items-center gap-1">
+                                <label>Show:</label>
+                                <select onchange="changePerPage(this.value)">
+                                    <?php foreach ($perPageOptions as $option): ?>
+                                        <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
+                                            <?php echo $option; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <nav aria-label="Page navigation">
+                                <ul class="pagination justify-content-end mb-0">
+                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <i class="fas fa-angle-double-left"></i>
+                                        </a>
+                                    </li>
+                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <i class="fas fa-angle-left"></i>
+                                        </a>
+                                    </li>
+                                    
+                                    <?php
+                                    $startPage = max(1, $page - 2);
+                                    $endPage = min($totalPages, $page + 2);
+                                    if ($startPage > 1) {
+                                        echo '<li class="page-item"><span class="page-link">...</span></li>';
+                                    }
+                                    for ($i = $startPage; $i <= $endPage; $i++):
+                                    ?>
+                                        <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
+                                            <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                <?php echo $i; ?>
+                                            </a>
+                                        </li>
+                                    <?php endfor; ?>
+                                    <?php if ($endPage < $totalPages): ?>
+                                        <li class="page-item"><span class="page-link">...</span></li>
+                                    <?php endif; ?>
+                                    
+                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <i class="fas fa-angle-right"></i>
+                                        </a>
+                                    </li>
+                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <i class="fas fa-angle-double-right"></i>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+        <?php endif; ?>
+    </main>
+    
+    <!-- FOOTER -->
+    <footer class="footer">
+        &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System - ISU-Echague Dormitory. All rights reserved.
+    </footer>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // CHANGE PER PAGE
         function changePerPage(value) {
             const urlParams = new URLSearchParams(window.location.search);
             urlParams.set('per_page', value);
@@ -1694,18 +1572,14 @@ function getInitials($name) {
             window.location.href = '?' + urlParams.toString();
         }
         
-        // SIDEBAR TOGGLE (mobile)
         function toggleSidebar() {
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
         
-        // AUTO DISMISS ALERTS
         setTimeout(function() {
             document.querySelectorAll('.alert-dismissible').forEach(function(alert) {
-                try {
-                    var bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                } catch(e) {}
+                var bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
             });
         }, 5000);
     </script>
