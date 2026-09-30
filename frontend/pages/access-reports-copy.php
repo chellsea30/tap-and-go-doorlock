@@ -1,6 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Access Report Copy
+ * WITH PERIOD FILTER: Day | Week | Month | Year
  * PURE HTML TABLE - NO CSS - PLAIN BLACK AND WHITE
  * Location: frontend/pages/access-reports-copy.php
  */
@@ -18,10 +19,54 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
 $conn = getDBConnection();
 
 // ============================================================
-// GET FILTERS
+// ✅ PERIOD FILTER SETUP
 // ============================================================
+$period = isset($_GET['period']) ? $_GET['period'] : 'day';
 $dateFilter = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
 $searchFilter = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+// Validate period
+if (!in_array($period, ['day', 'week', 'month', 'year'])) {
+    $period = 'day';
+}
+
+// ============================================================
+// ✅ BUILD DATE RANGE BASED ON PERIOD
+// ============================================================
+$dateCondition = '';
+$periodLabel = '';
+
+switch ($period) {
+    case 'day':
+        // Today or selected date
+        $dateCondition = "DATE(al.timestamp) = '$dateFilter'";
+        $periodLabel = date('F d, Y', strtotime($dateFilter));
+        break;
+
+    case 'week':
+        // Current week (Sunday to Saturday)
+        $weekStart = date('Y-m-d', strtotime('sunday this week'));
+        $weekEnd = date('Y-m-d', strtotime('saturday this week'));
+        $dateCondition = "DATE(al.timestamp) BETWEEN '$weekStart' AND '$weekEnd'";
+        $periodLabel = date('M d', strtotime($weekStart)) . ' - ' . date('M d, Y', strtotime($weekEnd));
+        break;
+
+    case 'month':
+        // Current month
+        $monthStart = date('Y-m-01');
+        $monthEnd = date('Y-m-t');
+        $dateCondition = "DATE(al.timestamp) BETWEEN '$monthStart' AND '$monthEnd'";
+        $periodLabel = date('F Y');
+        break;
+
+    case 'year':
+        // Current year
+        $yearStart = date('Y-01-01');
+        $yearEnd = date('Y-12-31');
+        $dateCondition = "DATE(al.timestamp) BETWEEN '$yearStart' AND '$yearEnd'";
+        $periodLabel = date('Y');
+        break;
+}
 
 // ============================================================
 // GET ACCESS LOGS
@@ -41,12 +86,8 @@ $query = "
     LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
     LEFT JOIN users u ON c.user_id = u.user_id
     LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
-    WHERE 1=1
+    WHERE $dateCondition
 ";
-
-if (!empty($dateFilter)) {
-    $query .= " AND DATE(al.timestamp) = '$dateFilter'";
-}
 
 if (!empty($searchFilter)) {
     $query .= " AND (
@@ -56,7 +97,7 @@ if (!empty($searchFilter)) {
     )";
 }
 
-$query .= " ORDER BY al.timestamp DESC LIMIT 500";
+$query .= " ORDER BY al.timestamp DESC LIMIT 1000";
 
 $result = $conn->query($query);
 if ($result) {
@@ -85,9 +126,63 @@ function formatDate($date) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Access Report Copy</title>
+    <style>
+        /* Minimal styles para lang sa period buttons */
+        body { font-family: Arial, sans-serif; background: #0d1117; color: #e6edf3; padding: 20px; margin: 0; }
+        .period-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+        .period-btn { 
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 18px; border-radius: 8px;
+            background: #1c2333; border: 1px solid #30363d;
+            color: #8b949e; text-decoration: none; font-size: 14px;
+            font-family: Arial, sans-serif;
+        }
+        .period-btn:hover { background: #21283a; color: #e6edf3; }
+        .period-btn.active { background: #1f4f9e; color: #ffffff; border-color: #1f4f9e; }
+        .period-btn i { font-style: normal; }
+        .info { margin-bottom: 15px; color: #8b949e; font-size: 13px; }
+
+        /* Plain table lang - black and white */
+        table { width: 100%; border-collapse: collapse; background: #ffffff; color: #000000; }
+        th, td { border: 1px solid #000000; padding: 6px 8px; text-align: left; font-size: 13px; }
+        th { background: #ffffff; font-weight: bold; }
+    </style>
 </head>
 <body>
 
+<!-- ============================================================
+     PERIOD FILTER BUTTONS
+     ============================================================ -->
+<div class="period-buttons">
+    <a href="?period=day&date=<?php echo $dateFilter; ?>" 
+       class="period-btn <?php echo $period === 'day' ? 'active' : ''; ?>">
+        <i>📅</i> Day
+    </a>
+    <a href="?period=week<?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" 
+       class="period-btn <?php echo $period === 'week' ? 'active' : ''; ?>">
+        <i>🗓</i> Week
+    </a>
+    <a href="?period=month<?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" 
+       class="period-btn <?php echo $period === 'month' ? 'active' : ''; ?>">
+        <i>🗓</i> Month
+    </a>
+    <a href="?period=year<?php echo !empty($searchFilter) ? '&search=' . urlencode($searchFilter) : ''; ?>" 
+       class="period-btn <?php echo $period === 'year' ? 'active' : ''; ?>">
+        <i>📆</i> Year
+    </a>
+</div>
+
+<!-- ============================================================
+     PERIOD INFO
+     ============================================================ -->
+<div class="info">
+    Showing: <strong><?php echo $periodLabel; ?></strong> &nbsp;|&nbsp; 
+    Total Records: <strong><?php echo count($logs); ?></strong>
+</div>
+
+<!-- ============================================================
+     PLAIN TABLE - BLACK AND WHITE
+     ============================================================ -->
 <table border="1" cellpadding="6" cellspacing="0" width="100%">
     <thead>
         <tr>
