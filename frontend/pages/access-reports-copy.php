@@ -1,7 +1,7 @@
 <?php
 /**
  * Tap-and-Go Doorlock - Access Report Copy
- * PLAIN TABLE - SIMPLE DESIGN
+ * PURE PLAIN TABLE - BLACK AND WHITE
  * Columns: Date/Time | Name | Age | Gender | Birthdate | Address | Contact Number
  * Location: frontend/pages/access-reports-copy.php
  */
@@ -18,28 +18,17 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
 
 $conn = getDBConnection();
 
-// ============================================================
-// GET FILTERS
-// ============================================================
+// Filters
 $dateFilter = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
 $searchFilter = isset($_GET['search']) ? trim($_GET['search']) : '';
 
-// ============================================================
-// GET ACCESS LOGS WITH USER DETAILS
-// ============================================================
+// Get logs
 $logs = [];
-
 $query = "
     SELECT 
         al.log_id,
         al.timestamp,
-        al.access_type,
-        al.access_status,
-        al.card_uid,
-        u.user_id,
         u.full_name,
-        u.student_id,
-        u.room_number,
         u.contact_number,
         rp.age,
         rp.gender,
@@ -73,9 +62,6 @@ if ($result) {
     }
 }
 
-// ============================================================
-// HELPER FUNCTIONS
-// ============================================================
 function formatDate($date, $format = 'M d, Y') {
     if (empty($date) || $date == '0000-00-00') return 'N/A';
     $ts = strtotime($date);
@@ -95,7 +81,7 @@ function showVal($value, $default = 'N/A') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Access Report Copy - Tap-and-Go Doorlock</title>
+    <title>Access Report Copy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -182,8 +168,7 @@ function showVal($value, $default = 'N/A') {
             padding: 12px 16px;
             margin-bottom: 20px;
         }
-        .filter-bar .form-control,
-        .filter-bar .form-select {
+        .filter-bar .form-control {
             background: #1a1a2e !important;
             border: 1px solid #2a2a4a !important;
             color: #e0e0e0 !important;
@@ -192,8 +177,7 @@ function showVal($value, $default = 'N/A') {
             font-size: 13px;
             height: 36px;
         }
-        .filter-bar .form-control:focus,
-        .filter-bar .form-select:focus {
+        .filter-bar .form-control:focus {
             border-color: #2a5a9a !important;
             box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
         }
@@ -208,95 +192,48 @@ function showVal($value, $default = 'N/A') {
             font-size: 13px;
             height: 36px;
         }
-        .filter-bar .btn-filter:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(26,58,106,0.3);
-        }
 
         /* ============================================================
-           PLAIN TABLE - SIMPLE DESIGN
+           PURE PLAIN TABLE - BLACK AND WHITE
            ============================================================ */
-        .plain-table-wrapper {
+        .table-wrapper {
             background: #ffffff;
-            border-radius: 8px;
-            padding: 20px;
-            overflow-x: auto;
+            padding: 15px;
         }
 
-        .plain-table {
+        table.plain {
             width: 100%;
             border-collapse: collapse;
-            font-family: 'Inter', sans-serif;
-            font-size: 13px;
+            background: #ffffff;
             color: #000000;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        }
+
+        table.plain th {
+            background: #ffffff;
+            color: #000000;
+            font-weight: bold;
+            padding: 6px 8px;
+            text-align: left;
+            border: 1px solid #000000;
+        }
+
+        table.plain td {
+            background: #ffffff;
+            color: #000000;
+            padding: 6px 8px;
+            border: 1px solid #000000;
+        }
+
+        table.plain tr {
             background: #ffffff;
         }
 
-        .plain-table thead th {
-            background: #f0f0f0;
-            color: #000000;
-            font-weight: 700;
-            padding: 10px 12px;
-            text-align: left;
-            border: 1px solid #cccccc;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .plain-table tbody td {
-            padding: 8px 12px;
-            border: 1px solid #cccccc;
-            color: #000000;
-            font-size: 12px;
-            vertical-align: middle;
-        }
-
-        .plain-table tbody tr:nth-child(even) {
-            background: #f9f9f9;
-        }
-
-        .plain-table tbody tr:hover {
-            background: #e8f0ff;
-        }
-
-        .plain-table .empty-row td {
-            text-align: center;
-            padding: 30px;
-            color: #999999;
-            font-style: italic;
-        }
-
-        /* PRINT HEADER */
-        .print-header {
-            display: none;
-            text-align: center;
-            margin-bottom: 15px;
-            color: #000;
-        }
-        .print-header h2 {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-        .print-header p {
-            font-size: 12px;
-            margin: 2px 0;
-        }
-
-        /* SUMMARY */
-        .report-summary {
-            margin-top: 15px;
-            font-size: 13px;
-            color: #808090;
-            text-align: center;
-        }
-        .report-summary strong { color: #ffd700; }
-
-        /* PRINT STYLES */
+        /* PRINT */
         @media print {
             .no-print { display: none !important; }
-            .navbar, .sidebar, .filter-bar, .page-header, .report-summary {
+            .navbar, .sidebar, .filter-bar, .page-header, .footer {
                 display: none !important;
             }
             .main-content {
@@ -308,21 +245,9 @@ function showVal($value, $default = 'N/A') {
                 background: #ffffff !important;
                 padding: 0 !important;
             }
-            .plain-table-wrapper {
+            .table-wrapper {
                 padding: 0 !important;
-                border-radius: 0 !important;
             }
-            .plain-table thead th {
-                background: #e0e0e0 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .plain-table tbody tr:nth-child(even) {
-                background: #f5f5f5 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .print-header { display: block !important; }
         }
 
         /* RESPONSIVE */
@@ -340,19 +265,18 @@ function showVal($value, $default = 'N/A') {
                 margin-left: 0 !important;
                 padding: 12px 15px !important;
             }
-            .plain-table {
-                font-size: 11px;
+            table.plain {
+                font-size: 10px;
             }
-            .plain-table thead th,
-            .plain-table tbody td {
-                padding: 6px 8px;
+            table.plain th,
+            table.plain td {
+                padding: 4px 6px;
             }
         }
     </style>
 </head>
 <body>
     <?php include '../includes/navbar.php'; ?>
-
     <?php include '../includes/sidebar.php'; ?>
 
     <main class="main-content">
@@ -394,19 +318,9 @@ function showVal($value, $default = 'N/A') {
             </form>
         </div>
 
-        <!-- PRINT HEADER -->
-        <div class="print-header">
-            <h2>ISU-E LADIES DORMITORY</h2>
-            <p>Isabela State University · Echague, Isabela</p>
-            <p><strong>Access Report Copy</strong></p>
-            <p>Date: <?php echo !empty($dateFilter) ? date('F d, Y', strtotime($dateFilter)) : 'All Records'; ?></p>
-        </div>
-
-        <!-- ============================================================
-             PLAIN TABLE
-             ============================================================ -->
-        <div class="plain-table-wrapper">
-            <table class="plain-table">
+        <!-- PLAIN TABLE -->
+        <div class="table-wrapper">
+            <table class="plain">
                 <thead>
                     <tr>
                         <th>Date / Time</th>
@@ -420,16 +334,14 @@ function showVal($value, $default = 'N/A') {
                 </thead>
                 <tbody>
                     <?php if (empty($logs)): ?>
-                        <tr class="empty-row">
-                            <td colspan="7">
-                                <i class="fas fa-inbox" style="font-size: 24px; display: block; margin-bottom: 8px;"></i>
-                                No access records found for the selected date
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 20px;">
+                                No access records found
                             </td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($logs as $log): ?>
                             <tr>
-                                <!-- 1. DATE / TIME -->
                                 <td>
                                     <?php 
                                         $timestamp = strtotime($log['timestamp']);
@@ -438,43 +350,17 @@ function showVal($value, $default = 'N/A') {
                                              date('h:i A', $timestamp);
                                     ?>
                                 </td>
-
-                                <!-- 2. NAME -->
                                 <td><?php echo showVal($log['full_name'] ?? null, 'Unknown'); ?></td>
-
-                                <!-- 3. AGE -->
                                 <td><?php echo showVal($log['age'] ?? null); ?></td>
-
-                                <!-- 4. GENDER -->
                                 <td><?php echo showVal($log['gender'] ?? null); ?></td>
-
-                                <!-- 5. BIRTHDATE -->
                                 <td><?php echo formatDate($log['birth_date'] ?? null); ?></td>
-
-                                <!-- 6. ADDRESS -->
                                 <td><?php echo showVal($log['home_address'] ?? null); ?></td>
-
-                                <!-- 7. CONTACT NUMBER -->
                                 <td><?php echo showVal($log['contact_number'] ?? null); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </tbody>
             </table>
-        </div>
-
-        <!-- SUMMARY -->
-        <div class="report-summary no-print">
-            <i class="fas fa-database me-1"></i>
-            Total Records: <strong><?php echo count($logs); ?></strong>
-            <?php if (!empty($dateFilter)): ?>
-                <span class="mx-2">|</span>
-                Date: <strong><?php echo date('F d, Y', strtotime($dateFilter)); ?></strong>
-            <?php endif; ?>
-            <?php if (!empty($searchFilter)): ?>
-                <span class="mx-2">|</span>
-                Search: <strong>"<?php echo htmlspecialchars($searchFilter); ?>"</strong>
-            <?php endif; ?>
         </div>
 
     </main>
