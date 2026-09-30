@@ -5,6 +5,7 @@
  * WITH PROFILE PHOTO UPLOAD AND DISPLAY
  * PURE DARK MODE - No white backgrounds
  * ✅ FIXED: Sidebar not covered by main content
+ * ✅ FIXED: Fully responsive - fits all screen sizes
  * Location: frontend/pages/residents.php
  */
 
@@ -338,6 +339,7 @@ function getInitials($name) {
             font-family: 'Inter', sans-serif;
             background: #0a0e1a !important;
             color: #e0e0e0 !important;
+            overflow-x: hidden;
         }
         
         /* ============================================================
@@ -372,6 +374,7 @@ function getInitials($name) {
             overflow-y: auto !important;
             z-index: 1040 !important;
             padding-top: 10px !important;
+            transition: width 0.3s ease, left 0.3s ease !important;
         }
         .sidebar .nav-link {
             color: #9090a0 !important;
@@ -410,6 +413,7 @@ function getInitials($name) {
             background: #0a0e1a !important;
             position: relative;
             z-index: 1;
+            transition: margin-left 0.3s ease !important;
         }
         
         /* ============================================================
@@ -423,6 +427,7 @@ function getInitials($name) {
             color: #606070 !important;
             font-size: 12px !important;
             text-align: center !important;
+            transition: margin-left 0.3s ease !important;
         }
         
         /* ============================================================
@@ -430,16 +435,16 @@ function getInitials($name) {
            ============================================================ */
         .approval-tabs {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
-            margin-bottom: 18px;
+            margin-bottom: 16px;
         }
         
         .approval-tab {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
+            gap: 6px;
+            padding: 8px 16px;
             background: #111827;
             border: 1px solid #1a2a4a;
             border-radius: 12px;
@@ -449,6 +454,7 @@ function getInitials($name) {
             text-decoration: none;
             transition: all 0.3s ease;
             cursor: pointer;
+            white-space: nowrap;
         }
         
         .approval-tab:hover {
@@ -522,6 +528,12 @@ function getInitials($name) {
             box-shadow: 0 2px 15px rgba(0,0,0,0.3) !important;
             transition: all 0.3s ease;
             border-left: 3px solid #1a3a6a;
+            overflow: hidden;
+        }
+        
+        .resident-card .row {
+            --bs-gutter-x: 0.5rem;
+            --bs-gutter-y: 0.5rem;
         }
         
         .resident-card.pending-status {
@@ -549,8 +561,8 @@ function getInitials($name) {
            RESIDENT AVATAR
            ============================================================ */
         .resident-avatar {
-            width: 50px;
-            height: 50px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -573,7 +585,7 @@ function getInitials($name) {
             justify-content: center;
             width: 100%;
             height: 100%;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             color: white;
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
@@ -586,7 +598,7 @@ function getInitials($name) {
             background: rgba(0,0,0,0.8);
             color: white;
             text-align: center;
-            font-size: 9px;
+            font-size: 8px;
             padding: 2px 0;
             opacity: 0;
             transition: all 0.3s ease;
@@ -601,15 +613,15 @@ function getInitials($name) {
             background: #10b981;
             color: white;
             border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            font-size: 8px;
+            width: 16px;
+            height: 16px;
+            font-size: 7px;
             display: flex;
             align-items: center;
             justify-content: center;
             border: 2px solid #111827;
         }
-        .resident-info h5 { color: #e0e0e0 !important; margin: 0; font-size: 14px; font-weight: 600; }
+        .resident-info h5 { color: #e0e0e0 !important; margin: 0; font-size: 13px; font-weight: 600; }
         .resident-info .text-muted { color: #808090 !important; font-size: 11px; }
         
         /* ============================================================
@@ -623,6 +635,7 @@ function getInitials($name) {
             transition: all 0.3s ease;
             border: 1px solid transparent;
             margin: 1px;
+            white-space: nowrap;
         }
         .btn-action:hover { transform: translateY(-1px); }
         
@@ -696,7 +709,7 @@ function getInitials($name) {
         /* ============================================================
            BADGES
            ============================================================ */
-        .badge-status { padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 500; }
+        .badge-status { padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 500; display: inline-block; }
         .badge-active { background: #065f46 !important; color: #6ee7b7 !important; }
         .badge-pending { 
             background: #92400e !important; 
@@ -714,7 +727,7 @@ function getInitials($name) {
         /* ============================================================
            SEARCH BOX
            ============================================================ */
-        .search-box { max-width: 380px; }
+        .search-box { max-width: 100%; }
         .search-box .form-control {
             background: #1a1a2e !important;
             border: 1px solid #2a2a4a !important;
@@ -899,6 +912,7 @@ function getInitials($name) {
             border-radius: 10px !important;
             font-weight: 600 !important;
             transition: all 0.3s ease;
+            white-space: nowrap;
         }
         .btn-new-resident:hover {
             transform: translateY(-2px);
@@ -915,6 +929,7 @@ function getInitials($name) {
             border-radius: 10px !important;
             font-weight: 600 !important;
             transition: all 0.3s ease;
+            white-space: nowrap;
         }
         .btn-admission-form:hover {
             transform: translateY(-2px);
@@ -923,20 +938,54 @@ function getInitials($name) {
         }
         
         /* ============================================================
-           ✅ RESPONSIVE - MOBILE
+           ✅ RESPONSIVE BREAKPOINTS
            ============================================================ */
-        @media (max-width: 768px) {
+        
+        /* Large screens - 1400px and below */
+        @media (max-width: 1400px) {
             .sidebar {
-                position: fixed !important;
-                top: 56px !important;
-                bottom: 0 !important;
-                left: -260px !important;
-                width: 260px !important;
-                transition: left 0.3s ease !important;
-                z-index: 1040 !important;
+                width: 200px !important;
             }
-            .sidebar.show { left: 0 !important; }
-            
+            .main-content {
+                margin-left: 200px !important;
+                padding: 14px 20px !important;
+            }
+            .footer {
+                margin-left: 200px !important;
+            }
+        }
+        
+        /* Medium-large screens - 1200px and below */
+        @media (max-width: 1200px) {
+            .sidebar {
+                width: 180px !important;
+            }
+            .sidebar .nav-link {
+                font-size: 12px !important;
+                padding: 7px 12px !important;
+            }
+            .main-content {
+                margin-left: 180px !important;
+                padding: 12px 15px !important;
+            }
+            .footer {
+                margin-left: 180px !important;
+            }
+            .resident-actions .btn-action {
+                font-size: 10px;
+                padding: 3px 8px;
+            }
+        }
+        
+        /* Tablet - 992px and below */
+        @media (max-width: 992px) {
+            .sidebar {
+                left: -260px !important;
+                width: 240px !important;
+            }
+            .sidebar.show {
+                left: 0 !important;
+            }
             .main-content {
                 margin-left: 0 !important;
                 padding: 12px 15px !important;
@@ -945,8 +994,27 @@ function getInitials($name) {
                 margin-left: 0 !important;
                 padding: 8px 15px !important;
             }
-            
-            .resident-card { padding: 12px; }
+            .page-header h1 {
+                font-size: 18px;
+            }
+            .approval-tab {
+                font-size: 12px;
+                padding: 7px 14px;
+            }
+        }
+        
+        /* Mobile - 768px and below */
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 10px 12px !important;
+            }
+            .resident-card {
+                padding: 12px;
+            }
+            .resident-actions {
+                justify-content: flex-start !important;
+                margin-top: 8px;
+            }
             .resident-actions .btn-action {
                 margin-bottom: 3px;
                 font-size: 10px;
@@ -963,7 +1031,59 @@ function getInitials($name) {
             
             .approval-tab {
                 font-size: 11px;
-                padding: 8px 12px;
+                padding: 6px 10px;
+            }
+            .approval-tab .badge {
+                font-size: 10px;
+                padding: 1px 6px;
+            }
+            
+            .resident-info h5 { font-size: 12px; }
+            .resident-info .text-muted { font-size: 10px; }
+            .resident-avatar { width: 42px; height: 42px; }
+            .resident-avatar .no-photo { font-size: 14px; }
+            
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start !important;
+                gap: 10px;
+            }
+            .page-header .d-flex {
+                width: 100%;
+            }
+            .page-header .btn {
+                flex: 1;
+                text-align: center;
+            }
+        }
+        
+        /* Small mobile - 480px and below */
+        @media (max-width: 480px) {
+            .main-content {
+                padding: 8px 10px !important;
+            }
+            .resident-card {
+                padding: 10px;
+            }
+            .resident-avatar {
+                width: 38px;
+                height: 38px;
+            }
+            .resident-avatar .no-photo { font-size: 13px; }
+            .btn-action {
+                font-size: 9px !important;
+                padding: 3px 6px !important;
+            }
+            .approval-tabs {
+                gap: 5px;
+            }
+            .approval-tab {
+                font-size: 10px;
+                padding: 5px 8px;
+                border-radius: 8px;
+            }
+            .page-header h1 {
+                font-size: 16px;
             }
         }
         
@@ -983,7 +1103,7 @@ function getInitials($name) {
         /* ============================================================
            SCROLLBAR
            ============================================================ */
-        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0a0e1a; }
         ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
@@ -997,7 +1117,7 @@ function getInitials($name) {
     <!-- MAIN CONTENT -->
     <main class="main-content">
         <!-- Page Header -->
-        <div class="page-header d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
+        <div class="page-header d-flex justify-content-between flex-wrap align-items-center gap-2">
             <h1><i class="fas fa-users me-2"></i>Residents</h1>
             <div class="d-flex gap-2 flex-wrap">
                 <a href="new-resident.php" class="btn btn-new-resident">
@@ -1070,7 +1190,7 @@ function getInitials($name) {
         <?php endif; ?>
 
         <!-- Search Bar -->
-        <div class="row mb-3">
+        <div class="row mb-3 g-2">
             <div class="col-md-8">
                 <form method="GET" action="" class="search-box d-flex">
                     <?php if (!empty($statusFilter)): ?>
@@ -1092,7 +1212,7 @@ function getInitials($name) {
                     <?php endif; ?>
                 </form>
             </div>
-            <div class="col-md-4 text-end">
+            <div class="col-md-4 text-md-end text-start">
                 <span class="text-muted small">
                     <i class="fas fa-users me-1"></i>
                     Showing <?php echo count($residents); ?> of <?php echo $totalResidents; ?> residents
@@ -1121,7 +1241,7 @@ function getInitials($name) {
                            class="btn btn-outline-secondary btn-sm">Clear Search</a>
                     <?php else: ?>
                         <p class="text-muted small">Start by adding your first resident</p>
-                        <div class="d-flex gap-2 justify-content-center mt-2">
+                        <div class="d-flex gap-2 justify-content-center mt-2 flex-wrap">
                             <a href="new-resident.php" class="btn btn-new-resident btn-sm">
                                 <i class="fas fa-user-plus me-1"></i> New Resident Form
                             </a>
@@ -1159,9 +1279,9 @@ function getInitials($name) {
                 elseif ($approvalStatus === 'rejected') $cardClass = 'rejected-status';
             ?>
                 <div class="resident-card <?php echo $cardClass; ?>">
-                    <div class="row align-items-center">
+                    <div class="row align-items-center g-2">
                         <!-- Avatar & Name -->
-                        <div class="col-md-4 col-lg-3">
+                        <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                             <div class="d-flex align-items-center gap-2">
                                 <div class="resident-avatar" 
                                      data-bs-toggle="modal" 
@@ -1200,7 +1320,7 @@ function getInitials($name) {
                         </div>
 
                         <!-- Room & Status -->
-                        <div class="col-md-3 col-lg-3">
+                        <div class="col-6 col-sm-3 col-md-3 col-lg-2">
                             <div>
                                 <span class="text-muted small">Room</span>
                                 <br>
@@ -1222,7 +1342,7 @@ function getInitials($name) {
                         </div>
 
                         <!-- Approval Status -->
-                        <div class="col-md-2 col-lg-2">
+                        <div class="col-6 col-sm-3 col-md-2 col-lg-2">
                             <div>
                                 <span class="text-muted small">Approval</span>
                                 <br>
@@ -1252,8 +1372,8 @@ function getInitials($name) {
                         </div>
 
                         <!-- Action Buttons -->
-                        <div class="col-md-3 col-lg-4">
-                            <div class="resident-actions d-flex flex-wrap gap-1">
+                        <div class="col-12 col-sm-12 col-md-3 col-lg-5">
+                            <div class="resident-actions d-flex flex-wrap gap-1 justify-content-md-end justify-content-start">
                                 
                                 <?php if ($approvalStatus === 'pending'): ?>
                                     <a href="approve-resident.php?approve=<?php echo $resident['user_id']; ?>" 
@@ -1485,7 +1605,7 @@ function getInitials($name) {
             <!-- PAGINATION -->
             <?php if ($totalPages > 1 || $totalResidents > 0): ?>
             <div class="pagination-container">
-                <div class="row align-items-center">
+                <div class="row align-items-center g-2">
                     <div class="col-md-6">
                         <div class="page-info">
                             <i class="fas fa-info-circle me-1"></i>
@@ -1495,7 +1615,7 @@ function getInitials($name) {
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="d-flex align-items-center justify-content-end gap-2 flex-wrap">
+                        <div class="d-flex align-items-center justify-content-md-end justify-content-start gap-2 flex-wrap">
                             <div class="per-page-selector d-flex align-items-center gap-1">
                                 <label>Show:</label>
                                 <select onchange="changePerPage(this.value)">
