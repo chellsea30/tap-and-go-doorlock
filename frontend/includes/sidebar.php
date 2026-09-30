@@ -7,6 +7,7 @@
  * REPORTS MOVED TO OTHERS SUBMENU
  * WITH STUDENT REGISTRATION APPROVAL TRACKING
  * ✅ UPDATED: 13 ROOMS (from 5 rooms)
+ * ✅ NEW: Access Report Copy submenu
  * Location: frontend/includes/sidebar.php
  */
 
@@ -269,7 +270,6 @@ $totalRooms = 13;
        MOBILE FIX - SIDEBAR TOGGLE
        ============================================================ */
     
-    /* Sidebar Overlay - for mobile */
     .sidebar-overlay {
         display: none;
         position: fixed;
@@ -286,7 +286,6 @@ $totalRooms = 13;
         display: block;
     }
 
-    /* Mobile Toggle Button */
     .sidebar-toggle-btn {
         display: none;
         background: transparent;
@@ -657,11 +656,11 @@ SIDEBAR OVERLAY - for mobile close
             
             <!-- ===== OTHERS ===== -->
             <li class="nav-item">
-                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'active' : ''; ?>" 
+                <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'access-reports-copy.php', 'visitor-reports.php', 'chart-report.php']) ? 'active' : ''; ?>" 
                    href="#othersMenu" 
                    data-bs-toggle="collapse" 
                    role="button" 
-                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'true' : 'false'; ?>">
+                   aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'access-reports-copy.php', 'visitor-reports.php', 'chart-report.php']) ? 'true' : 'false'; ?>">
                     <i class="fas fa-ellipsis-h"></i> Others
                     <i class="fas fa-chevron-down"></i>
                     <?php
@@ -679,20 +678,22 @@ SIDEBAR OVERLAY - for mobile close
                         <span class="badge bg-danger rounded-pill"><?php echo $totalOthersBadge; ?></span>
                     <?php endif; ?>
                 </a>
-                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="othersMenu">
+                <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['concerns-management.php', 'emails.php', 'email-staff.php', 'email-residents.php', 'request-reset-pass.php', 'settings.php', 'reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'access-reports-copy.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="othersMenu">
                     
-                    <!-- REPORTS SUBMENU -->
+                    <!-- ============================================================
+                         REPORTS SUBMENU
+                         ============================================================ -->
                     <li class="nav-item">
-                        <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'active' : ''; ?>" 
+                        <a class="nav-link <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'access-reports-copy.php', 'visitor-reports.php', 'chart-report.php']) ? 'active' : ''; ?>" 
                            href="#reportsSubMenu" 
                            data-bs-toggle="collapse" 
                            role="button" 
-                           aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'true' : 'false'; ?>">
+                           aria-expanded="<?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'access-reports-copy.php', 'visitor-reports.php', 'chart-report.php']) ? 'true' : 'false'; ?>">
                             <i class="fas fa-chart-bar"></i> Reports
                             <i class="fas fa-chevron-down"></i>
                             <span class="badge bg-info rounded-pill"><?php echo $approvedResidents; ?></span>
                         </a>
-                        <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="reportsSubMenu">
+                        <ul class="nav flex-column collapse <?php echo in_array(basename($_SERVER['PHP_SELF']), ['reports.php', 'resident-reports.php', 'residents-report.php', 'access-reports.php', 'access-reports-copy.php', 'visitor-reports.php', 'chart-report.php']) ? 'show' : ''; ?>" id="reportsSubMenu">
                             <li class="nav-item">
                                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'reports.php' ? 'active' : ''; ?>" href="reports.php">
                                     <i class="fas fa-chart-pie"></i> Overview
@@ -709,6 +710,12 @@ SIDEBAR OVERLAY - for mobile close
                             <li class="nav-item">
                                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'access-reports.php' ? 'active' : ''; ?>" href="access-reports.php">
                                     <i class="fas fa-door-open"></i> Access Reports
+                                </a>
+                            </li>
+                            <!-- ✅ BAGONG ACCESS REPORT COPY -->
+                            <li class="nav-item">
+                                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'access-reports-copy.php' ? 'active' : ''; ?>" href="access-reports-copy.php">
+                                    <i class="fas fa-copy"></i> Access Report Copy
                                 </a>
                             </li>
                             <li class="nav-item">
@@ -896,4 +903,5 @@ JAVASCRIPT - SIDEBAR TOGGLE
     setInterval(refreshPendingCount, 30000);
 
     console.log('✅ Dark Sidebar loaded with approval tracking - 13 Rooms');
+    console.log('✅ Access Report Copy submenu added');
 </script>
