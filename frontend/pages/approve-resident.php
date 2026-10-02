@@ -1,137 +1,118 @@
 <?php
 /**
- * Tap-and-Go Doorlock - Admin Approve/Reject Handler
- * Handles student registration approval
+ * Approve / Reject handler
  * Location: frontend/pages/approve-resident.php
  */
-
 session_start();
+
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
+require_once '../../backend/helpers/audit.php';
 
-// Check authentication
 if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
 }
 
-$conn = getDBConnection();
+$conn    = getDBConnection();
+$adminId = (int)$_SESSION['admin_id'];
 
 // ============================================================
-// HANDLE APPROVE
+// APPROVE (GET)
 // ============================================================
 if (isset($_GET['approve']) && is_numeric($_GET['approve'])) {
-    $user_id = (int)$_GET['approve'];
-    
-    // Get student info for logging
-    $infoStmt = $conn->prepare("SELECT full_name, student_id FROM users WHERE user_id = ?");
-    $infoStmt->bind_param("i", $user_id);
-    $infoStmt->execute();
-    $infoResult = $infoStmt->get_result();
-    $studentInfo = $infoResult->fetch_assoc();
-    $infoStmt->close();
-    
-    if (!$studentInfo) {
-        header('Location: residents.php?msg=error&status=pending');
+    $id = (int)$_GET['approve'];
+
+    $stmt = $conn->prepare("SELECT user_id, full_name, student_id, approval_status FROM users WHERE user_id = ? AND status != 'deleted'");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$user) {
+        header('Location: residents.php?msg=error');
         exit();
     }
-    
-    // Update user
+
+    $oldStatus = $user['approval_status'] ?? 'pending';
+
     $stmt = $conn->prepare("
-        UPDATE users 
-        SET approval_status = 'approved', 
-            approved_by = ?, 
+        UPDATE users
+        SET approval_status = 'approved',
+            status = 'active',
             approved_at = NOW(),
-            status = 'active'
+            approved_by = ?,
+            rejection_reason = NULL,
+            rejected_at = NULL,
+            rejected_by = NULL
         WHERE user_id = ?
     ");
-    $stmt->bind_param("ii", $_SESSION['admin_id'], $user_id);
-    
-    if ($stmt->execute()) {
-        $stmt->close();
-        
-        // Log to student_registration_logs
-        $logStmt = $conn->prepare("
-            INSERT INTO student_registration_logs (user_id, action, details, performed_by)
-            VALUES (?, 'approved', ?, ?)
-        ");
-        $adminName = $_SESSION['full_name'] ?? 'Admin';
-        $details = "Registration approved: {$studentInfo['full_name']} ({$studentInfo['student_id']})";
-        $logStmt->bind_param("iss", $user_id, $details, $adminName);
-        $logStmt->execute();
-        $logStmt->close();
-        
-        // Log to admin audit
-        logAudit($_SESSION['admin_id'], 'Approve Student', "Approved student: {$studentInfo['full_name']} ({$studentInfo['student_id']})");
-        
-        header('Location: residents.php?msg=approved&status=pending');
-        exit();
+    $stmt->bind_param("ii", $adminId, $id);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    if ($ok) {
+        auditLog(
+            $conn,
+            'Approve Student',
+            sprintf('Approved student: %s (%s)', $user['full_name'], $user['student_id'] ?? 'N/A')
+        );
+        header('Location: residents.php?msg=approved');
     } else {
-        header('Location: residents.php?msg=error&status=pending');
-        exit();
+        header('Location: residents.php?msg=error');
     }
+    exit();
 }
 
 // ============================================================
-// HANDLE REJECT
+// REJECT (POST)
 // ============================================================
-if (isset($_GET['reject']) && is_numeric($_GET['reject'])) {
-    $user_id = (int)$_GET['reject'];
-    $reason = isset($_GET['reason']) ? trim($_GET['reason']) : 'Requirements not complete';
-    
-    // Get student info
-    $infoStmt = $conn->prepare("SELECT full_name, student_id FROM users WHERE user_id = ?");
-    $infoStmt->bind_param("i", $user_id);
-    $infoStmt->execute();
-    $infoResult = $infoStmt->get_result();
-    $studentInfo = $infoResult->fetch_assoc();
-    $infoStmt->close();
-    
-    if (!$studentInfo) {
-        header('Location: residents.php?msg=error&status=pending');
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reject']) && is_numeric($_POST['reject'])) {
+    $id     = (int)$_POST['reject'];
+    $reason = trim($_POST['reason'] ?? '');
+
+    if ($reason === '') $reason = 'No reason provided.';
+    if (mb_strlen($reason) > 1000) $reason = mb_substr($reason, 0, 1000);
+
+    $stmt = $conn->prepare("SELECT user_id, full_name, student_id, approval_status FROM users WHERE user_id = ? AND status != 'deleted'");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$user) {
+        header('Location: residents.php?msg=error');
         exit();
     }
-    
-    // Update user
+
     $stmt = $conn->prepare("
-        UPDATE users 
-        SET approval_status = 'rejected', 
-            approved_by = ?, 
-            approved_at = NOW(),
+        UPDATE users
+        SET approval_status = 'rejected',
             rejection_reason = ?,
-            status = 'inactive'
+            rejected_at = NOW(),
+            rejected_by = ?
         WHERE user_id = ?
     ");
-    $stmt->bind_param("isi", $_SESSION['admin_id'], $reason, $user_id);
-    
-    if ($stmt->execute()) {
-        $stmt->close();
-        
-        // Log to student_registration_logs
-        $logStmt = $conn->prepare("
-            INSERT INTO student_registration_logs (user_id, action, details, performed_by)
-            VALUES (?, 'rejected', ?, ?)
-        ");
-        $adminName = $_SESSION['full_name'] ?? 'Admin';
-        $details = "Registration rejected: {$studentInfo['full_name']} ({$studentInfo['student_id']}) - Reason: {$reason}";
-        $logStmt->bind_param("iss", $user_id, $details, $adminName);
-        $logStmt->execute();
-        $logStmt->close();
-        
-        // Log to admin audit
-        logAudit($_SESSION['admin_id'], 'Reject Student', "Rejected student: {$studentInfo['full_name']} ({$studentInfo['student_id']})");
-        
-        header('Location: residents.php?msg=rejected&status=pending');
-        exit();
+    $stmt->bind_param("sii", $reason, $adminId, $id);
+    $ok = $stmt->execute();
+    $stmt->close();
+
+    if ($ok) {
+        auditLog(
+            $conn,
+            'Reject Student',
+            sprintf('Rejected student: %s (%s) - Reason: %s',
+                $user['full_name'],
+                $user['student_id'] ?? 'N/A',
+                $reason
+            )
+        );
+        header('Location: residents.php?msg=rejected');
     } else {
-        header('Location: residents.php?msg=error&status=pending');
-        exit();
+        header('Location: residents.php?msg=error');
     }
+    exit();
 }
 
-// ============================================================
-// DEFAULT: Redirect to residents
-// ============================================================
 header('Location: residents.php');
 exit();
-?>
