@@ -2,6 +2,7 @@
 /**
  * Audit Logs viewer.
  * Location: frontend/pages/audit-logs.php
+ * WITH DARK MODE SUPPORT
  */
 session_start();
 
@@ -14,9 +15,24 @@ if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     exit();
 }
 
-include '../includes/header.php';
-
 $conn = getDBConnection();
+
+// ============================================================
+// DARK MODE (matching residents.php)
+// ============================================================
+$darkModeClass = '';
+if (isset($_SESSION['admin_id'])) {
+    try {
+        $stmt = $conn->prepare("SELECT setting_value FROM user_settings WHERE admin_id = ? AND setting_key = 'dark_mode'");
+        $stmt->bind_param("i", $_SESSION['admin_id']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($row = $result->fetch_assoc()) {
+            if ($row['setting_value'] == 'true') $darkModeClass = 'dark-mode';
+        }
+        $stmt->close();
+    } catch (Exception $e) {}
+}
 
 $filters = [
     'action'    => $_GET['action'] ?? '',
@@ -57,30 +73,98 @@ function fmtAction($a) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
-        html, body { font-family: 'Inter', sans-serif; background: #0a0e1a !important; color: #e0e0e0 !important; margin: 0; }
+        * { box-sizing: border-box; }
+        html, body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0e1a !important;
+            color: #e0e0e0 !important;
+            margin: 0;
+            min-height: 100%;
+        }
+
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
             position: fixed !important; top: 0; left: 0; right: 0;
             z-index: 1050 !important; height: 56px !important;
         }
+        .navbar-brand { color: #e0e0e0 !important; }
+        .navbar .nav-link { color: rgba(255,255,255,0.6) !important; }
+        .navbar .nav-link:hover { color: #ffffff !important; background: rgba(255,255,255,0.05) !important; }
+        .navbar .nav-link.active { color: #ffffff !important; background: rgba(255,255,255,0.08) !important; }
+
         .sidebar {
             position: fixed !important; top: 56px; left: 0; bottom: 0;
             width: 220px !important; background: #0d1528 !important;
             border-right: 1px solid #1a2a4a !important;
             overflow-y: auto !important; z-index: 1040 !important;
+            transition: width 0.3s ease, left 0.3s ease !important;
         }
-        .main-content { margin-left: 220px !important; margin-top: 56px !important; padding: 15px 25px !important; min-height: calc(100vh - 56px) !important; }
-        .footer { margin-left: 220px !important; padding: 10px 25px !important; background: #0d1528 !important; border-top: 1px solid #1a2a4a !important; color: #606070 !important; font-size: 12px !important; text-align: center !important; }
+        .sidebar .nav-link {
+            color: #9090a0 !important;
+            padding: 8px 16px !important;
+            border-radius: 8px !important;
+            margin: 2px 10px !important;
+            font-size: 13px !important;
+        }
+        .sidebar .nav-link:hover { background: rgba(255,255,255,0.05) !important; color: #e0e0e0 !important; }
+        .sidebar .nav-link.active {
+            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
+            color: white !important;
+        }
+        .sidebar .nav-link i { width: 18px; text-align: center; }
+
+        .main-content {
+            margin-left: 220px !important;
+            margin-top: 56px !important;
+            padding: 15px 25px !important;
+            min-height: calc(100vh - 56px) !important;
+            background: #0a0e1a !important;
+            transition: margin-left 0.3s ease !important;
+        }
+        .footer {
+            margin-left: 220px !important;
+            padding: 10px 25px !important;
+            background: #0d1528 !important;
+            border-top: 1px solid #1a2a4a !important;
+            color: #606070 !important;
+            font-size: 12px !important;
+            text-align: center !important;
+            transition: margin-left 0.3s ease !important;
+        }
+
         .page-header { padding-bottom: 10px; margin-bottom: 15px; border-bottom: 1px solid #1a2a4a; }
         .page-header h1 { font-size: 20px; font-weight: 600; color: #e0e0e0; }
         .page-header h1 i { color: #1a3a6a; }
 
-        .card { background: #111827 !important; border: 1px solid #1a2a4a !important; border-radius: 12px !important; padding: 16px; }
+        .card {
+            background: #111827 !important;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 12px !important;
+            padding: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+        }
+
         .table { color: #e0e0e0 !important; margin: 0; }
-        .table thead th { background: #0d1528 !important; border-color: #1a2a4a !important; color: #9090a0 !important; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-        .table td { border-color: #1a2a4a !important; font-size: 12px; vertical-align: middle; }
-        .table tbody tr:hover { background: rgba(255,255,255,0.03); }
+        .table thead th {
+            background: #0d1528 !important;
+            border-color: #1a2a4a !important;
+            color: #9090a0 !important;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            padding: 10px 12px;
+        }
+        .table td {
+            border-color: #1a2a4a !important;
+            font-size: 12px;
+            vertical-align: middle;
+            padding: 10px 12px;
+            color: #e0e0e0 !important;
+        }
+        .table tbody tr { border-color: #1a2a4a !important; }
+        .table tbody tr:hover { background: rgba(255,255,255,0.03) !important; }
 
         .badge-status { padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; display: inline-block; }
         .badge-success { background: #065f46 !important; color: #6ee7b7 !important; }
@@ -88,34 +172,89 @@ function fmtAction($a) {
         .badge-info    { background: #1a3a6a !important; color: #93c5fd !important; }
         .badge-warning { background: #4a3a1a !important; color: #fbbf24 !important; }
 
-        .form-control, .form-select { background: #1a1a2e !important; border: 1px solid #2a2a4a !important; color: #e0e0e0 !important; font-size: 13px; height: 36px; border-radius: 8px; }
-        .form-control:focus, .form-select:focus { border-color: #2a5a9a !important; box-shadow: 0 0 0 3px rgba(26,58,106,0.3); }
+        .form-control, .form-select {
+            background: #1a1a2e !important;
+            border: 1px solid #2a2a4a !important;
+            color: #e0e0e0 !important;
+            font-size: 13px;
+            height: 36px;
+            border-radius: 8px;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #2a5a9a !important;
+            box-shadow: 0 0 0 3px rgba(26,58,106,0.3);
+            background: #1a1a2e !important;
+            color: #e0e0e0 !important;
+        }
+        .form-control::placeholder { color: #606070 !important; }
         .form-label { color: #9090a0; font-size: 12px; margin-bottom: 4px; }
 
-        .btn-primary { background: #1a3a6a !important; border-color: #1a3a6a !important; color: white !important; font-size: 12px !important; padding: 6px 14px !important; border-radius: 8px !important; }
-        .btn-primary:hover { background: #2a5a9a !important; }
-        .btn-outline-secondary { border-color: #2a2a4a !important; color: #808090 !important; font-size: 12px !important; padding: 6px 12px !important; border-radius: 8px !important; background: transparent !important; }
+        .btn-primary {
+            background: #1a3a6a !important;
+            border-color: #1a3a6a !important;
+            color: white !important;
+            font-size: 12px !important;
+            padding: 6px 14px !important;
+            border-radius: 8px !important;
+        }
+        .btn-primary:hover { background: #2a5a9a !important; border-color: #2a5a9a !important; }
+
+        .btn-outline-secondary {
+            border-color: #2a2a4a !important;
+            color: #808090 !important;
+            font-size: 12px !important;
+            padding: 6px 12px !important;
+            border-radius: 8px !important;
+            background: transparent !important;
+        }
         .btn-outline-secondary:hover { background: #2a2a4a !important; color: #e0e0e0 !important; }
 
-        .pagination .page-link { color: #9090a0 !important; background: transparent !important; border: none; font-size: 12px; padding: 5px 10px; border-radius: 6px; margin: 0 2px; }
+        .pagination .page-link {
+            color: #9090a0 !important;
+            background: transparent !important;
+            border: none;
+            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 6px;
+            margin: 0 2px;
+        }
         .pagination .page-link:hover { background: #2a2a4a !important; color: #e0e0e0 !important; }
-        .pagination .page-item.active .page-link { background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important; color: white !important; }
+        .pagination .page-item.active .page-link {
+            background: linear-gradient(135deg, #1a3a6a, #2a5a9a) !important;
+            color: white !important;
+        }
         .pagination .page-item.disabled .page-link { color: #4a4a5a !important; }
 
         .details-cell { color: #b0b0c0; max-width: 400px; }
 
+        @media (max-width: 1400px) {
+            .sidebar { width: 200px !important; }
+            .main-content { margin-left: 200px !important; padding: 14px 20px !important; }
+            .footer { margin-left: 200px !important; }
+        }
+        @media (max-width: 1200px) {
+            .sidebar { width: 180px !important; }
+            .main-content { margin-left: 180px !important; padding: 12px 15px !important; }
+            .footer { margin-left: 180px !important; }
+        }
         @media (max-width: 992px) {
             .sidebar { left: -260px !important; width: 240px !important; }
             .sidebar.show { left: 0 !important; }
             .main-content { margin-left: 0 !important; padding: 12px 15px !important; }
             .footer { margin-left: 0 !important; padding: 8px 15px !important; }
         }
+        @media (max-width: 768px) {
+            .main-content { padding: 10px 12px !important; }
+            .table td, .table th { font-size: 11px; padding: 8px; }
+        }
+
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0a0e1a; }
         ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
     </style>
 </head>
-<body>
+<body class="<?php echo $darkModeClass; ?>">
     <?php include '../includes/navbar.php'; ?>
     <?php include '../includes/sidebar.php'; ?>
 
