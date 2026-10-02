@@ -3,6 +3,7 @@
  * Tap-and-Go Doorlock - Main Login with Math Puzzle
  * ISABELA STATE UNIVERSITY - LADIES DORMITORY
  * ✅ AUTO-UNLOCK kapag natapos na ang 10-minute ban
+ * ✅ COMPACT LAYOUT - fit sa screen
  */
 
 session_start();
@@ -10,7 +11,6 @@ session_start();
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
 
-// Check if already logged in
 if (isset($_SESSION['admin_id']) && isSessionValid()) {
     header('Location: dashboard.php');
     exit();
@@ -41,44 +41,39 @@ $block_until_timestamp = 0;
 $max_attempts = 3;
 
 // ============================================================
-// ✅ AUTO-UNLOCK: Clean up expired bans sa database
+// ✅ AUTO-UNLOCK: Clean up expired bans
 // ============================================================
 function autoUnlockExpiredBans($conn) {
     $tables = ['admin_users', 'staff_users', 'student_users'];
     $id_fields = ['admin_id', 'staff_id', 'student_id'];
-    
+
     for ($i = 0; $i < count($tables); $i++) {
         $table = $tables[$i];
         $id_field = $id_fields[$i];
-        
-        // Reset login_attempts at login_blocked_until kapag expired na
+
         $conn->query("
-            UPDATE $table 
-            SET login_attempts = 0, 
-                login_blocked_until = NULL 
-            WHERE login_blocked_until IS NOT NULL 
+            UPDATE $table
+            SET login_attempts = 0,
+                login_blocked_until = NULL
+            WHERE login_blocked_until IS NOT NULL
             AND login_blocked_until <= NOW()
         ");
-        
-        // Reset math attempts din
+
         $conn->query("
-            UPDATE $table 
-            SET math_attempts = 0, 
-                math_blocked_until = NULL 
-            WHERE math_blocked_until IS NOT NULL 
+            UPDATE $table
+            SET math_attempts = 0,
+                math_blocked_until = NULL
+            WHERE math_blocked_until IS NOT NULL
             AND math_blocked_until <= NOW()
         ");
     }
 }
 
-// ✅ AUTO-UNLOCK sa page load
 try {
     $conn = getDBConnection();
     autoUnlockExpiredBans($conn);
     $conn->close();
-} catch (Exception $e) {
-    // Silently fail
-}
+} catch (Exception $e) {}
 
 // ============================================================
 // HANDLE PASSWORD RESET REQUEST
@@ -86,7 +81,7 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
     $reset_email = trim($_POST['reset_email'] ?? '');
     $reset_reason = trim($_POST['reset_reason'] ?? '');
-    
+
     if (empty($reset_email)) {
         $error = 'Please enter your email address.';
     } else {
@@ -95,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
         $stmt->bind_param("s", $reset_email);
         $stmt->execute();
         $result = $stmt->get_result();
-        
+
         if ($row = $result->fetch_assoc()) {
             $check = $conn->prepare("SELECT request_id FROM password_reset_requests WHERE student_id = ? AND status = 'pending'");
             $check->bind_param("i", $row['student_id']);
@@ -108,11 +103,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
                         student_id, student_name, student_id_number, username, email, reason, status, requested_at
                     ) VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())
                 ");
-                $stmt2->bind_param("isssss", 
-                    $row['student_id'], $row['full_name'], $row['student_id_number'], 
+                $stmt2->bind_param("isssss",
+                    $row['student_id'], $row['full_name'], $row['student_id_number'],
                     $row['username'], $row['email'], $reset_reason
                 );
-                
+
                 if ($stmt2->execute()) {
                     $reset_success = "✅ Password reset request submitted! Please wait for admin approval.";
                     logStudentAudit($row['student_id'], 'Request Password Reset', "Requested password reset");
@@ -146,23 +141,22 @@ if (isset($_GET['reset'])) {
 }
 
 // ============================================================
-// ✅ CHECK IF USER IS BLOCKED (with auto-unlock)
+// CHECK IF USER IS BLOCKED
 // ============================================================
 function checkLoginBlock($role, $user_id) {
     $conn = getDBConnection();
     $table = $role . '_users';
     $id_field = $role . '_id';
-    
+
     $stmt = $conn->prepare("SELECT login_attempts, login_blocked_until FROM $table WHERE $id_field = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
+    $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     $conn->close();
-    
+
     if (!$row) return false;
-    
+
     if (!empty($row['login_blocked_until'])) {
         $blocked_until = strtotime($row['login_blocked_until']);
         if ($blocked_until > time()) {
@@ -172,7 +166,6 @@ function checkLoginBlock($role, $user_id) {
                 'remaining_seconds' => $blocked_until - time()
             ];
         } else {
-            // ✅ Auto-unlock kung tapos na ang ban
             $conn = getDBConnection();
             $stmt = $conn->prepare("UPDATE $table SET login_attempts = 0, login_blocked_until = NULL WHERE $id_field = ?");
             $stmt->bind_param("i", $user_id);
@@ -182,11 +175,8 @@ function checkLoginBlock($role, $user_id) {
             return false;
         }
     }
-    
-    return [
-        'blocked' => false,
-        'attempts' => (int)($row['login_attempts'] ?? 0)
-    ];
+
+    return ['blocked' => false, 'attempts' => (int)($row['login_attempts'] ?? 0)];
 }
 
 // ============================================================
@@ -196,14 +186,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $role = $_POST['role'] ?? 'admin';
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
-    
+
     if (empty($email) || empty($password)) {
         $error = 'Please enter both email and password.';
     } else {
         $result = null;
         $user_id = 0;
         $full_name = '';
-        
+
         switch ($role) {
             case 'admin':
                 $result = authenticateAdminByEmail($email, $password);
@@ -230,10 +220,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 }
                 break;
         }
-        
+
         if ($result && $result['success']) {
             resetLoginAttempts($role, $user_id);
-            
+
             if (isMathBlocked($role, $user_id)) {
                 $blocked_until = '';
                 $blocked_until_timestamp = 0;
@@ -243,14 +233,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $stmt = $conn->prepare("SELECT math_blocked_until FROM $table WHERE $id_field = ?");
                 $stmt->bind_param("i", $user_id);
                 $stmt->execute();
-                $result = $stmt->get_result();
-                if ($row = $result->fetch_assoc()) {
+                $result2 = $stmt->get_result();
+                if ($row = $result2->fetch_assoc()) {
                     $blocked_until = date('h:i A', strtotime($row['math_blocked_until']));
                     $blocked_until_timestamp = strtotime($row['math_blocked_until']);
                 }
                 $stmt->close();
                 $conn->close();
-                
+
                 $error = "⛔ Too many failed puzzle attempts. You are blocked until $blocked_until. Please try again later.";
                 $is_blocked = true;
             } else {
@@ -259,13 +249,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $answer = $num1 + $num2;
                 $question = "$num1 + $num2";
                 $display = "$num1 + $num2 = ?";
-                
+
                 $puzzle_data = [
                     'answer' => $answer,
                     'question' => $question,
                     'display' => $display
                 ];
-                
+
                 $_SESSION['puzzle_user_id'] = $user_id;
                 $_SESSION['puzzle_user_type'] = $role;
                 $_SESSION['puzzle_email'] = $email;
@@ -273,7 +263,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $_SESSION['puzzle_answer'] = $puzzle_data['answer'];
                 $_SESSION['puzzle_question'] = $puzzle_data['question'];
                 $_SESSION['puzzle_display'] = $puzzle_data['display'];
-                
+
                 $show_puzzle = true;
                 $puzzle_user_id = $user_id;
                 $puzzle_user_type = $role;
@@ -282,62 +272,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             }
         } else {
             $conn = getDBConnection();
-            
+
             $user_found = false;
             $found_user_id = 0;
             $found_role = '';
-            
+
             $stmt = $conn->prepare("SELECT admin_id FROM admin_users WHERE email = ?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
-            $result = $stmt->get_result();
-            if ($row = $result->fetch_assoc()) {
+            if ($row = $stmt->get_result()->fetch_assoc()) {
                 $found_user_id = $row['admin_id'];
                 $found_role = 'admin';
                 $user_found = true;
             }
             $stmt->close();
-            
+
             if (!$user_found) {
                 $stmt = $conn->prepare("SELECT staff_id FROM staff_users WHERE email = ?");
                 $stmt->bind_param("s", $email);
                 $stmt->execute();
-                $result = $stmt->get_result();
-                if ($row = $result->fetch_assoc()) {
+                if ($row = $stmt->get_result()->fetch_assoc()) {
                     $found_user_id = $row['staff_id'];
                     $found_role = 'staff';
                     $user_found = true;
                 }
                 $stmt->close();
             }
-            
+
             if (!$user_found) {
                 $stmt = $conn->prepare("SELECT student_id FROM student_users WHERE email = ? AND is_active = 1");
                 $stmt->bind_param("s", $email);
                 $stmt->execute();
-                $result = $stmt->get_result();
-                if ($row = $result->fetch_assoc()) {
+                if ($row = $stmt->get_result()->fetch_assoc()) {
                     $found_user_id = $row['student_id'];
                     $found_role = 'student';
                     $user_found = true;
                 }
                 $stmt->close();
             }
-            
+
             if ($user_found) {
                 $table = $found_role . '_users';
                 $id_field = $found_role . '_id';
-                
+
                 $stmt = $conn->prepare("SELECT login_attempts, login_blocked_until FROM $table WHERE $id_field = ?");
                 $stmt->bind_param("i", $found_user_id);
                 $stmt->execute();
-                $result = $stmt->get_result();
-                $row = $result->fetch_assoc();
+                $row = $stmt->get_result()->fetch_assoc();
                 $stmt->close();
-                
+
                 $current_attempts = (int)($row['login_attempts'] ?? 0);
                 $new_attempts = $current_attempts + 1;
-                
+
                 if (!empty($row['login_blocked_until'])) {
                     $blocked_until_time = strtotime($row['login_blocked_until']);
                     if ($blocked_until_time < time()) {
@@ -361,7 +347,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         $stmt->bind_param("isi", $new_attempts, $block_until_time, $found_user_id);
                         $stmt->execute();
                         $stmt->close();
-                        
+
                         $error = "⛔ Too many failed login attempts (3). Your account is locked for 10 minutes. Please try again at " . date('h:i A', strtotime($block_until_time));
                         $is_blocked = true;
                         $block_until = date('h:i A', strtotime($block_until_time));
@@ -372,7 +358,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         $stmt->bind_param("ii", $new_attempts, $found_user_id);
                         $stmt->execute();
                         $stmt->close();
-                        
+
                         $remaining_attempts = 3 - $new_attempts;
                         $error = "Invalid credentials. You have $remaining_attempts attempt(s) remaining before account lock.";
                     }
@@ -395,7 +381,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_math'])) {
     $email = $_POST['email'] ?? '';
     $question = $_POST['question'] ?? '';
     $correct_answer = (int)($_POST['correct_answer'] ?? 0);
-    
+
     if ($user_answer === -1 || $user_answer === '') {
         $error = 'Please enter your answer.';
     } else {
@@ -403,20 +389,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_math'])) {
             $error = '⛔ You are temporarily blocked. Please try again later.';
         } else {
             $checkResult = checkMathPuzzle($user_type, $user_id, $email, $question, $user_answer, $correct_answer);
-            
+
             if ($checkResult['success']) {
                 resetMathAttempts($user_type, $user_id);
-                
+
                 $conn = getDBConnection();
                 $table = $user_type . '_users';
                 $id_field = $user_type . '_id';
                 $stmt = $conn->prepare("SELECT * FROM $table WHERE $id_field = ?");
                 $stmt->bind_param("i", $user_id);
                 $stmt->execute();
-                $result = $stmt->get_result();
-                $userData = $result->fetch_assoc();
+                $userData = $stmt->get_result()->fetch_assoc();
                 $stmt->close();
-                
+
                 switch ($user_type) {
                     case 'admin':
                         $_SESSION['admin_id'] = $user_id;
@@ -515,13 +500,9 @@ if (isset($_POST['reset_math']) && isset($_SESSION['puzzle_user_id'])) {
     $answer = $num1 + $num2;
     $question = "$num1 + $num2";
     $display = "$num1 + $num2 = ?";
-    
-    $puzzle_data = [
-        'answer' => $answer,
-        'question' => $question,
-        'display' => $display
-    ];
-    
+
+    $puzzle_data = ['answer' => $answer, 'question' => $question, 'display' => $display];
+
     $_SESSION['puzzle_answer'] = $puzzle_data['answer'];
     $_SESSION['puzzle_question'] = $puzzle_data['question'];
     $_SESSION['puzzle_display'] = $puzzle_data['display'];
@@ -532,7 +513,6 @@ if (isset($_POST['reset_math']) && isset($_SESSION['puzzle_user_id'])) {
     $puzzle_name = $_SESSION['puzzle_name'] ?? '';
 }
 
-// If puzzle data is in session but not set, retrieve it
 if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     $puzzle_data = [
         'answer' => $_SESSION['puzzle_answer'] ?? 0,
@@ -552,7 +532,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISU Ladies Dormitory - Login</title>
-    
+
     <link rel="icon" type="image/png" href="../assets/images/isu-logo.png">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -560,40 +540,44 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
+
+        html, body {
+            height: 100%;
             font-family: 'Inter', sans-serif;
+        }
+
+        body {
             min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 15px;
             background: linear-gradient(135deg, #0a1628 0%, #0d1f3c 50%, #1a2a4a 100%);
             position: relative;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
         }
-        
+
         body::before {
             content: '';
             position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: 
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background:
                 radial-gradient(ellipse at 20% 50%, rgba(26, 86, 168, 0.08) 0%, transparent 50%),
                 radial-gradient(ellipse at 80% 50%, rgba(26, 86, 168, 0.06) 0%, transparent 50%),
                 radial-gradient(ellipse at 50% 100%, rgba(26, 58, 106, 0.04) 0%, transparent 40%);
             animation: rotateBg 60s linear infinite;
             z-index: 0;
         }
-        
+
         @keyframes rotateBg {
             0% { transform: rotate(0deg) scale(1); }
             50% { transform: rotate(180deg) scale(1.1); }
             100% { transform: rotate(360deg) scale(1); }
         }
-        
+
         .particle {
             position: absolute;
             border-radius: 50%;
@@ -604,13 +588,16 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         .particle:nth-child(1) { width: 300px; height: 300px; top: -100px; right: -100px; animation: float 20s ease-in-out infinite; }
         .particle:nth-child(2) { width: 200px; height: 200px; bottom: -50px; left: -50px; animation: float 25s ease-in-out infinite reverse; }
         .particle:nth-child(3) { width: 150px; height: 150px; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: float 30s ease-in-out infinite; }
-        
+
         @keyframes float {
             0%, 100% { transform: translate(0, 0) scale(1); }
             33% { transform: translate(30px, -30px) scale(1.05); }
             66% { transform: translate(-20px, 20px) scale(0.95); }
         }
-        
+
+        /* ============================================================
+           COMPACT LAYOUT — fits viewport, no extra space
+           ============================================================ */
         .login-wrapper {
             width: 100%;
             max-width: 1200px;
@@ -619,25 +606,27 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             z-index: 1;
             display: flex;
             align-items: center;
-            gap: 60px;
+            justify-content: center;
+            gap: 50px;
         }
-        
+
         .brand-section {
             flex: 1;
+            max-width: 520px;
             color: white;
-            padding: 20px 0;
+            padding: 0;
         }
-        
+
         .brand-section .logo {
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }
-        
+
         .brand-section .logo img {
-            width: 100px;
-            height: 100px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
             object-fit: contain;
             box-shadow: 0 0 25px rgba(255, 215, 0, 0.5);
@@ -645,102 +634,106 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             background: white;
             padding: 3px;
         }
-        
+
         .brand-section .logo-text h1 {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 800;
             letter-spacing: -0.5px;
             margin: 0;
             line-height: 1.1;
         }
-        
+
         .brand-section .logo-text h1 span {
             background: linear-gradient(135deg, #ffd700, #f59e0b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
+
         .brand-section .logo-text p {
-            font-size: 14px;
+            font-size: 13px;
             color: rgba(255,255,255,0.5);
             margin: 0;
             font-weight: 400;
         }
-        
+
         .brand-section .hero-text {
-            margin: 40px 0;
+            margin: 24px 0;
         }
-        
+
         .brand-section .hero-text h2 {
-            font-size: 42px;
+            font-size: 34px;
             font-weight: 800;
-            line-height: 1.2;
-            margin-bottom: 15px;
+            line-height: 1.15;
+            margin-bottom: 12px;
         }
-        
+
         .brand-section .hero-text h2 span {
             background: linear-gradient(135deg, #ffd700, #f59e0b);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
+
         .brand-section .hero-text p {
-            font-size: 16px;
+            font-size: 14px;
             color: rgba(255,255,255,0.6);
             max-width: 450px;
-            line-height: 1.7;
+            line-height: 1.6;
         }
-        
+
         .brand-section .features {
             display: flex;
             gap: 20px;
-            margin-top: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
         }
-        
+
         .brand-section .feature-item {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             color: rgba(255,255,255,0.7);
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
         }
-        
+
         .brand-section .feature-item i {
             color: #ffd700;
-            font-size: 16px;
+            font-size: 15px;
         }
-        
+
         .brand-section .footer-text {
-            margin-top: 50px;
-            font-size: 13px;
+            margin-top: 24px;
+            font-size: 12px;
             color: rgba(255,255,255,0.2);
         }
-        
+
         .brand-section .footer-text span {
             color: rgba(255, 215, 0, 0.3);
         }
-        
+
+        /* ============================================================
+           LOGIN CARD — compact
+           ============================================================ */
         .login-card {
             width: 100%;
-            max-width: 440px;
+            max-width: 420px;
             background: rgba(255,255,255,0.05);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 32px;
-            padding: 45px 40px;
+            border-radius: 24px;
+            padding: 32px 30px;
             box-shadow: 0 40px 80px rgba(0,0,0,0.4);
             position: relative;
             flex-shrink: 0;
         }
-        
+
         .login-card::before {
             content: '';
             position: absolute;
             inset: -1px;
-            border-radius: 32px;
+            border-radius: 24px;
             padding: 1px;
             background: linear-gradient(135deg, rgba(255,215,0,0.1), transparent, rgba(255,215,0,0.05));
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -749,115 +742,115 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             mask-composite: exclude;
             pointer-events: none;
         }
-        
+
         .login-card .card-header {
             text-align: center;
-            margin-bottom: 35px;
+            margin-bottom: 22px;
         }
-        
+
         .login-card .card-header h3 {
             color: white;
             font-weight: 700;
-            font-size: 22px;
-            margin-bottom: 6px;
+            font-size: 20px;
+            margin-bottom: 4px;
         }
-        
+
         .login-card .card-header p {
             color: rgba(255,255,255,0.4);
-            font-size: 14px;
+            font-size: 13px;
             margin: 0;
         }
-        
+
         .role-selector {
             display: flex;
-            gap: 8px;
-            margin-bottom: 30px;
+            gap: 6px;
+            margin-bottom: 20px;
             background: rgba(255,255,255,0.05);
-            border-radius: 14px;
-            padding: 5px;
+            border-radius: 12px;
+            padding: 4px;
             border: 1px solid rgba(255,255,255,0.06);
         }
-        
+
         .role-btn {
             flex: 1;
-            padding: 10px 12px;
+            padding: 9px 10px;
             border: none;
-            border-radius: 10px;
+            border-radius: 9px;
             background: transparent;
             color: rgba(255,255,255,0.5);
             font-weight: 600;
-            font-size: 13px;
+            font-size: 12px;
             transition: all 0.3s ease;
             cursor: pointer;
         }
-        
+
         .role-btn:hover { color: rgba(255,255,255,0.8); }
-        
+
         .role-btn.active {
             background: linear-gradient(135deg, #1a3a6a, #2a5a9a);
             color: white;
             box-shadow: 0 4px 15px rgba(26,58,106,0.3);
         }
-        
-        .role-btn i { margin-right: 6px; font-size: 13px; }
-        
-        .form-group { margin-bottom: 18px; }
-        
+
+        .role-btn i { margin-right: 5px; font-size: 12px; }
+
+        .form-group { margin-bottom: 14px; }
+
         .form-group label {
             display: block;
             color: rgba(255,255,255,0.6);
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
         }
-        
+
         .form-group .input-group {
             display: flex;
             align-items: center;
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 14px;
+            border-radius: 12px;
             transition: all 0.3s ease;
             overflow: hidden;
         }
-        
+
         .form-group .input-group:focus-within {
             border-color: rgba(255,215,0,0.3);
             box-shadow: 0 0 0 4px rgba(255,215,0,0.05);
         }
-        
+
         .form-group .input-group .input-icon {
-            padding: 0 16px;
+            padding: 0 14px;
             color: rgba(255,255,255,0.3);
-            font-size: 15px;
+            font-size: 14px;
             flex-shrink: 0;
         }
-        
+
         .form-group .input-group input {
             flex: 1;
             background: transparent;
             border: none;
-            padding: 14px 16px 14px 0;
+            padding: 12px 14px 12px 0;
             color: white;
-            font-size: 14px;
+            font-size: 13px;
             outline: none;
             width: 100%;
         }
-        
+
         .form-group .input-group input::placeholder { color: rgba(255,255,255,0.25); }
         .form-group .input-group input:disabled { opacity: 0.6; cursor: not-allowed; }
-        
+
         .form-group .input-group .toggle-password {
-            padding: 0 16px;
+            padding: 0 14px;
             color: rgba(255,255,255,0.3);
             cursor: pointer;
             transition: color 0.3s ease;
             background: none;
             border: none;
         }
-        
+
         .form-group .input-group .toggle-password:hover { color: rgba(255,255,255,0.6); }
-        
+
         .lock-indicator {
             display: <?php echo $is_blocked ? 'flex' : 'none'; ?>;
             align-items: center;
@@ -867,342 +860,366 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             background: rgba(239,68,68,0.12);
             border: 1px solid rgba(239,68,68,0.15);
             border-radius: 12px;
-            margin-bottom: 18px;
+            margin-bottom: 14px;
             color: #f87171;
-            font-size: 13px;
+            font-size: 12px;
         }
-        
-        .lock-indicator i { font-size: 18px; }
+
+        .lock-indicator i { font-size: 16px; }
         .lock-indicator .lock-timer { color: #ffd700; font-weight: 700; }
-        
+
         .attempts-warning {
             color: #fbbf24;
-            font-size: 13px;
+            font-size: 12px;
             text-align: center;
-            padding: 8px;
+            padding: 7px;
             border-radius: 10px;
             background: rgba(251, 191, 36, 0.05);
             border: 1px solid rgba(251, 191, 36, 0.1);
             margin-bottom: 10px;
         }
-        
+
         .pulse-warning { animation: pulseWarning 1.5s ease-in-out infinite; }
-        
+
         @keyframes pulseWarning {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
-        
+
         .alert-custom {
-            padding: 12px 16px;
+            padding: 10px 14px;
             border-radius: 12px;
-            font-size: 13px;
-            margin-bottom: 18px;
+            font-size: 12px;
+            margin-bottom: 14px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
+            line-height: 1.5;
         }
-        
-        .alert-custom i { font-size: 16px; flex-shrink: 0; }
-        
+
+        .alert-custom i { font-size: 15px; flex-shrink: 0; }
+
         .alert-custom.alert-danger {
             background: rgba(239, 68, 68, 0.1);
             border: 1px solid rgba(239, 68, 68, 0.15);
             color: #fca5a5;
         }
-        
+
         .alert-custom.alert-success {
             background: rgba(16, 185, 129, 0.1);
             border: 1px solid rgba(16, 185, 129, 0.15);
             color: #6ee7b7;
         }
-        
+
         .btn-login, .btn-login-puzzle {
             width: 100%;
-            padding: 16px;
-            font-size: 15px;
+            padding: 14px;
+            font-size: 14px;
             font-weight: 600;
-            border-radius: 14px;
+            border-radius: 12px;
             background: linear-gradient(135deg, #ffd700, #f59e0b);
             border: none;
             color: #0a1628;
             transition: all 0.3s ease;
             cursor: pointer;
-            height: 54px;
-            margin-top: 8px;
+            height: 50px;
+            margin-top: 6px;
         }
-        
+
         .btn-login:hover:not(:disabled), .btn-login-puzzle:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 30px rgba(255, 215, 0, 0.25);
         }
-        
+
         .btn-login:disabled, .btn-login-puzzle:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
-        
-        .btn-login i, .btn-login-puzzle i { margin-right: 8px; }
-        
+
+        .btn-login i, .btn-login-puzzle i { margin-right: 6px; }
+
         .puzzle-section {
             display: <?php echo $show_puzzle ? 'block' : 'none'; ?>;
             animation: fadeIn 0.5s ease;
         }
-        
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
-        .puzzle-header { text-align: center; margin-bottom: 20px; }
-        .puzzle-header h4 { color: white; font-weight: 600; font-size: 18px; }
-        .puzzle-header p { color: rgba(255,255,255,0.4); font-size: 13px; margin: 0; }
-        .puzzle-header .user-email { color: #ffd700; font-weight: 500; font-size: 14px; margin-top: 4px; }
-        
+
+        .puzzle-header { text-align: center; margin-bottom: 14px; }
+        .puzzle-header h4 { color: white; font-weight: 600; font-size: 16px; margin-bottom: 4px; }
+        .puzzle-header p { color: rgba(255,255,255,0.4); font-size: 12px; margin: 0; }
+        .puzzle-header .user-email { color: #ffd700; font-weight: 500; font-size: 13px; margin-top: 4px; }
+
         .puzzle-box {
             background: rgba(255,255,255,0.04);
-            border-radius: 16px;
-            padding: 25px;
+            border-radius: 14px;
+            padding: 20px;
             text-align: center;
             border: 1px solid rgba(255,255,255,0.06);
-            margin: 20px 0;
+            margin: 14px 0;
         }
-        
+
         .puzzle-question {
-            font-size: 36px;
+            font-size: 30px;
             font-weight: 700;
             color: #ffd700;
             letter-spacing: 2px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
-        
-        .puzzle-hint { color: rgba(255,255,255,0.3); font-size: 12px; }
-        
+
+        .puzzle-hint { color: rgba(255,255,255,0.3); font-size: 11px; }
+
         .puzzle-input {
-            width: 120px;
-            height: 60px;
+            width: 110px;
+            height: 54px;
             background: rgba(255,255,255,0.06);
             border: 2px solid rgba(255,215,0,0.15);
             border-radius: 12px;
             color: white;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 700;
             text-align: center;
             transition: all 0.3s ease;
-            margin: 15px auto;
+            margin: 12px auto;
             display: block;
             outline: none;
         }
-        
+
         .puzzle-input:focus {
             border-color: #ffd700;
             box-shadow: 0 0 0 4px rgba(255,215,0,0.05);
         }
-        
+
         .puzzle-attempts {
             text-align: center;
             color: rgba(255,255,255,0.3);
-            font-size: 13px;
-            margin: 10px 0;
+            font-size: 12px;
+            margin: 8px 0;
         }
-        
+
         .puzzle-actions {
             display: flex;
             justify-content: center;
             gap: 15px;
-            margin-top: 15px;
+            margin-top: 12px;
         }
-        
+
         .puzzle-actions .reset-puzzle-btn {
             background: transparent;
             border: none;
             color: rgba(255,215,0,0.4);
-            font-size: 13px;
+            font-size: 12px;
             cursor: pointer;
             transition: all 0.3s ease;
             text-decoration: underline;
         }
-        
+
         .puzzle-actions .reset-puzzle-btn:hover { color: #ffd700; }
-        
+
         .puzzle-actions .back-login-btn {
             color: rgba(255,255,255,0.3);
-            font-size: 13px;
+            font-size: 12px;
             text-decoration: none;
             transition: all 0.3s ease;
             background: none;
             border: none;
         }
-        
+
         .puzzle-actions .back-login-btn:hover { color: rgba(255,255,255,0.6); }
         .puzzle-actions .divider { color: rgba(255,255,255,0.1); }
-        
+
         .reset-section {
             display: <?php echo isset($_POST['show_reset']) ? 'block' : 'none'; ?>;
             animation: fadeIn 0.5s ease;
         }
-        
-        .reset-section .reset-header { text-align: center; margin-bottom: 25px; }
-        .reset-section .reset-header h4 { color: white; font-weight: 600; font-size: 18px; }
-        .reset-section .reset-header p { color: rgba(255,255,255,0.4); font-size: 13px; margin: 0; }
-        
+
+        .reset-section .reset-header { text-align: center; margin-bottom: 18px; }
+        .reset-section .reset-header h4 { color: white; font-weight: 600; font-size: 16px; margin-bottom: 4px; }
+        .reset-section .reset-header p { color: rgba(255,255,255,0.4); font-size: 12px; margin: 0; }
+
         .reset-section .back-to-login-link {
             color: rgba(255,255,255,0.3);
-            font-size: 13px;
+            font-size: 12px;
             cursor: pointer;
             transition: all 0.3s ease;
             text-decoration: none;
             background: none;
             border: none;
         }
-        
+
         .reset-section .back-to-login-link:hover { color: rgba(255,255,255,0.6); }
-        
+
         .btn-reset {
             width: 100%;
-            padding: 16px;
-            font-size: 15px;
+            padding: 14px;
+            font-size: 14px;
             font-weight: 600;
-            border-radius: 14px;
+            border-radius: 12px;
             background: linear-gradient(135deg, #f59e0b, #d97706);
             border: none;
             color: white;
             transition: all 0.3s ease;
             cursor: pointer;
-            height: 54px;
-            margin-top: 8px;
+            height: 50px;
+            margin-top: 6px;
         }
-        
+
         .btn-reset:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 30px rgba(245, 158, 11, 0.25);
         }
-        
+
         textarea.form-control-custom {
             width: 100%;
-            padding: 12px 16px;
+            padding: 11px 14px;
             background: rgba(255,255,255,0.06);
             border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 14px;
+            border-radius: 12px;
             color: white;
-            font-size: 14px;
+            font-size: 13px;
             transition: all 0.3s ease;
             outline: none;
             resize: none;
             font-family: 'Inter', sans-serif;
         }
-        
+
         textarea.form-control-custom:focus {
             border-color: rgba(255,215,0,0.3);
             box-shadow: 0 0 0 4px rgba(255,215,0,0.05);
         }
-        
+
         textarea.form-control-custom::placeholder { color: rgba(255,255,255,0.25); }
-        
+
         .forgot-password-link {
             color: rgba(255,255,255,0.3);
-            font-size: 13px;
+            font-size: 12px;
             text-decoration: none;
             transition: all 0.3s ease;
             display: inline-block;
-            margin-top: 4px;
+            margin-top: 2px;
         }
-        
+
         .forgot-password-link:hover { color: rgba(255,215,0,0.6); }
-        
+
         .login-footer-text {
             text-align: center;
-            margin-top: 25px;
+            margin-top: 18px;
             color: rgba(255,255,255,0.12);
-            font-size: 11px;
+            font-size: 10px;
             letter-spacing: 0.5px;
         }
-        
+
         .login-footer-text span { color: rgba(255,215,0,0.15); }
-        
+
+        /* Info box under login button */
+        .info-note {
+            margin-top: 12px;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .info-note p {
+            color: rgba(255,255,255,0.5);
+            font-size: 11px;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .info-note strong { color: rgba(255,255,255,0.7); }
+        .info-note i { color: #ffd700; margin-right: 4px; }
+
+        /* ============================================================
+           STUDENT CONFIRMATION MODAL
+           ============================================================ */
         .student-confirm-modal .modal-content {
             background: #131926 !important;
             border: 1px solid #1a2a4a;
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.6);
         }
-        
+
         .student-confirm-modal .modal-header {
             border-bottom: 1px solid #1a2a4a;
-            padding: 20px 25px;
+            padding: 18px 22px;
         }
-        
+
         .student-confirm-modal .modal-title {
             color: #ffd700;
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
         }
-        
+
         .student-confirm-modal .modal-body {
-            padding: 30px 25px 20px;
+            padding: 24px 22px 16px;
             text-align: center;
         }
-        
+
         .student-confirm-modal .modal-footer {
             border-top: 1px solid #1a2a4a;
-            padding: 20px 25px;
+            padding: 16px 22px;
             display: flex;
             flex-direction: column;
             gap: 10px;
         }
-        
+
         .student-confirm-modal .confirm-icon {
-            font-size: 70px;
+            font-size: 60px;
             color: #ffd700;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             animation: bounceIcon 1s ease-in-out;
         }
-        
+
         @keyframes bounceIcon {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
         }
-        
+
         .student-confirm-modal .confirm-title {
             color: #e5e7eb;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
-        
+
         .student-confirm-modal .confirm-text {
             color: rgba(255,255,255,0.6);
-            font-size: 14px;
-            line-height: 1.7;
-            margin-bottom: 20px;
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 16px;
         }
-        
+
         .student-confirm-modal .confirm-note {
             background: rgba(59, 130, 246, 0.1);
             border: 1px solid rgba(59, 130, 246, 0.3);
             border-radius: 12px;
-            padding: 14px 16px;
-            margin-bottom: 10px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
             text-align: left;
         }
-        
+
         .student-confirm-modal .confirm-note p {
             color: #93c5fd;
             font-size: 12px;
-            margin: 0 0 8px 0;
-            line-height: 1.7;
+            margin: 0 0 6px 0;
+            line-height: 1.6;
         }
-        
+
         .student-confirm-modal .confirm-note p:last-child { margin-bottom: 0; }
-        
+
         .btn-have-account {
             background: linear-gradient(135deg, #10b981, #059669) !important;
             border: none !important;
             color: white !important;
-            padding: 14px 25px;
+            padding: 13px 22px;
             border-radius: 12px;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 13px;
             transition: all 0.3s ease;
             text-decoration: none;
             display: block;
@@ -1210,86 +1227,101 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             text-align: center;
             cursor: pointer;
         }
-        
+
         .btn-have-account:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
             color: white !important;
         }
-        
+
         .btn-no-account {
             background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
             border: none !important;
             color: #0a1628 !important;
-            padding: 14px 25px;
+            padding: 13px 22px;
             border-radius: 12px;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 13px;
             transition: all 0.3s ease;
             text-decoration: none;
             display: block;
             width: 100%;
             text-align: center;
         }
-        
+
         .btn-no-account:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
             color: #0a1628 !important;
         }
-        
+
         .btn-cancel-confirm {
             background: #2a2a4a !important;
             border: none !important;
             color: #b0b0c0 !important;
-            padding: 12px 25px;
+            padding: 11px 22px;
             border-radius: 12px;
             font-weight: 600;
-            font-size: 13px;
+            font-size: 12px;
             transition: all 0.3s ease;
             display: block;
             width: 100%;
             cursor: pointer;
-            margin-top: 5px;
+            margin-top: 4px;
         }
-        
+
         .btn-cancel-confirm:hover {
             background: #3a3a5a !important;
             color: #e0e0e0 !important;
         }
-        
+
         .modal-backdrop { z-index: 1040 !important; background-color: #000 !important; }
         .modal { z-index: 1050 !important; }
         body.modal-open { overflow: hidden !important; }
         body:not(.modal-open) { pointer-events: auto !important; overflow: auto !important; }
         body:not(.modal-open) .modal-backdrop { display: none !important; }
         .modal:not(.show) { display: none !important; pointer-events: none !important; }
-        
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
         @media (max-width: 992px) {
-            .login-wrapper { flex-direction: column; gap: 30px; }
-            .brand-section { text-align: center; padding: 0; }
-            .brand-section .logo { justify-content: center; }
-            .brand-section .hero-text p { max-width: 100%; }
-            .brand-section .features { justify-content: center; }
-            .brand-section .footer-text { margin-top: 20px; }
-            .login-card { max-width: 100%; padding: 35px 30px; }
-            .brand-section .hero-text h2 { font-size: 32px; }
-        }
-        
-        @media (max-width: 576px) {
-            body { padding: 10px; }
-            .login-card { padding: 25px 20px; border-radius: 24px; }
+            body { padding: 12px; align-items: flex-start; padding-top: 20px; }
+            .login-wrapper { flex-direction: column; gap: 24px; max-width: 460px; }
+            .brand-section { text-align: center; max-width: 100%; }
+            .brand-section .logo { justify-content: center; margin-bottom: 16px; }
+            .brand-section .hero-text { margin: 16px 0; }
             .brand-section .hero-text h2 { font-size: 26px; }
-            .brand-section .features { flex-wrap: wrap; gap: 12px; }
+            .brand-section .hero-text p { max-width: 100%; font-size: 13px; }
+            .brand-section .features { justify-content: center; gap: 14px; margin-top: 14px; }
             .brand-section .feature-item { font-size: 12px; }
-            .role-btn { font-size: 11px; padding: 8px 6px; }
-            .role-btn i { margin-right: 3px; }
-            .puzzle-question { font-size: 28px; }
-            .puzzle-input { width: 90px; height: 50px; font-size: 22px; }
-            .login-card .card-header h3 { font-size: 18px; }
-            .brand-section .logo img { width: 70px; height: 70px; }
+            .brand-section .footer-text { margin-top: 14px; }
+            .login-card { padding: 26px 22px; border-radius: 20px; }
         }
-        
+
+        @media (max-width: 576px) {
+            body { padding: 10px; padding-top: 14px; }
+            .brand-section .logo img { width: 60px; height: 60px; }
+            .brand-section .logo-text h1 { font-size: 18px; }
+            .brand-section .logo-text p { font-size: 11px; }
+            .brand-section .hero-text h2 { font-size: 22px; }
+            .brand-section .hero-text p { font-size: 12px; }
+            .brand-section .features { gap: 10px; }
+            .brand-section .feature-item { font-size: 11px; }
+            .login-card { padding: 22px 18px; border-radius: 18px; }
+            .role-btn { font-size: 11px; padding: 8px 5px; }
+            .role-btn i { margin-right: 2px; }
+            .puzzle-question { font-size: 24px; }
+            .puzzle-input { width: 90px; height: 48px; font-size: 20px; }
+            .login-card .card-header h3 { font-size: 17px; }
+            .login-card .card-header p { font-size: 12px; }
+        }
+
+        @media (min-width: 1400px) {
+            .brand-section .hero-text h2 { font-size: 38px; }
+            .login-card { max-width: 440px; padding: 36px 34px; }
+        }
+
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a1628; }
         ::-webkit-scrollbar-thumb { background: #1a2a4a; border-radius: 3px; }
@@ -1297,33 +1329,33 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     </style>
 </head>
 <body>
-    
+
     <div class="particle"></div>
     <div class="particle"></div>
     <div class="particle"></div>
-    
+
     <div class="login-wrapper">
-        
+
         <!-- BRANDING -->
         <div class="brand-section">
             <div class="logo">
                 <img src="../assets/images/isu-logo.png" alt="ISU Logo">
-                
+
                 <div class="logo-text">
                     <h1>ISU-E <span>Ladies Dormitory</span></h1>
                     <p>Isabela State University · Echague Isabela</p>
                 </div>
             </div>
-            
+
             <div class="hero-text">
                 <h2>Welcome to <span>Ladies Dormitory</span> Portal</h2>
                 <p>
-                    Secure access to the Isabela State University Ladies Dormitory 
-                    management system. Track attendance, manage residents, and 
+                    Secure access to the Isabela State University Ladies Dormitory
+                    management system. Track attendance, manage residents, and
                     monitor access in real-time.
                 </p>
             </div>
-            
+
             <div class="features">
                 <div class="feature-item">
                     <i class="fas fa-shield-alt"></i>
@@ -1338,21 +1370,20 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     Tamper-proof
                 </div>
             </div>
-            
+
             <div class="footer-text">
                 &copy; <?php echo date('Y'); ?> <span>Isabela State University</span> · Ladies Dormitory
             </div>
         </div>
-        
+
         <!-- LOGIN CARD -->
         <div class="login-card" id="loginCard">
-            
+
             <div class="card-header">
                 <h3>Sign in to your account</h3>
                 <p>Access your dashboard and manage attendance records securely.</p>
             </div>
 
-            <!-- ✅ AUTO-UNLOCK NOTIFICATION -->
             <div class="alert-custom alert-success" id="autoUnlockNotice" style="display:none;">
                 <i class="fas fa-unlock"></i>
                 <span>🔓 <strong>Account unlocked!</strong> You can now login again.</span>
@@ -1385,11 +1416,11 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             <!-- MATH PUZZLE -->
             <div class="puzzle-section" id="puzzleSection">
                 <div class="puzzle-header">
-                    <h4><i class="fas fa-calculator" style="color: #ffd700; margin-right: 8px;"></i>Solve the Math Puzzle</h4>
+                    <h4><i class="fas fa-calculator" style="color: #ffd700; margin-right: 6px;"></i>Solve the Math Puzzle</h4>
                     <p>Please solve this simple addition problem to continue</p>
                     <div class="user-email">
-                        <i class="fas fa-user me-1"></i> 
-                        <?php echo htmlspecialchars($puzzle_name ?? ''); ?> 
+                        <i class="fas fa-user me-1"></i>
+                        <?php echo htmlspecialchars($puzzle_name ?? ''); ?>
                         <span style="color: rgba(255,255,255,0.4); font-weight: 400;">
                             (<?php echo htmlspecialchars($puzzle_email ?? ''); ?>)
                         </span>
@@ -1402,7 +1433,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                     <input type="hidden" name="email" value="<?php echo htmlspecialchars($puzzle_email ?? ''); ?>">
                     <input type="hidden" name="question" value="<?php echo htmlspecialchars($puzzle_data['question'] ?? $_SESSION['puzzle_question'] ?? ''); ?>">
                     <input type="hidden" name="correct_answer" value="<?php echo $puzzle_data['answer'] ?? $_SESSION['puzzle_answer'] ?? 0; ?>">
-                    
+
                     <div class="puzzle-box">
                         <div class="puzzle-question">
                             <?php echo htmlspecialchars($puzzle_data['display'] ?? $_SESSION['puzzle_display'] ?? '5 + 3 = ?'); ?>
@@ -1410,12 +1441,12 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         <p class="puzzle-hint">Add the two numbers together</p>
                         <input type="number" class="puzzle-input" name="math_answer" id="mathAnswer" placeholder="?" required autofocus>
                     </div>
-                    
+
                     <div class="puzzle-attempts">
                         <span>Attempts left: </span>
                         <span id="attemptsLeft">3</span>
                     </div>
-                    
+
                     <button type="submit" name="verify_math" class="btn-login-puzzle" id="verifyMathBtn">
                         <i class="fas fa-check-circle"></i> Verify Answer
                     </button>
@@ -1436,7 +1467,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
             <!-- LOGIN FORM -->
             <div id="loginFormSection" style="<?php echo $show_puzzle ? 'display:none;' : 'display:block;'; ?>">
-                
+
                 <div class="role-selector" id="roleSelector">
                     <button type="button" class="role-btn active" data-role="admin">
                         <i class="fas fa-user-shield"></i> Admin
@@ -1451,7 +1482,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
                 <form method="POST" action="" id="adminForm" class="login-form">
                     <input type="hidden" name="role" value="admin">
-                    
+
                     <div class="form-group">
                         <label><i class="fas fa-envelope me-1"></i> Email Address</label>
                         <div class="input-group">
@@ -1459,7 +1490,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                             <input type="email" name="email" id="loginEmail" placeholder="Enter your email" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         </div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label><i class="fas fa-lock me-1"></i> Password</label>
                         <div class="input-group">
@@ -1470,22 +1501,22 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                             </button>
                         </div>
                     </div>
-                    
+
                     <?php if ($remaining_attempts < 3 && !$is_blocked): ?>
                     <div class="attempts-warning pulse-warning">
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         <?php echo $remaining_attempts; ?> attempt(s) remaining before account lock
                     </div>
                     <?php endif; ?>
-                    
+
                     <button type="submit" name="login" class="btn-login" id="loginBtn" <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
-                    
-                    <div style="margin-top: 15px; padding: 12px 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; text-align: center;">
-                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; line-height: 1.6;">
-                            <i class="fas fa-info-circle" style="color: #ffd700; margin-right: 5px;"></i>
-                            <strong style="color: rgba(255,255,255,0.7);">How it works:</strong> 
+
+                    <div class="info-note">
+                        <p>
+                            <i class="fas fa-info-circle"></i>
+                            <strong>How it works:</strong>
                             Enter your email, then solve a simple addition problem to verify your identity.
                         </p>
                     </div>
@@ -1493,7 +1524,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
                 <form method="POST" action="" id="staffForm" class="login-form" style="display:none;">
                     <input type="hidden" name="role" value="staff">
-                    
+
                     <div class="form-group">
                         <label><i class="fas fa-envelope me-1"></i> Email Address</label>
                         <div class="input-group">
@@ -1501,33 +1532,33 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                             <input type="email" name="email" placeholder="Enter your registered email" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         </div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label><i class="fas fa-lock me-1"></i> Password</label>
                         <div class="input-group">
                             <span class="input-icon"><i class="fas fa-lock"></i></span>
                             <input type="password" name="password" placeholder="Enter password" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
                             <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">
-                                <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                                <i class="fas fa-eye"></i>
                             </button>
                         </div>
                     </div>
-                    
+
                     <?php if ($remaining_attempts < 3 && !$is_blocked): ?>
                     <div class="attempts-warning pulse-warning">
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         <?php echo $remaining_attempts; ?> attempt(s) remaining before account lock
                     </div>
                     <?php endif; ?>
-                    
+
                     <button type="submit" name="login" class="btn-login" <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
-                    
-                    <div style="margin-top: 15px; padding: 12px 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; text-align: center;">
-                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; line-height: 1.6;">
-                            <i class="fas fa-info-circle" style="color: #ffd700; margin-right: 5px;"></i>
-                            <strong style="color: rgba(255,255,255,0.7);">How it works:</strong> 
+
+                    <div class="info-note">
+                        <p>
+                            <i class="fas fa-info-circle"></i>
+                            <strong>How it works:</strong>
                             Enter your email, then solve a simple addition problem to verify your identity.
                         </p>
                     </div>
@@ -1535,7 +1566,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
                 <form method="POST" action="" id="studentForm" class="login-form" style="display:none;">
                     <input type="hidden" name="role" value="student">
-                    
+
                     <div class="form-group">
                         <label><i class="fas fa-envelope me-1"></i> Email Address</label>
                         <div class="input-group">
@@ -1543,39 +1574,39 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                             <input type="email" name="email" placeholder="Enter your student email" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         </div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label><i class="fas fa-lock me-1"></i> Password</label>
                         <div class="input-group">
                             <span class="input-icon"><i class="fas fa-lock"></i></span>
                             <input type="password" name="password" placeholder="Enter password" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
                             <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">
-                                <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                                <i class="fas fa-eye"></i>
                             </button>
                         </div>
                     </div>
-                    
+
                     <?php if ($remaining_attempts < 3 && !$is_blocked): ?>
                     <div class="attempts-warning pulse-warning">
                         <i class="fas fa-exclamation-triangle me-1"></i>
                         <?php echo $remaining_attempts; ?> attempt(s) remaining before account lock
                     </div>
                     <?php endif; ?>
-                    
-                    <div class="text-center mt-2 mb-3">
-                        <a href="#" class="forgot-password-link" onclick="showResetForm()">
+
+                    <div class="text-center mb-2">
+                        <a href="#" class="forgot-password-link" onclick="showResetForm(); return false;">
                             <i class="fas fa-key me-1"></i> Forgot Password? Request Reset
                         </a>
                     </div>
-                    
+
                     <button type="submit" name="login" class="btn-login" <?php echo $is_blocked ? 'disabled' : ''; ?>>
                         <i class="fas fa-sign-in-alt"></i> Sign In
                     </button>
-                    
-                    <div style="margin-top: 15px; padding: 12px 15px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; text-align: center;">
-                        <p style="color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; line-height: 1.6;">
-                            <i class="fas fa-info-circle" style="color: #ffd700; margin-right: 5px;"></i>
-                            <strong style="color: rgba(255,255,255,0.7);">How it works:</strong> 
+
+                    <div class="info-note">
+                        <p>
+                            <i class="fas fa-info-circle"></i>
+                            <strong>How it works:</strong>
                             Enter your email, then solve a simple addition problem to verify your identity.
                         </p>
                     </div>
@@ -1584,7 +1615,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 <!-- PASSWORD RESET FORM -->
                 <div class="reset-section" id="resetSection">
                     <div class="reset-header">
-                        <h4><i class="fas fa-key" style="color: #ffd700; margin-right: 8px;"></i>Request Password Reset</h4>
+                        <h4><i class="fas fa-key" style="color: #ffd700; margin-right: 6px;"></i>Request Password Reset</h4>
                         <p>Enter your email address to request a password reset</p>
                     </div>
 
@@ -1593,15 +1624,15 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                             <label><i class="fas fa-envelope me-1"></i> Email Address</label>
                             <div class="input-group">
                                 <span class="input-icon"><i class="fas fa-envelope"></i></span>
-                                <input type="email" class="form-control-custom" name="reset_email" placeholder="Enter your registered email" required>
+                                <input type="email" class="form-control-custom" name="reset_email" placeholder="Enter your registered email" required style="background:transparent;border:none;padding:12px 14px 12px 0;color:white;font-size:13px;width:100%;outline:none;">
                             </div>
                         </div>
-                        
+
                         <div class="form-group">
                             <label><i class="fas fa-info-circle me-1"></i> Reason for Reset</label>
-                            <textarea class="form-control-custom" name="reset_reason" rows="2" placeholder="e.g., I forgot my password" style="height:60px;"></textarea>
+                            <textarea class="form-control-custom" name="reset_reason" rows="2" placeholder="e.g., I forgot my password" style="height:56px;"></textarea>
                         </div>
-                        
+
                         <button type="submit" name="request_reset" class="btn-reset">
                             <i class="fas fa-paper-plane me-1"></i> Request Reset
                         </button>
@@ -1613,7 +1644,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         </button>
                     </div>
                 </div>
-                
+
                 <div class="login-footer-text">
                     &copy; <?php echo date('Y'); ?> <span>Isabela State University</span> · Ladies Dormitory
                 </div>
@@ -1657,12 +1688,12 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         <i class="fas fa-sign-in-alt me-2"></i>
                         Yes, I have an account (Login)
                     </button>
-                    
+
                     <a href="student-self-registration.php" class="btn-no-account">
                         <i class="fas fa-user-plus me-2"></i>
                         No, I want to register (Sign Up)
                     </a>
-                    
+
                     <button type="button" class="btn-cancel-confirm" data-bs-dismiss="modal">
                         <i class="fas fa-times me-1"></i> Cancel
                     </button>
@@ -1673,9 +1704,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // ✅ AUTO CLEANUP: Remove leftover backdrops on page load
-        // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
             document.body.classList.remove('modal-open');
@@ -1683,66 +1711,43 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             document.body.style.paddingRight = '';
         });
 
-        // ============================================================
-        // ✅ AUTO-UNLOCK COUNTDOWN TIMER
-        // Kapag natapos ang 10-minute ban, awtomatikong mag-u-unlock
-        // ============================================================
         <?php if ($is_blocked && $block_until_timestamp > 0): ?>
-        
-        const blockUntilTime = <?php echo $block_until_timestamp * 1000; ?>; // Convert to milliseconds
+        const blockUntilTime = <?php echo $block_until_timestamp * 1000; ?>;
         let autoUnlockTriggered = false;
-        
+
         function updateLockCountdown() {
             const now = Date.now();
             const diff = blockUntilTime - now;
-            
+
             if (diff <= 0 && !autoUnlockTriggered) {
-                // ✅ BAN EXPIRED - AUTO-UNLOCK!
                 autoUnlockTriggered = true;
-                
-                // Clear timer
-                if (window.lockTimerInterval) {
-                    clearInterval(window.lockTimerInterval);
-                }
-                
-                // Hide lock indicator
+
+                if (window.lockTimerInterval) clearInterval(window.lockTimerInterval);
+
                 const lockIndicator = document.getElementById('lockIndicator');
-                if (lockIndicator) {
-                    lockIndicator.style.display = 'none';
-                }
-                
-                // ✅ Show auto-unlock notification
+                if (lockIndicator) lockIndicator.style.display = 'none';
+
                 const autoUnlockNotice = document.getElementById('autoUnlockNotice');
-                if (autoUnlockNotice) {
-                    autoUnlockNotice.style.display = 'flex';
-                }
-                
-                // ✅ Enable form inputs
+                if (autoUnlockNotice) autoUnlockNotice.style.display = 'flex';
+
                 document.querySelectorAll('input:disabled, button:disabled').forEach(function(el) {
                     el.disabled = false;
                 });
-                
-                // ✅ Remove disabled attribute from login button
+
                 const loginBtn = document.getElementById('loginBtn');
-                if (loginBtn) {
-                    loginBtn.disabled = false;
-                }
-                
-                // ✅ Remove attempts warning
+                if (loginBtn) loginBtn.disabled = false;
+
                 document.querySelectorAll('.attempts-warning').forEach(function(el) {
                     el.style.display = 'none';
                 });
-                
-                // ✅ Force reload after 2 seconds para fresh form
-                // (Para malinis ang error messages at ma-reset lahat)
+
                 setTimeout(function() {
                     window.location.href = 'login.php?unlocked=1';
                 }, 2000);
-                
+
                 return;
             }
-            
-            // Update countdown display
+
             if (diff > 0) {
                 const minutes = Math.floor(diff / 60000);
                 const seconds = Math.floor((diff % 60000) / 1000);
@@ -1752,30 +1757,21 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                 }
             }
         }
-        
-        // Initial call
+
         updateLockCountdown();
-        
-        // Update every second
         window.lockTimerInterval = setInterval(updateLockCountdown, 1000);
-        
         <?php endif; ?>
 
-        // ============================================================
-        // ✅ SHOW AUTO-UNLOCK MESSAGE KUNG KAKA-UNLOCK LANG
-        // ============================================================
         <?php if (isset($_GET['unlocked']) && $_GET['unlocked'] == '1'): ?>
         document.addEventListener('DOMContentLoaded', function() {
             const notice = document.getElementById('autoUnlockNotice');
             if (notice) {
                 notice.style.display = 'flex';
-                // Auto-hide after 5 seconds
                 setTimeout(function() {
                     notice.style.display = 'none';
                 }, 5000);
             }
-            
-            // Focus on email input
+
             setTimeout(function() {
                 const emailInput = document.getElementById('loginEmail');
                 if (emailInput) emailInput.focus();
@@ -1783,133 +1779,108 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         });
         <?php endif; ?>
 
-        // ============================================================
-        // SHOW STUDENT CONFIRMATION MODAL
-        // ============================================================
         function confirmStudentRegistration() {
             const modalElement = document.getElementById('studentConfirmModal');
-            
             let existingModal = bootstrap.Modal.getInstance(modalElement);
-            if (existingModal) {
-                existingModal.dispose();
-            }
-            
+            if (existingModal) existingModal.dispose();
+
             const modal = new bootstrap.Modal(modalElement, {
                 backdrop: 'static',
                 keyboard: false
             });
-            
             modal.show();
         }
 
-        // ============================================================
-        // SHOW STUDENT LOGIN FORM
-        // ============================================================
         function showStudentLogin() {
             const modalElement = document.getElementById('studentConfirmModal');
             const modal = bootstrap.Modal.getInstance(modalElement);
-            
-            if (modal) {
-                modal.hide();
-            }
-            
+
+            if (modal) modal.hide();
+
             setTimeout(function() {
                 document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) {
                     backdrop.remove();
                 });
-                
+
                 document.body.classList.remove('modal-open');
                 document.body.style.overflow = '';
                 document.body.style.paddingRight = '';
                 document.body.style.pointerEvents = 'auto';
-                
+
                 modalElement.style.display = 'none';
                 modalElement.classList.remove('show');
                 modalElement.setAttribute('aria-hidden', 'true');
                 modalElement.removeAttribute('aria-modal');
-                
+
                 document.querySelectorAll('.role-btn').forEach(function(b) {
                     b.classList.remove('active');
                 });
                 const studentBtn = document.querySelector('.role-btn[data-role="student"]');
                 if (studentBtn) studentBtn.classList.add('active');
-                
+
                 document.querySelectorAll('.login-form').forEach(function(form) {
                     form.style.display = 'none';
                 });
-                
+
                 const studentForm = document.getElementById('studentForm');
                 if (studentForm) studentForm.style.display = 'block';
-                
+
                 const resetSection = document.getElementById('resetSection');
                 if (resetSection) resetSection.style.display = 'none';
-                
+
                 setTimeout(function() {
                     const emailInput = document.querySelector('#studentForm input[name="email"]');
                     if (emailInput) emailInput.focus();
                 }, 100);
-                
             }, 300);
         }
 
-        // ============================================================
-        // ROLE SELECTOR
-        // ============================================================
         document.querySelectorAll('.role-btn').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 const role = this.dataset.role;
-                
+
                 if (role === 'student') {
                     e.preventDefault();
                     e.stopPropagation();
                     confirmStudentRegistration();
                     return;
                 }
-                
+
                 document.querySelectorAll('.role-btn').forEach(function(b) {
                     b.classList.remove('active');
                 });
                 this.classList.add('active');
-                
+
                 document.querySelectorAll('.login-form').forEach(function(form) {
                     form.style.display = 'none';
                 });
                 document.getElementById(role + 'Form').style.display = 'block';
-                
+
                 document.getElementById('resetSection').style.display = 'none';
             });
         });
 
-        // ============================================================
-        // TOGGLE PASSWORD VISIBILITY
-        // ============================================================
         function togglePasswordVisibility() {
             const passwordInputs = document.querySelectorAll('input[type="password"]');
-            const icon = document.getElementById('passwordToggleIcon');
-            
+            const icons = document.querySelectorAll('.toggle-password i');
+
             passwordInputs.forEach(function(input) {
                 if (input.type === 'password') {
                     input.type = 'text';
-                    if (icon) icon.className = 'fas fa-eye-slash';
+                    icons.forEach(i => i.className = 'fas fa-eye-slash');
                 } else {
                     input.type = 'password';
-                    if (icon) icon.className = 'fas fa-eye';
+                    icons.forEach(i => i.className = 'fas fa-eye');
                 }
             });
         }
 
-        // ============================================================
-        // AUTO-FOCUS
-        // ============================================================
         <?php if ($show_puzzle): ?>
-        document.getElementById('mathAnswer').focus();
+        document.getElementById('mathAnswer')?.focus();
         <?php else: ?>
         document.getElementById('loginEmail')?.focus();
         <?php endif; ?>
 
-        // ============================================================
-        // ENTER KEY SUPPORT
-        // ============================================================
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 const activeForm = document.querySelector('.login-form:not([style*="display: none"])');
@@ -1920,9 +1891,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             }
         });
 
-        // ============================================================
-        // MATH PUZZLE - Auto-submit on Enter
-        // ============================================================
         document.getElementById('mathAnswer')?.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -1930,9 +1898,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             }
         });
 
-        // ============================================================
-        // SHOW/HIDE RESET FORM
-        // ============================================================
         function showResetForm() {
             document.getElementById('resetSection').style.display = 'block';
             document.getElementById('studentForm').style.display = 'none';
