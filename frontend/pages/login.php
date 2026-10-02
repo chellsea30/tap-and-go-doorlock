@@ -541,24 +541,30 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        html {
+            height: 100%;
+            overflow: hidden;
+        }
+
         html, body {
             height: 100%;
             font-family: 'Inter', sans-serif;
             margin: 0;
             padding: 0;
+            overflow-x: hidden;
         }
 
         body {
-            min-height: 100vh;
-            min-height: 100dvh;
-            max-height: 100vh;
+            height: 100vh;
+            height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 15px;
+            padding: 10px;
             background: linear-gradient(135deg, #0a1628 0%, #0d1f3c 50%, #1a2a4a 100%);
             position: relative;
             overflow: hidden;
+            margin: 0;
         }
 
         body::before {
@@ -607,7 +613,8 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             align-items: center;
             justify-content: center;
             gap: 50px;
-            min-height: auto;
+            height: 100%;
+            max-height: 100%;
         }
 
         .brand-section {
@@ -621,7 +628,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .brand-section .logo img {
@@ -658,7 +665,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         }
 
         .brand-section .hero-text {
-            margin: 24px 0;
+            margin: 20px 0;
         }
 
         .brand-section .hero-text h2 {
@@ -704,7 +711,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         }
 
         .brand-section .footer-text {
-            margin-top: 24px;
+            margin-top: 20px;
             font-size: 12px;
             color: rgba(255,255,255,0.2);
         }
@@ -720,12 +727,13 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255,255,255,0.08);
             border-radius: 24px;
-            padding: 32px 30px;
+            padding: 28px 26px;
             box-shadow: 0 40px 80px rgba(0,0,0,0.4);
             position: relative;
             flex-shrink: 0;
-            max-height: calc(100vh - 30px);
+            max-height: calc(100vh - 20px);
             overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .login-card::before {
@@ -1273,7 +1281,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         .modal-backdrop { z-index: 1040 !important; background-color: #000 !important; }
         .modal { z-index: 1050 !important; }
         body.modal-open { overflow: hidden !important; }
-        body:not(.modal-open) { pointer-events: auto !important; overflow: auto !important; }
+        body:not(.modal-open) { pointer-events: auto !important; overflow: hidden !important; }
         body:not(.modal-open) .modal-backdrop { display: none !important; }
         .modal:not(.show) { display: none !important; pointer-events: none !important; }
 
@@ -1287,31 +1295,40 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
            RESPONSIVE
            ============================================================ */
         @media (max-width: 992px) {
+            html {
+                overflow: auto;
+            }
             body {
+                height: auto;
+                min-height: 100vh;
+                min-height: 100dvh;
                 max-height: none;
                 overflow-y: auto;
-                padding: 12px;
-                padding-top: 12px;
+                overflow-x: hidden;
+                padding: 10px;
                 align-items: flex-start;
             }
             .login-wrapper {
                 flex-direction: column;
-                gap: 24px;
+                gap: 20px;
                 max-width: 460px;
+                height: auto;
+                max-height: none;
             }
             .brand-section { text-align: center; max-width: 100%; }
-            .brand-section .logo { justify-content: center; margin-bottom: 16px; }
-            .brand-section .hero-text { margin: 16px 0; }
-            .brand-section .hero-text h2 { font-size: 26px; }
+            .brand-section .logo { justify-content: center; margin-bottom: 14px; }
+            .brand-section .hero-text { margin: 14px 0; }
+            .brand-section .hero-text h2 { font-size: 24px; }
             .brand-section .hero-text p { max-width: 100%; font-size: 13px; }
-            .brand-section .features { justify-content: center; gap: 14px; margin-top: 14px; }
+            .brand-section .features { justify-content: center; gap: 12px; margin-top: 12px; }
             .brand-section .feature-item { font-size: 12px; }
-            .brand-section .footer-text { margin-top: 14px; }
-            .login-card { padding: 26px 22px; border-radius: 20px; max-height: none; }
+            .brand-section .footer-text { margin-top: 12px; }
+            .login-card { padding: 24px 20px; border-radius: 20px; max-height: none; }
         }
 
         @media (max-width: 576px) {
-            body { padding: 10px; padding-top: 10px; }
+            body { padding: 8px; }
+            .login-wrapper { gap: 16px; }
             .brand-section .logo img { width: 60px; height: 60px; }
             .brand-section .logo-text h1 { font-size: 18px; }
             .brand-section .logo-text p { font-size: 11px; }
@@ -1319,7 +1336,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             .brand-section .hero-text p { font-size: 12px; }
             .brand-section .features { gap: 10px; }
             .brand-section .feature-item { font-size: 11px; }
-            .login-card { padding: 22px 18px; border-radius: 18px; }
+            .login-card { padding: 20px 16px; border-radius: 18px; }
             .role-btn { font-size: 11px; padding: 8px 5px; }
             .role-btn i { margin-right: 2px; }
             .puzzle-question { font-size: 24px; }
@@ -1330,7 +1347,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
         @media (min-width: 1400px) {
             .brand-section .hero-text h2 { font-size: 38px; }
-            .login-card { max-width: 440px; padding: 36px 34px; }
+            .login-card { max-width: 440px; padding: 32px 30px; }
         }
 
         ::-webkit-scrollbar { width: 6px; }
