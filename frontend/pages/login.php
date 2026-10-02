@@ -3,7 +3,7 @@
  * Tap-and-Go Doorlock - Main Login with Math Puzzle
  * ISABELA STATE UNIVERSITY - LADIES DORMITORY
  * ✅ AUTO-UNLOCK kapag natapos na ang 10-minute ban
- * ✅ COMPACT LAYOUT - fit sa screen
+ * ✅ COMPACT LAYOUT - fit sa screen, walang extra space sa baba
  */
 
 session_start();
@@ -544,19 +544,21 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         html, body {
             height: 100%;
             font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
         }
 
         body {
             min-height: 100vh;
             min-height: 100dvh;
+            max-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 15px;
             background: linear-gradient(135deg, #0a1628 0%, #0d1f3c 50%, #1a2a4a 100%);
             position: relative;
-            overflow-x: hidden;
-            overflow-y: auto;
+            overflow: hidden;
         }
 
         body::before {
@@ -595,9 +597,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             66% { transform: translate(-20px, 20px) scale(0.95); }
         }
 
-        /* ============================================================
-           COMPACT LAYOUT — fits viewport, no extra space
-           ============================================================ */
         .login-wrapper {
             width: 100%;
             max-width: 1200px;
@@ -608,6 +607,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             align-items: center;
             justify-content: center;
             gap: 50px;
+            min-height: auto;
         }
 
         .brand-section {
@@ -713,9 +713,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             color: rgba(255, 215, 0, 0.3);
         }
 
-        /* ============================================================
-           LOGIN CARD — compact
-           ============================================================ */
         .login-card {
             width: 100%;
             max-width: 420px;
@@ -727,6 +724,8 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             box-shadow: 0 40px 80px rgba(0,0,0,0.4);
             position: relative;
             flex-shrink: 0;
+            max-height: calc(100vh - 30px);
+            overflow-y: auto;
         }
 
         .login-card::before {
@@ -1114,7 +1113,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
         .login-footer-text span { color: rgba(255,215,0,0.15); }
 
-        /* Info box under login button */
         .info-note {
             margin-top: 12px;
             padding: 10px 12px;
@@ -1134,9 +1132,6 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         .info-note strong { color: rgba(255,255,255,0.7); }
         .info-note i { color: #ffd700; margin-right: 4px; }
 
-        /* ============================================================
-           STUDENT CONFIRMATION MODAL
-           ============================================================ */
         .student-confirm-modal .modal-content {
             background: #131926 !important;
             border: 1px solid #1a2a4a;
@@ -1282,12 +1277,28 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         body:not(.modal-open) .modal-backdrop { display: none !important; }
         .modal:not(.show) { display: none !important; pointer-events: none !important; }
 
+        /* Custom scrollbar for login-card */
+        .login-card::-webkit-scrollbar { width: 4px; }
+        .login-card::-webkit-scrollbar-track { background: transparent; }
+        .login-card::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+        .login-card::-webkit-scrollbar-thumb:hover { background: rgba(255, 215, 0, 0.3); }
+
         /* ============================================================
            RESPONSIVE
            ============================================================ */
         @media (max-width: 992px) {
-            body { padding: 12px; align-items: flex-start; padding-top: 20px; }
-            .login-wrapper { flex-direction: column; gap: 24px; max-width: 460px; }
+            body {
+                max-height: none;
+                overflow-y: auto;
+                padding: 12px;
+                padding-top: 12px;
+                align-items: flex-start;
+            }
+            .login-wrapper {
+                flex-direction: column;
+                gap: 24px;
+                max-width: 460px;
+            }
             .brand-section { text-align: center; max-width: 100%; }
             .brand-section .logo { justify-content: center; margin-bottom: 16px; }
             .brand-section .hero-text { margin: 16px 0; }
@@ -1296,11 +1307,11 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             .brand-section .features { justify-content: center; gap: 14px; margin-top: 14px; }
             .brand-section .feature-item { font-size: 12px; }
             .brand-section .footer-text { margin-top: 14px; }
-            .login-card { padding: 26px 22px; border-radius: 20px; }
+            .login-card { padding: 26px 22px; border-radius: 20px; max-height: none; }
         }
 
         @media (max-width: 576px) {
-            body { padding: 10px; padding-top: 14px; }
+            body { padding: 10px; padding-top: 10px; }
             .brand-section .logo img { width: 60px; height: 60px; }
             .brand-section .logo-text h1 { font-size: 18px; }
             .brand-section .logo-text p { font-size: 11px; }
@@ -1497,7 +1508,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                             <span class="input-icon"><i class="fas fa-lock"></i></span>
                             <input type="password" name="password" id="loginPassword" placeholder="Enter password" required <?php echo $is_blocked ? 'disabled' : ''; ?>>
                             <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">
-                                <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                                <i class="fas fa-eye"></i>
                             </button>
                         </div>
                     </div>
@@ -1624,7 +1635,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                             <label><i class="fas fa-envelope me-1"></i> Email Address</label>
                             <div class="input-group">
                                 <span class="input-icon"><i class="fas fa-envelope"></i></span>
-                                <input type="email" class="form-control-custom" name="reset_email" placeholder="Enter your registered email" required style="background:transparent;border:none;padding:12px 14px 12px 0;color:white;font-size:13px;width:100%;outline:none;">
+                                <input type="email" name="reset_email" placeholder="Enter your registered email" required style="background:transparent;border:none;padding:12px 14px 12px 0;color:white;font-size:13px;width:100%;outline:none;">
                             </div>
                         </div>
 
