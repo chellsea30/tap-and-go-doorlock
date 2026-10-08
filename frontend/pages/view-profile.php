@@ -2,7 +2,6 @@
 /**
  * Tap-and-Go Doorlock - View Resident Profile
  * FULL DARK MODE - With Fixed Action Bar Below Navbar
-
  */
 
 // Start session
@@ -783,6 +782,15 @@ function getStatusBadge($status) {
                 padding-right: 20px !important;
             }
         }
+
+        /* ============================================================
+           EMPTY VALUE PLACEHOLDER
+           ============================================================ */
+        .empty-value {
+            color: var(--text-muted) !important;
+            font-style: italic;
+            font-weight: 400;
+        }
     </style>
 </head>
 <body>
@@ -959,16 +967,16 @@ function getStatusBadge($status) {
                                     <span class="info-label">Religion</span>
                                     <span class="info-value"><?php echo getVal($profile, 'religion'); ?></span>
                                 </div>
-                                <!-- ✅ EYE COLOR DISPLAYED -->
+                                <!-- ✅ EYE COLOR - ALWAYS DISPLAYS EVEN IF EMPTY -->
                                 <div class="detail-row">
                                     <span class="info-label">Eye Color</span>
                                     <span class="info-value">
                                         <?php 
                                             $eyeColor = $profile['eye_color'] ?? '';
-                                            if (!empty($eyeColor)) {
-                                                echo htmlspecialchars($eyeColor);
+                                            if (!empty(trim($eyeColor))) {
+                                                echo htmlspecialchars(trim($eyeColor));
                                             } else {
-                                                echo '<span style="color: var(--text-muted); font-style: italic;">Not Specified</span>';
+                                                echo '<span class="empty-value">—</span>';
                                             }
                                         ?>
                                     </span>
@@ -1095,8 +1103,7 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- ===== ADMISSION INFORMATION ===== -->
-                    <?php if ($admission): ?>
+                    <!-- ===== ADMISSION INFORMATION - ALWAYS DISPLAYS ===== -->
                     <div class="print-section">
                         <h6><i class="fas fa-clipboard-list me-2"></i>Admission Information</h6>
                         <div class="row">
@@ -1133,7 +1140,6 @@ function getStatusBadge($status) {
                             </div>
                         </div>
                     </div>
-                    <?php endif; ?>
 
                     <!-- ===== FORMER BOARDING ===== -->
                     <div class="print-section">
