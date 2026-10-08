@@ -3,7 +3,7 @@
  * Tap-and-Go Doorlock - Student Self-Registration Form
  * Public - No login required
  * Location: frontend/pages/student-self-registration.php
- * ✅ ALL FIELDS REQUIRED - Hindi pwedeng mag-skip
+ * ✅ ALL FIELDS REQUIRED EXCEPT EYE COLOR
  * ✅ AUTO-SCROLL sa unang missing field
  * ✅ RED HIGHLIGHT sa missing fields
  */
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
     $date_registered = date('Y-m-d');
     
     // ============================================================
-    // ✅ LAHAT NG FIELDS AY REQUIRED (MALIBAN SA EYE COLOR)
+    // ✅ REQUIRED FIELDS (WALANG EYE COLOR)
     // ============================================================
     $required_fields = [
         'full_name' => 'Full Name',
@@ -75,6 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
         'allowance_source' => 'Other Sources of Allowance',
         'cultural_origin' => 'Cultural Origin',
         'religion' => 'Religion',
+        // ✅ EYE COLOR AY HINDI KASAMA DITO (OPTIONAL)
         'dialect' => 'Dialect Spoken',
         'father_education' => "Father's Education",
         'mother_education' => "Mother's Education",
@@ -296,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             font-style: italic;
         }
         
-        /* ✅ BAGO: ERROR HIGHLIGHT */
+        /* ✅ ERROR HIGHLIGHT */
         .form-control.error-field,
         .form-select.error-field {
             border-color: #ef4444 !important;
@@ -370,7 +371,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             font-family: monospace;
         }
         
-        /* ✅ BAGO: Required notice banner */
+        /* ✅ Required notice banner */
         .required-notice {
             background: rgba(239,68,68,0.1);
             border: 1px solid rgba(239,68,68,0.3);
@@ -441,7 +442,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             <div class="required-notice">
                 <i class="fas fa-exclamation-triangle"></i>
                 <div>
-                    <strong>ALL FIELDS ARE REQUIRED</strong> — Hindi pwedeng mag-skip ng kahit anong field.
+                    <strong>ALL FIELDS ARE REQUIRED</strong> — Maliban sa <strong>Eye Color</strong> na optional.
                     Kung may kulang, awtomatikong babalik ka sa field na kailangan mong punan.
                 </div>
             </div>
@@ -532,7 +533,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                             </select>
                             <div class="error-message" id="error_civil_status">Civil status is required</div>
                         </div>
-                        <!-- ✅ EYE COLOR - Nasa Personal Information na -->
+                        <!-- ✅ EYE COLOR - OPTIONAL (WALANG required attribute) -->
                         <div class="col-md-4">
                             <label class="form-label">Eye Color <span class="optional-tag">(Optional)</span></label>
                             <input type="text" class="form-control auto-upper" name="eye_color" id="eye_color" 
@@ -866,7 +867,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
         // ============================================================
         document.getElementById('registrationForm').addEventListener('submit', function(e) {
             const missing = [];
-            const errorMessages = {};
             
             // 1. Check profile photo
             const photoInput = document.getElementById('photoInput');
@@ -877,6 +877,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             }
             
             // 2. Check all text/select/date inputs with required attribute
+            // ✅ EYE COLOR AY HINDI KASAMA DAHIL WALANG required attribute
             const requiredInputs = this.querySelectorAll('.form-control[required], .form-select[required]');
             requiredInputs.forEach(function(input) {
                 if (!input.value || input.value.trim() === '') {
