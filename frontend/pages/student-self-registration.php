@@ -5,7 +5,7 @@
  * Location: frontend/pages/student-self-registration.php
  * ✅ ALL FIELDS REQUIRED - Hindi pwedeng mag-skip
  * ✅ AUTO-SCROLL sa unang missing field
- * ✅ RED HIGHLIGHT sa missing fields
+ * ✅ RED HIGHLIGHT sa missing field
  */
 
 session_start();
@@ -35,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
     $school_address = strtoupper(trim($_POST['school_address'] ?? ''));
     $cultural_origin = strtoupper(trim($_POST['cultural_origin'] ?? ''));
     $religion = strtoupper(trim($_POST['religion'] ?? ''));
+    $eye_color = strtoupper(trim($_POST['eye_color'] ?? ''));  // ✅ OPTIONAL FIELD
     $dialect = strtoupper(trim($_POST['dialect'] ?? ''));
     $cp_no = strtoupper(trim($_POST['cp_no'] ?? ''));
     $home_address = strtoupper(trim($_POST['home_address'] ?? ''));
@@ -55,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
     $date_registered = date('Y-m-d');
     
     // ============================================================
-    // ✅ LAHAT NG FIELDS AY REQUIRED
+    // ✅ LAHAT NG FIELDS AY REQUIRED (MALIBAN SA EYE COLOR)
     // ============================================================
     $required_fields = [
         'full_name' => 'Full Name',
@@ -159,24 +160,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 $stmt->close();
                 
                 // Insert into resident_profiles
+                // ✅ EYE COLOR ADDED (after religion)
                 $profileStmt = $conn->prepare("
                     INSERT INTO resident_profiles (
                         user_id, date_registered, gender, gender_other, birth_date, age,
                         birth_no, course, year_level, no_siblings, scholarship, allowance_source,
-                        school_last, school_address, cultural_origin, religion, dialect,
+                        school_last, school_address, cultural_origin, religion, eye_color, dialect,
                         home_address, civil_status, father_education, mother_education,
                         father_occupation, mother_occupation, emergency_name, emergency_relationship,
                         emergency_address, emergency_contact, parents_marital_status,
                         former_boarding_years, plan_transfer, plan_transfer_yes, plan_transfer_no
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 
-                $types = "i" . str_repeat("s", 4) . "i" . str_repeat("s", 26);
+                // ✅ TYPES: 1 int (user_id) + 4 strings + 1 int (age) + 27 strings
+                $types = "i" . str_repeat("s", 4) . "i" . str_repeat("s", 27);
                 
                 $profileStmt->bind_param($types,
                     $user_id, $date_registered, $gender, $gender_other, $birth_date, $age,
                     $birth_no, $course, $year_level, $no_siblings, $scholarship, $allowance_source,
-                    $school_last, $school_address, $cultural_origin, $religion, $dialect,
+                    $school_last, $school_address, $cultural_origin, $religion, $eye_color, $dialect,
                     $home_address, $civil_status, $father_education, $mother_education,
                     $father_occupation, $mother_occupation, $emergency_name, $emergency_relationship,
                     $emergency_address, $emergency_contact, $parents_marital_status,
@@ -286,6 +289,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             border-color: #ffd700;
         }
         .required { color: #ef4444; }
+        .optional-tag {
+            color: #94a3b8;
+            font-size: 10px;
+            font-weight: 400;
+            font-style: italic;
+        }
         
         /* ✅ BAGO: ERROR HIGHLIGHT */
         .form-control.error-field,
@@ -585,6 +594,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                             <label class="form-label">Religion <span class="required">*</span></label>
                             <input type="text" class="form-control auto-upper" name="religion" id="religion" placeholder="Religion" required>
                             <div class="error-message" id="error_religion">Religion is required</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Eye Color <span class="optional-tag">(Optional)</span></label>
+                            <input type="text" class="form-control auto-upper" name="eye_color" id="eye_color" placeholder="e.g., Brown, Black, Hazel">
+                            <div class="error-message" id="error_eye_color"></div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Dialect Spoken <span class="required">*</span></label>
