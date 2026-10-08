@@ -2,7 +2,6 @@
 /**
  * Tap-and-Go Doorlock - View Resident Profile
  * FULL DARK MODE - With Fixed Action Bar Below Navbar
- * ✅ EYE COLOR ALWAYS DISPLAYS (N/A if empty)
  */
 
 // Start session
@@ -506,15 +505,6 @@ function getStatusBadge($status) {
         }
 
         /* ============================================================
-           EMPTY VALUE PLACEHOLDER
-           ============================================================ */
-        .empty-value {
-            color: var(--text-muted) !important;
-            font-style: italic;
-            font-weight: 400;
-        }
-
-        /* ============================================================
            PRINT STYLES
            ============================================================ */
         @media print {
@@ -968,19 +958,10 @@ function getStatusBadge($status) {
                                     <span class="info-label">Religion</span>
                                     <span class="info-value"><?php echo getVal($profile, 'religion'); ?></span>
                                 </div>
-                                <!-- ✅ EYE COLOR - ALWAYS DISPLAYS N/A IF EMPTY -->
+                                <!-- ✅ EYE COLOR ADDED -->
                                 <div class="detail-row">
                                     <span class="info-label">Eye Color</span>
-                                    <span class="info-value">
-                                        <?php 
-                                            $eyeColor = $profile['eye_color'] ?? '';
-                                            if (!empty(trim($eyeColor))) {
-                                                echo htmlspecialchars(trim($eyeColor));
-                                            } else {
-                                                echo 'N/A';
-                                            }
-                                        ?>
-                                    </span>
+                                    <span class="info-value"><?php echo getVal($profile, 'eye_color'); ?></span>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -1105,6 +1086,7 @@ function getStatusBadge($status) {
                     </div>
 
                     <!-- ===== ADMISSION INFORMATION ===== -->
+                    <?php if ($admission): ?>
                     <div class="print-section">
                         <h6><i class="fas fa-clipboard-list me-2"></i>Admission Information</h6>
                         <div class="row">
@@ -1141,6 +1123,7 @@ function getStatusBadge($status) {
                             </div>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <!-- ===== FORMER BOARDING ===== -->
                     <div class="print-section">
