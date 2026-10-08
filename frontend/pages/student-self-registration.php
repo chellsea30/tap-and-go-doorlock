@@ -5,7 +5,7 @@
  * Location: frontend/pages/student-self-registration.php
  * ✅ ALL FIELDS REQUIRED - Hindi pwedeng mag-skip
  * ✅ AUTO-SCROLL sa unang missing field
- * ✅ RED HIGHLIGHT sa missing field
+ * ✅ RED HIGHLIGHT sa missing fields
  */
 
 session_start();
@@ -532,7 +532,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                             </select>
                             <div class="error-message" id="error_civil_status">Civil status is required</div>
                         </div>
-                        <div class="col-md-12">
+                        <!-- ✅ EYE COLOR - Nasa Personal Information na -->
+                        <div class="col-md-4">
+                            <label class="form-label">Eye Color <span class="optional-tag">(Optional)</span></label>
+                            <input type="text" class="form-control auto-upper" name="eye_color" id="eye_color" 
+                                   placeholder="e.g., Brown, Black, Hazel">
+                            <div class="error-message" id="error_eye_color"></div>
+                        </div>
+                        <div class="col-md-8">
                             <label class="form-label">Complete Home Address <span class="required">*</span></label>
                             <input type="text" class="form-control auto-upper" name="home_address" id="home_address"
                                    placeholder="House No., Street, Barangay, Municipality, Province" required>
@@ -594,11 +601,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                             <label class="form-label">Religion <span class="required">*</span></label>
                             <input type="text" class="form-control auto-upper" name="religion" id="religion" placeholder="Religion" required>
                             <div class="error-message" id="error_religion">Religion is required</div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Eye Color <span class="optional-tag">(Optional)</span></label>
-                            <input type="text" class="form-control auto-upper" name="eye_color" id="eye_color" placeholder="e.g., Brown, Black, Hazel">
-                            <div class="error-message" id="error_eye_color"></div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Dialect Spoken <span class="required">*</span></label>
