@@ -2,6 +2,7 @@
 /**
  * Tap-and-Go Doorlock - View Resident Profile
  * FULL DARK MODE - With Fixed Action Bar Below Navbar
+
  */
 
 // Start session
@@ -958,10 +959,19 @@ function getStatusBadge($status) {
                                     <span class="info-label">Religion</span>
                                     <span class="info-value"><?php echo getVal($profile, 'religion'); ?></span>
                                 </div>
-                                <!-- ✅ EYE COLOR ADDED -->
+                                <!-- ✅ EYE COLOR DISPLAYED -->
                                 <div class="detail-row">
                                     <span class="info-label">Eye Color</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'eye_color'); ?></span>
+                                    <span class="info-value">
+                                        <?php 
+                                            $eyeColor = $profile['eye_color'] ?? '';
+                                            if (!empty($eyeColor)) {
+                                                echo htmlspecialchars($eyeColor);
+                                            } else {
+                                                echo '<span style="color: var(--text-muted); font-style: italic;">Not Specified</span>';
+                                            }
+                                        ?>
+                                    </span>
                                 </div>
                             </div>
                             <div class="col-md-6">
