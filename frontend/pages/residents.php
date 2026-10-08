@@ -3,8 +3,6 @@
  * Tap-and-Go Doorlock - Residents List
  * WITH APPROVAL SYSTEM + BULK APPROVE + REJECTION REASONS + AUDIT LOGGING
  * Location: frontend/pages/residents.php
- *
- * ✅ FIXED: Modals moved OUTSIDE <form id="bulkForm"> to fix unclickable buttons
  */
 
 session_start();
@@ -65,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_approve']) && !e
                 $upd->execute();
                 $upd->close();
 
+                // Audit (one row per student)
                 foreach ($targets as $t) {
                     auditLog(
                         $conn,
@@ -203,6 +202,7 @@ $success = '';
 $perPageOptions = [10, 25, 50, 100];
 if (!in_array($perPage, $perPageOptions)) $perPage = 10;
 
+// Dark mode
 $darkModeClass = '';
 if (isset($_SESSION['admin_id'])) {
     try {
@@ -218,6 +218,9 @@ if (isset($_SESSION['admin_id'])) {
     } catch (Exception $e) {}
 }
 
+// ============================================================
+// GET RESIDENTS LIST
+// ============================================================
 try {
     $conn = getDBConnection();
 
@@ -325,6 +328,7 @@ try {
     $error = 'Error loading residents: ' . $e->getMessage();
 }
 
+// Success messages
 if (isset($_GET['msg'])) {
     switch ($_GET['msg']) {
         case 'deleted':        $success = 'Resident deleted successfully!'; break;
@@ -644,11 +648,6 @@ function getInitials($name) {
             white-space: nowrap;
         }
 
-        /* ✅ FIX: ensure modal stays clickable */
-        .modal { z-index: 1055 !important; }
-        .modal-backdrop { z-index: 1050 !important; }
-        .modal-dialog { pointer-events: auto !important; }
-
         @media (max-width: 1400px) {
             .sidebar { width: 200px !important; }
             .main-content { margin-left: 200px !important; padding: 14px 20px !important; }
@@ -788,9 +787,7 @@ function getInitials($name) {
             </div>
         <?php endif; ?>
 
-        <!-- ============================================================ -->
-        <!-- BULK FORM: contains ONLY checkboxes + bulk bar + search + cards (NO modals inside) -->
-        <!-- ============================================================ -->
+        <!-- BULK FORM (Para sa Bulk Approve lamang) -->
         <form method="POST" action="" id="bulkForm">
             <input type="hidden" name="bulk_approve" value="1">
 
@@ -1022,12 +1019,12 @@ function getInitials($name) {
                                            onclick="return confirm('Approve this student registration?\n\nStudent: <?php echo htmlspecialchars(addslashes($resident['full_name'])); ?>\nID: <?php echo htmlspecialchars($resident['student_id']); ?>')">
                                             <i class="fas fa-check me-1"></i> Approve
                                         </a>
-                                        <button type="button"
+                                        <a href="#"
                                            class="btn btn-action btn-reject"
                                            data-bs-toggle="modal"
                                            data-bs-target="#rejectModal<?php echo $resident['user_id']; ?>">
                                             <i class="fas fa-times me-1"></i> Reject
-                                        </button>
+                                        </a>
                                         <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>"
                                            class="btn btn-action btn-view">
                                             <i class="fas fa-eye me-1"></i> View
@@ -1082,82 +1079,82 @@ function getInitials($name) {
                         </div>
                     </div>
                 <?php endforeach; ?>
+            <?php endif; ?>
 
-                <!-- PAGINATION -->
-                <?php if ($totalPages > 1 || $totalResidents > 0): ?>
-                <div class="pagination-container">
-                    <div class="row align-items-center g-2">
-                        <div class="col-md-6">
-                            <div class="page-info">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalResidents); ?> of <?php echo $totalResidents; ?> residents
-                                <span class="mx-1 text-muted">|</span>
-                                <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
-                            </div>
+            <!-- PAGINATION (Nasa loob pa rin ng form para sa bulk action) -->
+            <?php if ($totalPages > 1 || $totalResidents > 0): ?>
+            <div class="pagination-container">
+                <div class="row align-items-center g-2">
+                    <div class="col-md-6">
+                        <div class="page-info">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalResidents); ?> of <?php echo $totalResidents; ?> residents
+                            <span class="mx-1 text-muted">|</span>
+                            <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
                         </div>
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center justify-content-md-end justify-content-start gap-2 flex-wrap">
-                                <div class="per-page-selector d-flex align-items-center gap-1">
-                                    <label>Show:</label>
-                                    <select onchange="changePerPage(this.value)">
-                                        <?php foreach ($perPageOptions as $option): ?>
-                                            <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                                <?php echo $option; ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-
-                                <nav aria-label="Page navigation">
-                                    <ul class="pagination justify-content-end mb-0">
-                                        <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-double-left"></i>
-                                            </a>
-                                        </li>
-                                        <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-left"></i>
-                                            </a>
-                                        </li>
-                                        <?php
-                                        $startPage = max(1, $page - 2);
-                                        $endPage = min($totalPages, $page + 2);
-                                        if ($startPage > 1) echo '<li class="page-item"><span class="page-link">...</span></li>';
-                                        for ($i = $startPage; $i <= $endPage; $i++):
-                                        ?>
-                                            <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                                <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                    <?php echo $i; ?>
-                                                </a>
-                                            </li>
-                                        <?php endfor; ?>
-                                        <?php if ($endPage < $totalPages) echo '<li class="page-item"><span class="page-link">...</span></li>'; ?>
-
-                                        <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-right"></i>
-                                            </a>
-                                        </li>
-                                        <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <i class="fas fa-angle-double-right"></i>
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </nav>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center justify-content-md-end justify-content-start gap-2 flex-wrap">
+                            <div class="per-page-selector d-flex align-items-center gap-1">
+                                <label>Show:</label>
+                                <select onchange="changePerPage(this.value)">
+                                    <?php foreach ($perPageOptions as $option): ?>
+                                        <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
+                                            <?php echo $option; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
+
+                            <nav aria-label="Page navigation">
+                                <ul class="pagination justify-content-end mb-0">
+                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <i class="fas fa-angle-double-left"></i>
+                                        </a>
+                                    </li>
+                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <i class="fas fa-angle-left"></i>
+                                        </a>
+                                    </li>
+                                    <?php
+                                    $startPage = max(1, $page - 2);
+                                    $endPage = min($totalPages, $page + 2);
+                                    if ($startPage > 1) echo '<li class="page-item"><span class="page-link">...</span></li>';
+                                    for ($i = $startPage; $i <= $endPage; $i++):
+                                    ?>
+                                        <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
+                                            <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                <?php echo $i; ?>
+                                            </a>
+                                        </li>
+                                    <?php endfor; ?>
+                                    <?php if ($endPage < $totalPages) echo '<li class="page-item"><span class="page-link">...</span></li>'; ?>
+
+                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <i class="fas fa-angle-right"></i>
+                                        </a>
+                                    </li>
+                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                        <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                            <i class="fas fa-angle-double-right"></i>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </nav>
                         </div>
                     </div>
                 </div>
-                <?php endif; ?>
+            </div>
             <?php endif; ?>
-        </form>
-        <!-- END BULK FORM -->
 
-        <!-- ============================================================ -->
-        <!-- ✅ MODALS — LAHAT SA LABAS NG FORM (para ma-click) -->
-        <!-- ============================================================ -->
+        </form> <!-- END BULK FORM -->
+
+        <!-- ============================================ -->
+        <!-- MGA MODAL (Nasa labas na ng form)             -->
+        <!-- ============================================ -->
         <?php foreach ($residents as $resident):
             $photoPath = $resident['profile_photo'] ?? '';
             $hasPhoto = false;
@@ -1335,6 +1332,7 @@ function getInitials($name) {
                     </div>
                 </div>
             </div>
+
         <?php endforeach; ?>
 
     </main>
