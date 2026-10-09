@@ -958,11 +958,6 @@ function getStatusBadge($status) {
                                     <span class="info-label">Religion</span>
                                     <span class="info-value"><?php echo getVal($profile, 'religion'); ?></span>
                                 </div>
-                                <!-- ✅ EYE COLOR ADDED -->
-                                <div class="detail-row">
-                                    <span class="info-label">Eye Color</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'eye_color'); ?></span>
-                                </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="detail-row">
