@@ -4,10 +4,7 @@
  * WITH APPROVAL SYSTEM + BULK APPROVE + REJECTION REASONS + AUDIT LOGGING
  * Location: frontend/pages/residents.php
  *
- * ✅ FIXED: All modals working (Photo, Reject, Delete)
- * ✅ FIXED: Single modal per type (dynamic content)
- * ✅ FIXED: Modals outside bulkForm
- * ✅ FIXED: z-index para hindi matakpan ng navbar
+ * ✅ FIXED: Modals moved OUTSIDE <form id="bulkForm"> to fix unclickable buttons
  */
 
 session_start();
@@ -647,19 +644,10 @@ function getInitials($name) {
             white-space: nowrap;
         }
 
-        /* ✅ FIX: Modal z-index and pointer events */
-        .modal { 
-            z-index: 99999 !important; 
-        }
-        .modal-backdrop { 
-            z-index: 99998 !important; 
-        }
-        .modal-dialog { 
-            pointer-events: auto !important; 
-        }
-        .modal-content { 
-            pointer-events: auto !important; 
-        }
+        /* ✅ FIX: ensure modal stays clickable */
+        .modal { z-index: 1055 !important; }
+        .modal-backdrop { z-index: 1050 !important; }
+        .modal-dialog { pointer-events: auto !important; }
 
         @media (max-width: 1400px) {
             .sidebar { width: 200px !important; }
@@ -800,7 +788,9 @@ function getInitials($name) {
             </div>
         <?php endif; ?>
 
-        <!-- BULK FORM: contains ONLY checkboxes + bulk bar + search + cards -->
+        <!-- ============================================================ -->
+        <!-- BULK FORM: contains ONLY checkboxes + bulk bar + search + cards (NO modals inside) -->
+        <!-- ============================================================ -->
         <form method="POST" action="" id="bulkForm">
             <input type="hidden" name="bulk_approve" value="1">
 
@@ -908,8 +898,6 @@ function getInitials($name) {
 
                     $initials = getInitials($resident['full_name'] ?? '');
                     $approvalStatus = $resident['approval_status'] ?? 'pending';
-                    $residentName = htmlspecialchars(addslashes($resident['full_name'] ?? 'Unknown'));
-                    $residentStudentId = htmlspecialchars($resident['student_id'] ?? 'N/A');
 
                     $cardClass = '';
                     if ($approvalStatus === 'pending') $cardClass = 'pending-status';
@@ -932,7 +920,8 @@ function getInitials($name) {
                             <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="resident-avatar"
-                                         onclick="openPhotoModal(<?php echo $resident['user_id']; ?>, '<?php echo $residentName; ?>', '<?php echo $fullPhotoPath; ?>', '<?php echo $initials; ?>')"
+                                         data-bs-toggle="modal"
+                                         data-bs-target="#photoModal<?php echo $resident['user_id']; ?>"
                                          title="Click to upload/change photo">
                                         <?php if ($hasPhoto): ?>
                                             <img src="<?php echo $fullPhotoPath; ?>"
@@ -1035,7 +1024,8 @@ function getInitials($name) {
                                         </a>
                                         <button type="button"
                                            class="btn btn-action btn-reject"
-                                           onclick="openRejectModal(<?php echo $resident['user_id']; ?>, '<?php echo $residentName; ?>', '<?php echo $residentStudentId; ?>')">
+                                           data-bs-toggle="modal"
+                                           data-bs-target="#rejectModal<?php echo $resident['user_id']; ?>">
                                             <i class="fas fa-times me-1"></i> Reject
                                         </button>
                                         <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>"
@@ -1046,7 +1036,8 @@ function getInitials($name) {
                                     <?php elseif ($approvalStatus === 'approved'): ?>
                                         <button type="button"
                                                 class="btn btn-action btn-upload-photo"
-                                                onclick="openPhotoModal(<?php echo $resident['user_id']; ?>, '<?php echo $residentName; ?>', '<?php echo $fullPhotoPath; ?>', '<?php echo $initials; ?>')">
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#photoModal<?php echo $resident['user_id']; ?>">
                                             <i class="fas fa-camera me-1"></i> Photo
                                         </button>
                                         <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>"
@@ -1063,7 +1054,8 @@ function getInitials($name) {
                                         </a>
                                         <button type="button"
                                                 class="btn btn-action btn-delete"
-                                                onclick="openDeleteModal(<?php echo $resident['user_id']; ?>, '<?php echo $residentName; ?>', '<?php echo $residentStudentId; ?>')">
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
                                             <i class="fas fa-trash me-1"></i> Delete
                                         </button>
 
@@ -1079,7 +1071,8 @@ function getInitials($name) {
                                         </a>
                                         <button type="button"
                                                 class="btn btn-action btn-delete"
-                                                onclick="openDeleteModal(<?php echo $resident['user_id']; ?>, '<?php echo $residentName; ?>', '<?php echo $residentStudentId; ?>')">
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#deleteModal<?php echo $resident['user_id']; ?>">
                                             <i class="fas fa-trash me-1"></i> Delete
                                         </button>
                                     <?php endif; ?>
@@ -1163,175 +1156,195 @@ function getInitials($name) {
         <!-- END BULK FORM -->
 
         <!-- ============================================================ -->
-        <!-- ✅ SINGLE MODALS - ISA LANG SA BUONG PAGE -->
+        <!-- ✅ MODALS — LAHAT SA LABAS NG FORM (para ma-click) -->
         <!-- ============================================================ -->
+        <?php foreach ($residents as $resident):
+            $photoPath = $resident['profile_photo'] ?? '';
+            $hasPhoto = false;
+            $fullPhotoPath = '';
 
-        <!-- PHOTO MODAL (Single) -->
-        <div class="modal fade" id="photoModal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            <i class="fas fa-camera me-2"></i>
-                            Profile Photo - <span id="photoModalName">—</span>
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body text-center">
-                        <div class="mb-3">
-                            <img id="photoModalPreview" src="" alt="Current Photo"
-                                 style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #2a2a4a;display:none;">
-                            <div id="photoModalInitials" 
-                                 style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#1a3a6a,#2a5a9a);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:40px;font-weight:700;color:white;">
-                                ?
-                            </div>
-                            <div class="mt-2" id="photoModalRemoveBtn" style="display:none;">
-                                <a href="#" id="photoModalRemoveLink"
-                                   class="btn btn-sm btn-remove-photo"
-                                   onclick="return confirm('Remove this photo?')">
-                                    <i class="fas fa-trash me-1"></i> Remove Photo
-                                </a>
-                            </div>
-                            <div class="mt-2 text-muted small" id="photoModalNoPhoto" style="display:none;">
-                                <i class="fas fa-info-circle me-1"></i>
-                                No photo uploaded yet
-                            </div>
+            if (!empty($photoPath)) {
+                if (strpos($photoPath, 'uploads/') === 0) {
+                    $fullPhotoPath = '../../' . $photoPath;
+                } else {
+                    $fullPhotoPath = '../../uploads/resident_photos/' . $photoPath;
+                }
+                if (file_exists($fullPhotoPath)) $hasPhoto = true;
+            }
+
+            $initials = getInitials($resident['full_name'] ?? '');
+        ?>
+
+            <!-- PHOTO MODAL -->
+            <div class="modal fade" id="photoModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-camera me-2"></i>
+                                Profile Photo - <?php echo htmlspecialchars($resident['full_name']); ?>
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-
-                        <hr>
-
-                        <form method="POST" action="residents.php" enctype="multipart/form-data">
-                            <input type="hidden" name="user_id" id="photoModalUserId" value="">
+                        <div class="modal-body text-center">
                             <div class="mb-3">
-                                <label class="form-label">Upload New Photo</label>
-                                <input type="file"
-                                       class="form-control"
-                                       name="profile_photo"
-                                       accept="image/*"
-                                       required>
-                                <div class="form-text text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Max size: 2MB. Allowed: JPG, PNG, GIF, WEBP
+                                <?php if ($hasPhoto): ?>
+                                    <img src="<?php echo $fullPhotoPath; ?>"
+                                         alt="Current Photo"
+                                         style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid #2a2a4a;">
+                                    <div class="mt-2">
+                                        <a href="?remove_photo=<?php echo $resident['user_id']; ?>"
+                                           class="btn btn-sm btn-remove-photo"
+                                           onclick="return confirm('Remove this photo?')">
+                                            <i class="fas fa-trash me-1"></i> Remove Photo
+                                        </a>
+                                    </div>
+                                <?php else: ?>
+                                    <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#1a3a6a,#2a5a9a);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:40px;font-weight:700;color:white;">
+                                        <?php echo $initials; ?>
+                                    </div>
+                                    <div class="mt-2 text-muted small">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        No photo uploaded yet
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+
+                            <hr>
+
+                            <form method="POST" enctype="multipart/form-data">
+                                <input type="hidden" name="user_id" value="<?php echo $resident['user_id']; ?>">
+                                <div class="mb-3">
+                                    <label class="form-label">Upload New Photo</label>
+                                    <input type="file"
+                                           class="form-control"
+                                           name="profile_photo"
+                                           accept="image/*"
+                                           required>
+                                    <div class="form-text text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Max size: 2MB. Allowed: JPG, PNG, GIF, WEBP
+                                    </div>
+                                </div>
+                                <button type="submit" name="upload_photo" class="btn btn-primary">
+                                    <i class="fas fa-upload me-1"></i> Upload Photo
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REJECT MODAL -->
+            <div class="modal fade" id="rejectModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header" style="border-bottom-color: #7a2a2a !important;">
+                            <h5 class="modal-title text-danger">
+                                <i class="fas fa-times-circle me-2"></i>
+                                Reject Registration
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form method="POST" action="approve-resident.php">
+                            <div class="modal-body">
+                                <input type="hidden" name="reject" value="<?php echo $resident['user_id']; ?>">
+
+                                <div class="text-center mb-3">
+                                    <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#7a2a2a,#ef4444);display:flex;align-items:center;justify-content:center;margin:0 auto 15px;font-size:24px;color:white;">
+                                        <i class="fas fa-user-times"></i>
+                                    </div>
+                                    <p style="color: #e0e0e0; margin-bottom: 5px;">
+                                        Are you sure you want to <strong class="text-danger">REJECT</strong> this registration?
+                                    </p>
+                                    <p style="color: #fbbf24; font-weight: 600; margin-bottom: 15px;">
+                                        <?php echo htmlspecialchars($resident['full_name']); ?>
+                                    </p>
+                                    <p class="text-muted small">
+                                        <i class="fas fa-id-card me-1"></i>
+                                        <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
+                                    </p>
+                                </div>
+
+                                <hr style="border-color: #1a2a4a;">
+
+                                <div class="mb-2">
+                                    <label class="form-label" style="color: #d1d5db; font-size: 13px;">
+                                        Reason for Rejection <span class="text-danger">*</span>
+                                    </label>
+                                    <textarea class="form-control"
+                                              name="reason"
+                                              rows="3"
+                                              required
+                                              placeholder="e.g., Incomplete requirements, Invalid information..."
+                                              style="background: #1a1a2e; border: 1px solid #2a2a4a; color: #e0e0e0;"></textarea>
+                                    <div class="form-text text-muted" style="font-size:11px;">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        This will be shown to the student on their status page.
+                                    </div>
                                 </div>
                             </div>
-                            <button type="submit" name="upload_photo" class="btn btn-primary">
-                                <i class="fas fa-upload me-1"></i> Upload Photo
-                            </button>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="fas fa-times me-1"></i> Cancel
+                                </button>
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="fas fa-times-circle me-1"></i> Yes, Reject
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- REJECT MODAL (Single) -->
-        <div class="modal fade" id="rejectModal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header" style="border-bottom-color: #7a2a2a !important;">
-                        <h5 class="modal-title text-danger">
-                            <i class="fas fa-times-circle me-2"></i>
-                            Reject Registration
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <form method="POST" action="approve-resident.php">
+            <!-- DELETE MODAL -->
+            <div class="modal fade" id="deleteModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title text-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>Confirm Delete
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
                         <div class="modal-body">
-                            <input type="hidden" name="reject" id="rejectModalUserId" value="">
-
-                            <div class="text-center mb-3">
-                                <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#7a2a2a,#ef4444);display:flex;align-items:center;justify-content:center;margin:0 auto 15px;font-size:24px;color:white;">
-                                    <i class="fas fa-user-times"></i>
-                                </div>
-                                <p style="color: #e0e0e0; margin-bottom: 5px;">
-                                    Are you sure you want to <strong class="text-danger">REJECT</strong> this registration?
-                                </p>
-                                <p style="color: #fbbf24; font-weight: 600; margin-bottom: 15px;" id="rejectModalName">
-                                    —
+                            <div class="text-center py-2">
+                                <i class="fas fa-user-times fa-3x text-danger mb-2"></i>
+                                <p class="mb-1">
+                                    Are you sure you want to delete
+                                    <strong><?php echo htmlspecialchars($resident['full_name']); ?></strong>?
                                 </p>
                                 <p class="text-muted small">
-                                    <i class="fas fa-id-card me-1"></i>
-                                    <span id="rejectModalId">—</span>
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Student ID: <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
+                                </p>
+                                <p class="text-danger small">
+                                    <i class="fas fa-exclamation-circle me-1"></i>
+                                    This action cannot be undone.
                                 </p>
                             </div>
-
-                            <hr style="border-color: #1a2a4a;">
-
-                            <div class="mb-2">
-                                <label class="form-label" style="color: #d1d5db; font-size: 13px;">
-                                    Reason for Rejection <span class="text-danger">*</span>
-                                </label>
-                                <textarea class="form-control"
-                                          name="reason"
-                                          id="rejectModalReason"
-                                          rows="3"
-                                          required
-                                          placeholder="e.g., Incomplete requirements, Invalid information..."
-                                          style="background: #1a1a2e; border: 1px solid #2a2a4a; color: #e0e0e0;"></textarea>
-                                <div class="form-text text-muted" style="font-size:11px;">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    This will be shown to the student on their status page.
-                                </div>
-                            </div>
                         </div>
-                        <div class="modal-footer">
+                        <div class="modal-footer justify-content-center">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                                 <i class="fas fa-times me-1"></i> Cancel
                             </button>
-                            <button type="submit" class="btn btn-danger">
-                                <i class="fas fa-times-circle me-1"></i> Yes, Reject
-                            </button>
+                            <a href="?delete=<?php echo $resident['user_id']; ?>&page=<?php echo $page; ?>" class="btn btn-danger">
+                                <i class="fas fa-trash me-1"></i> Yes, Delete
+                            </a>
                         </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- DELETE MODAL (Single) -->
-        <div class="modal fade" id="deleteModal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title text-danger">
-                            <i class="fas fa-exclamation-triangle me-2"></i>Confirm Delete
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="text-center py-2">
-                            <i class="fas fa-user-times fa-3x text-danger mb-2"></i>
-                            <p class="mb-1">
-                                Are you sure you want to delete
-                                <strong id="deleteModalName">—</strong>?
-                            </p>
-                            <p class="text-muted small">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Student ID: <span id="deleteModalId">—</span>
-                            </p>
-                            <p class="text-danger small">
-                                <i class="fas fa-exclamation-circle me-1"></i>
-                                This action cannot be undone.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="modal-footer justify-content-center">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                            <i class="fas fa-times me-1"></i> Cancel
-                        </button>
-                        <a href="#" id="deleteModalConfirm" class="btn btn-danger">
-                            <i class="fas fa-trash me-1"></i> Yes, Delete
-                        </a>
                     </div>
                 </div>
             </div>
-        </div>
+        <?php endforeach; ?>
 
     </main>
 
+    <footer class="footer">
+        &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System - ISU-Echague Dormitory. All rights reserved.
+    </footer>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // BULK SELECT
-        // ============================================================
         function toggleAllPending(src) {
             document.querySelectorAll('.pending-checkbox').forEach(cb => {
                 cb.checked = src.checked;
@@ -1341,8 +1354,7 @@ function getInitials($name) {
 
         function updateSelectedCount() {
             const n = document.querySelectorAll('.pending-checkbox:checked').length;
-            const counter = document.getElementById('selectedCount');
-            if (counter) counter.textContent = n;
+            document.getElementById('selectedCount').textContent = n;
 
             const total = document.querySelectorAll('.pending-checkbox').length;
             const selectAll = document.getElementById('selectAllPending');
@@ -1368,78 +1380,6 @@ function getInitials($name) {
             return confirm(`Approve ${n} selected application(s)?`);
         }
 
-        // ============================================================
-        // PHOTO MODAL
-        // ============================================================
-        function openPhotoModal(userId, fullName, photoPath, initials) {
-            document.getElementById('photoModalName').textContent = fullName;
-            document.getElementById('photoModalUserId').value = userId;
-
-            const preview = document.getElementById('photoModalPreview');
-            const initialsDiv = document.getElementById('photoModalInitials');
-            const removeBtn = document.getElementById('photoModalRemoveBtn');
-            const noPhotoMsg = document.getElementById('photoModalNoPhoto');
-            const removeLink = document.getElementById('photoModalRemoveLink');
-
-            // I-reset ang lahat
-            preview.style.display = 'none';
-            preview.src = '';
-            initialsDiv.style.display = 'flex';
-            removeBtn.style.display = 'none';
-            noPhotoMsg.style.display = 'none';
-
-            if (photoPath && photoPath !== '') {
-                // May photo
-                preview.src = photoPath;
-                preview.style.display = 'block';
-                initialsDiv.style.display = 'none';
-                removeBtn.style.display = 'block';
-                removeLink.href = '?remove_photo=' + userId;
-            } else {
-                // Walang photo
-                initialsDiv.textContent = initials;
-                initialsDiv.style.display = 'flex';
-                noPhotoMsg.style.display = 'block';
-            }
-
-            // Reset file input
-            const fileInput = document.querySelector('#photoModal input[type="file"]');
-            if (fileInput) fileInput.value = '';
-
-            const modal = new bootstrap.Modal(document.getElementById('photoModal'));
-            modal.show();
-        }
-
-        // ============================================================
-        // REJECT MODAL
-        // ============================================================
-        function openRejectModal(userId, fullName, studentId) {
-            document.getElementById('rejectModalUserId').value = userId;
-            document.getElementById('rejectModalName').textContent = fullName;
-            document.getElementById('rejectModalId').textContent = studentId;
-            document.getElementById('rejectModalReason').value = '';
-
-            const modal = new bootstrap.Modal(document.getElementById('rejectModal'));
-            modal.show();
-        }
-
-        // ============================================================
-        // DELETE MODAL
-        // ============================================================
-        function openDeleteModal(userId, fullName, studentId) {
-            document.getElementById('deleteModalName').textContent = fullName;
-            document.getElementById('deleteModalId').textContent = studentId;
-
-            const page = <?php echo (int)$page; ?>;
-            document.getElementById('deleteModalConfirm').href = '?delete=' + userId + '&page=' + page;
-
-            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
-            modal.show();
-        }
-
-        // ============================================================
-        // SEARCH / PAGINATION
-        // ============================================================
         function applySearch() {
             const q = document.getElementById('searchInput').value.trim();
             const params = new URLSearchParams(window.location.search);
