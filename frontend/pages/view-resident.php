@@ -2,6 +2,7 @@
 /**
  * Tap-and-Go Doorlock - View Resident Profile
  * FULL DARK MODE - With Fixed Action Bar Below Navbar
+ * ✅ EYE COLOR ALWAYS DISPLAYED
  */
 
 // Start session
@@ -36,9 +37,7 @@ $error = '';
 try {
     $conn = getDBConnection();
     
-    // ============================================================
     // GET USER DATA
-    // ============================================================
     $stmt = $conn->prepare("SELECT * FROM users WHERE user_id = ? AND status != 'deleted'");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -51,9 +50,7 @@ try {
         exit();
     }
     
-    // ============================================================
-    // GET PROFILE DATA
-    // ============================================================
+    // GET PROFILE DATA - ✅ SIGURADUHING KASAMA ANG eye_color
     $stmt = $conn->prepare("SELECT * FROM resident_profiles WHERE user_id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -61,9 +58,11 @@ try {
     $profile = $result->fetch_assoc();
     $stmt->close();
     
-    // ============================================================
+    // ✅ DEBUG: I-check kung may eye_color sa profile
+    // Uncomment ang line na ito para makita ang laman ng profile
+    // echo '<pre>'; print_r($profile); echo '</pre>'; exit();
+    
     // GET ADMISSION DATA
-    // ============================================================
     $stmt = $conn->prepare("SELECT * FROM admission_records WHERE user_id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -71,9 +70,7 @@ try {
     $admission = $result->fetch_assoc();
     $stmt->close();
     
-    // ============================================================
     // GET RFID CARD DATA
-    // ============================================================
     $stmt = $conn->prepare("SELECT * FROM rfid_cards WHERE user_id = ? AND status = 'active'");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -85,9 +82,7 @@ try {
     $error = 'Error loading data: ' . $e->getMessage();
 }
 
-// ============================================================
 // HELPER FUNCTIONS
-// ============================================================
 function getVal($array, $key, $default = 'N/A') {
     if ($array && isset($array[$key]) && $array[$key] !== null && $array[$key] !== '') {
         return htmlspecialchars(trim($array[$key]));
@@ -126,14 +121,10 @@ function getStatusBadge($status) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
-        /* ============================================================
-           ROOT VARIABLES - FULL DARK MODE
-           ============================================================ */
         :root {
             --bg-primary: #0a0e17;
             --bg-card: #111927;
             --bg-card-hover: #1a2335;
-            --bg-header: linear-gradient(135deg, #0a1628, #0d1f3c);
             --text-primary: #e8edf5;
             --text-secondary: #8899bb;
             --text-muted: #4a5a7a;
@@ -155,14 +146,7 @@ function getStatusBadge($status) {
             --navbar-height: 60px;
         }
 
-        /* ============================================================
-           GENERAL STYLES
-           ============================================================ */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         html, body {
             background: var(--bg-primary) !important;
@@ -171,22 +155,12 @@ function getStatusBadge($status) {
             min-height: 100vh;
         }
 
-        .container-fluid {
+        .container-fluid, .row, main {
             background: var(--bg-primary) !important;
         }
 
-        .row {
-            background: var(--bg-primary) !important;
-        }
+        main { padding-top: 0 !important; }
 
-        main {
-            background: var(--bg-primary) !important;
-            padding-top: 0 !important;
-        }
-
-        /* ============================================================
-           FIXED ACTION BAR - BELOW NAVBAR
-           ============================================================ */
         .action-bar {
             position: sticky;
             top: var(--navbar-height, 60px);
@@ -218,9 +192,7 @@ function getStatusBadge($status) {
             margin: 0;
         }
 
-        .action-bar .title-section .h2 i {
-            color: var(--gold) !important;
-        }
+        .action-bar .title-section .h2 i { color: var(--gold) !important; }
 
         .action-bar .btn-group-custom {
             display: flex;
@@ -229,54 +201,38 @@ function getStatusBadge($status) {
             align-items: center;
         }
 
-        /* ============================================================
-           BUTTONS - DARK MODE
-           ============================================================ */
         .btn-outline-secondary {
             color: var(--text-secondary) !important;
             border-color: var(--border-color) !important;
             background: transparent !important;
         }
-
         .btn-outline-secondary:hover {
             background: var(--bg-card-hover) !important;
             color: var(--text-primary) !important;
             border-color: var(--gold-dark) !important;
         }
-
         .btn-primary {
             background: var(--gold-dark) !important;
             border-color: var(--gold-dark) !important;
             color: #0a0e17 !important;
             font-weight: 600;
         }
-
         .btn-primary:hover {
             background: var(--gold) !important;
             border-color: var(--gold) !important;
             color: #0a0e17 !important;
         }
-
         .btn-outline-primary {
             color: var(--gold) !important;
             border-color: var(--gold-dark) !important;
             background: transparent !important;
         }
-
         .btn-outline-primary:hover {
             background: var(--gold-dark) !important;
             color: #0a0e17 !important;
         }
+        .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
 
-        .btn-sm {
-            padding: 5px 12px;
-            font-size: 12px;
-            border-radius: 6px;
-        }
-
-        /* ============================================================
-           THEME TOGGLE
-           ============================================================ */
         .theme-toggle {
             background: var(--bg-card-hover) !important;
             border: 1px solid var(--border-color);
@@ -288,16 +244,12 @@ function getStatusBadge($status) {
             transition: all 0.3s ease;
             line-height: 1.5;
         }
-
         .theme-toggle:hover {
             background: var(--gold-dark) !important;
             color: #0a0e17 !important;
             border-color: var(--gold-dark);
         }
 
-        /* ============================================================
-           PRINT SECTION - DARK MODE
-           ============================================================ */
         .print-section {
             background: var(--bg-card) !important;
             border-radius: 16px;
@@ -307,10 +259,7 @@ function getStatusBadge($status) {
             border: 1px solid var(--border-color);
             transition: all 0.3s ease;
         }
-
-        .print-section:hover {
-            box-shadow: var(--shadow-hover);
-        }
+        .print-section:hover { box-shadow: var(--shadow-hover); }
 
         .print-section h6 {
             color: var(--gold) !important;
@@ -347,13 +296,11 @@ function getStatusBadge($status) {
             color: var(--gold) !important;
             letter-spacing: 2px;
         }
-
         .logo-sub {
             font-size: 12px;
             color: var(--text-secondary) !important;
             letter-spacing: 1px;
         }
-
         .logo-line {
             width: 80px;
             height: 3px;
@@ -361,19 +308,12 @@ function getStatusBadge($status) {
             margin: 5px auto;
         }
 
-        /* ============================================================
-           DETAIL ROWS - DARK STYLE
-           ============================================================ */
         .detail-row {
             padding: 6px 0;
             border-bottom: 1px solid var(--border-color);
             transition: all 0.3s ease;
         }
-
-        .detail-row:last-child {
-            border-bottom: none;
-        }
-
+        .detail-row:last-child { border-bottom: none; }
         .detail-row:hover {
             background: var(--bg-card-hover);
             padding-left: 8px;
@@ -398,9 +338,6 @@ function getStatusBadge($status) {
             padding: 1px 0;
         }
 
-        /* ============================================================
-           PROFILE AVATAR - DARK MODE
-           ============================================================ */
         .profile-avatar {
             width: 120px;
             height: 120px;
@@ -416,16 +353,12 @@ function getStatusBadge($status) {
             border: 4px solid var(--gold-dark);
             margin: 0 auto;
         }
-
         .profile-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
-        /* ============================================================
-           BADGES - DARK MODE
-           ============================================================ */
         .badge-status {
             padding: 4px 12px;
             border-radius: 20px;
@@ -434,59 +367,44 @@ function getStatusBadge($status) {
             display: inline-block;
             letter-spacing: 0.3px;
         }
-
         .badge-active {
             background: var(--success-bg) !important;
             color: var(--success-text) !important;
             border: 1px solid rgba(110, 231, 183, 0.2);
         }
-
         .badge-pending {
             background: var(--warning-bg) !important;
             color: var(--warning-text) !important;
             border: 1px solid rgba(252, 211, 77, 0.2);
         }
-
         .badge-inactive {
             background: var(--secondary-bg) !important;
             color: var(--secondary-text) !important;
             border: 1px solid rgba(136, 153, 187, 0.2);
         }
-
         .badge-denied {
             background: var(--danger-bg) !important;
             color: var(--danger-text) !important;
             border: 1px solid rgba(252, 165, 165, 0.2);
         }
-
         .badge-completed {
             background: var(--info-bg) !important;
             color: var(--info-text) !important;
             border: 1px solid rgba(125, 211, 252, 0.2);
         }
-
         .badge-no-card {
             background: var(--secondary-bg) !important;
             color: var(--text-muted) !important;
             border: 1px solid rgba(74, 90, 122, 0.2);
         }
 
-        /* ============================================================
-           ALERT - DARK MODE
-           ============================================================ */
         .alert-danger {
             background: var(--danger-bg) !important;
             color: var(--danger-text) !important;
             border-color: rgba(252, 165, 165, 0.2) !important;
         }
+        .alert-danger .btn-close { filter: brightness(0.5) invert(1); }
 
-        .alert-danger .btn-close {
-            filter: brightness(0.5) invert(1);
-        }
-
-        /* ============================================================
-           PRINT FOOTER - DARK MODE
-           ============================================================ */
         .print-footer {
             text-align: center !important;
             margin-top: 20px !important;
@@ -496,33 +414,20 @@ function getStatusBadge($status) {
             color: var(--text-muted) !important;
         }
 
-        .text-muted {
+        .text-muted { color: var(--text-muted) !important; }
+        .text-muted i { color: var(--gold-dark) !important; }
+
+        .empty-value {
             color: var(--text-muted) !important;
+            font-style: italic;
+            font-weight: 400;
         }
 
-        .text-muted i {
-            color: var(--gold-dark) !important;
-        }
-
-        /* ============================================================
-           PRINT STYLES
-           ============================================================ */
         @media print {
             .no-print { display: none !important; }
-            
-            .action-bar {
-                display: none !important;
-            }
-            
-            body * {
-                visibility: hidden !important;
-            }
-            
-            #printContainer, 
-            #printContainer * {
-                visibility: visible !important;
-            }
-            
+            .action-bar { display: none !important; }
+            body * { visibility: hidden !important; }
+            #printContainer, #printContainer * { visibility: visible !important; }
             #printContainer {
                 position: absolute !important;
                 left: 0 !important;
@@ -532,7 +437,6 @@ function getStatusBadge($status) {
                 background: #0a0e17 !important;
                 margin: 0 !important;
             }
-            
             .print-section {
                 box-shadow: none !important;
                 border: 1px solid #1a2a44 !important;
@@ -543,46 +447,39 @@ function getStatusBadge($status) {
                 padding: 20px !important;
                 background: #0a0e17 !important;
             }
-            
             .print-header {
                 text-align: center !important;
                 margin-bottom: 20px !important;
                 border-bottom: 2px solid var(--gold-dark) !important;
                 padding-bottom: 15px !important;
             }
-            
             .print-header .logo-text {
                 font-size: 22px !important;
                 font-weight: 800 !important;
                 color: var(--gold) !important;
                 letter-spacing: 3px !important;
             }
-            
             .print-header .logo-sub {
                 font-size: 12px !important;
                 color: var(--text-secondary) !important;
                 letter-spacing: 2px !important;
             }
-            
             .print-header .logo-line {
                 width: 100px !important;
                 height: 3px !important;
                 background: var(--gold) !important;
                 margin: 8px auto !important;
             }
-            
             .print-label {
                 font-weight: 600 !important;
                 color: var(--gold) !important;
                 font-size: 12px !important;
             }
-            
             .print-value {
                 font-weight: 500 !important;
                 color: var(--text-primary) !important;
                 font-size: 14px !important;
             }
-            
             .print-footer {
                 text-align: center !important;
                 margin-top: 20px !important;
@@ -591,33 +488,17 @@ function getStatusBadge($status) {
                 font-size: 11px !important;
                 color: var(--text-muted) !important;
             }
-            
             .badge-status {
                 border: 1px solid var(--gold-dark) !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
-            
-            .profile-avatar {
-                border: 2px solid var(--gold-dark) !important;
-            }
-            
-            .detail-row {
-                border-bottom: 1px solid var(--border-color) !important;
-            }
-            
-            .info-label {
-                color: var(--text-secondary) !important;
-            }
-            
-            .info-value {
-                color: var(--text-primary) !important;
-            }
+            .profile-avatar { border: 2px solid var(--gold-dark) !important; }
+            .detail-row { border-bottom: 1px solid var(--border-color) !important; }
+            .info-label { color: var(--text-secondary) !important; }
+            .info-value { color: var(--text-primary) !important; }
         }
 
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
         @media (max-width: 992px) {
             .action-bar {
                 top: var(--navbar-height, 56px);
@@ -625,7 +506,6 @@ function getStatusBadge($status) {
                 min-height: 50px;
             }
         }
-
         @media (max-width: 768px) {
             .action-bar {
                 top: var(--navbar-height, 56px);
@@ -636,111 +516,36 @@ function getStatusBadge($status) {
                 margin: 0 -8px 15px -8px;
                 min-height: auto;
             }
-            
-            .action-bar .title-section {
-                justify-content: center;
-            }
-            
-            .action-bar .title-section .h2 {
-                font-size: 16px;
-            }
-            
-            .action-bar .btn-group-custom {
-                justify-content: center;
-            }
-            
-            .action-bar .btn-group-custom .btn {
-                font-size: 11px;
-                padding: 4px 8px;
-            }
-            
-            .theme-toggle {
-                font-size: 13px;
-                padding: 4px 8px;
-            }
-            
-            .print-section {
-                padding: 15px;
-            }
-            
-            .print-header-logo {
-                flex-direction: column;
-                text-align: center;
-            }
-            
-            .profile-avatar {
-                width: 80px;
-                height: 80px;
-                font-size: 32px;
-            }
-            
-            .logo-text {
-                font-size: 16px;
-            }
+            .action-bar .title-section { justify-content: center; }
+            .action-bar .title-section .h2 { font-size: 16px; }
+            .action-bar .btn-group-custom { justify-content: center; }
+            .action-bar .btn-group-custom .btn { font-size: 11px; padding: 4px 8px; }
+            .theme-toggle { font-size: 13px; padding: 4px 8px; }
+            .print-section { padding: 15px; }
+            .print-header-logo { flex-direction: column; text-align: center; }
+            .profile-avatar { width: 80px; height: 80px; font-size: 32px; }
+            .logo-text { font-size: 16px; }
         }
-
         @media (max-width: 576px) {
             .action-bar {
                 top: var(--navbar-height, 56px);
                 padding: 6px 10px;
                 margin: 0 -4px 12px -4px;
             }
-            
-            .action-bar .title-section .h2 {
-                font-size: 14px;
-            }
-            
-            .action-bar .btn-group-custom {
-                gap: 4px;
-            }
-            
-            .action-bar .btn-group-custom .btn {
-                font-size: 10px;
-                padding: 3px 6px;
-            }
-            
-            .theme-toggle {
-                font-size: 12px;
-                padding: 3px 6px;
-            }
-            
-            .print-section {
-                padding: 12px;
-            }
-            
-            .info-label {
-                font-size: 9px;
-            }
-            
-            .info-value {
-                font-size: 11px;
-            }
+            .action-bar .title-section .h2 { font-size: 14px; }
+            .action-bar .btn-group-custom { gap: 4px; }
+            .action-bar .btn-group-custom .btn { font-size: 10px; padding: 3px 6px; }
+            .theme-toggle { font-size: 12px; padding: 3px 6px; }
+            .print-section { padding: 12px; }
+            .info-label { font-size: 9px; }
+            .info-value { font-size: 11px; }
         }
 
-        /* ============================================================
-           SCROLLBAR - DARK STYLE
-           ============================================================ */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--gold-dark); }
 
-        ::-webkit-scrollbar-track {
-            background: var(--bg-primary);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--gold-dark);
-        }
-
-        /* ============================================================
-           NAVBAR OVERRIDES
-           ============================================================ */
         .navbar {
             background: var(--bg-card) !important;
             border-bottom: 1px solid var(--border-color) !important;
@@ -748,39 +553,20 @@ function getStatusBadge($status) {
             top: 0 !important;
             z-index: 1060 !important;
         }
-
-        .navbar .navbar-brand,
-        .navbar .nav-link {
-            color: var(--text-primary) !important;
-        }
-
-        .navbar .nav-link:hover {
-            color: var(--gold) !important;
-        }
-
+        .navbar .navbar-brand, .navbar .nav-link { color: var(--text-primary) !important; }
+        .navbar .nav-link:hover { color: var(--gold) !important; }
         .sidebar {
             background: var(--bg-card) !important;
             border-right: 1px solid var(--border-color) !important;
         }
-
-        .sidebar .nav-link {
-            color: var(--text-secondary) !important;
-        }
-
-        .sidebar .nav-link:hover,
-        .sidebar .nav-link.active {
+        .sidebar .nav-link { color: var(--text-secondary) !important; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active {
             color: var(--gold) !important;
             background: var(--bg-card-hover) !important;
         }
 
-        /* ============================================================
-           ADJUST FOR SIDEBAR
-           ============================================================ */
         @media (min-width: 768px) {
-            .col-md-9 {
-                padding-left: 20px !important;
-                padding-right: 20px !important;
-            }
+            .col-md-9 { padding-left: 20px !important; padding-right: 20px !important; }
         }
     </style>
 </head>
@@ -793,9 +579,6 @@ function getStatusBadge($status) {
             
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 
-                <!-- ============================================================
-                FIXED ACTION BAR - BELOW NAVBAR
-                ============================================================ -->
                 <div class="action-bar no-print">
                     <div class="title-section">
                         <h1 class="h2">
@@ -828,12 +611,9 @@ function getStatusBadge($status) {
                 <?php endif; ?>
 
                 <?php if ($resident): ?>
-                <!-- ============================================================
-                PRINT CONTAINER
-                ============================================================ -->
                 <div id="printContainer">
                     
-                    <!-- ===== HEADER WITH ISU LOGO ===== -->
+                    <!-- HEADER -->
                     <div class="print-section">
                         <div class="print-header-logo">
                             <div class="logo-icon no-print">ISU</div>
@@ -856,7 +636,6 @@ function getStatusBadge($status) {
                                     </div>
                                 </div>
                             </div>
-                            <!-- Profile Photo -->
                             <div class="no-print" style="text-align:center;">
                                 <div class="profile-avatar" style="width:100px; height:100px; font-size:40px;">
                                     <?php 
@@ -882,7 +661,7 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- ===== BASIC INFORMATION ===== -->
+                    <!-- BASIC INFORMATION -->
                     <div class="print-section">
                         <h6><i class="fas fa-id-card me-2"></i>Basic Information</h6>
                         <div class="row">
@@ -937,7 +716,7 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- ===== PERSONAL INFORMATION ===== -->
+                    <!-- PERSONAL INFORMATION -->
                     <div class="print-section">
                         <h6><i class="fas fa-user me-2"></i>Personal Information</h6>
                         <div class="row">
@@ -957,6 +736,20 @@ function getStatusBadge($status) {
                                 <div class="detail-row">
                                     <span class="info-label">Religion</span>
                                     <span class="info-value"><?php echo getVal($profile, 'religion'); ?></span>
+                                </div>
+                                <!-- ✅ EYE COLOR - ALWAYS DISPLAYS -->
+                                <div class="detail-row">
+                                    <span class="info-label">Eye Color</span>
+                                    <span class="info-value">
+                                        <?php 
+                                            $eyeColor = $profile['eye_color'] ?? '';
+                                            if (!empty(trim($eyeColor))) {
+                                                echo htmlspecialchars(trim($eyeColor));
+                                            } else {
+                                                echo '<span class="empty-value">—</span>';
+                                            }
+                                        ?>
+                                    </span>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -980,7 +773,7 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- ===== EDUCATIONAL BACKGROUND ===== -->
+                    <!-- EDUCATIONAL BACKGROUND -->
                     <div class="print-section">
                         <h6><i class="fas fa-graduation-cap me-2"></i>Educational Background</h6>
                         <div class="row">
@@ -1007,7 +800,7 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- ===== HOME ADDRESS ===== -->
+                    <!-- HOME ADDRESS -->
                     <div class="print-section">
                         <h6><i class="fas fa-home me-2"></i>Home Address</h6>
                         <div class="row">
@@ -1020,7 +813,7 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- ===== PARENT/GUARDIAN INFORMATION ===== -->
+                    <!-- PARENT/GUARDIAN INFORMATION -->
                     <div class="print-section">
                         <h6><i class="fas fa-users me-2"></i>Parent / Guardian Information</h6>
                         <div class="row">
@@ -1053,7 +846,7 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- ===== EMERGENCY CONTACT ===== -->
+                    <!-- EMERGENCY CONTACT -->
                     <div class="print-section">
                         <h6><i class="fas fa-phone-alt me-2"></i>Emergency Contact</h6>
                         <div class="row">
@@ -1080,8 +873,7 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- ===== ADMISSION INFORMATION ===== -->
-                    <?php if ($admission): ?>
+                    <!-- ADMISSION INFORMATION -->
                     <div class="print-section">
                         <h6><i class="fas fa-clipboard-list me-2"></i>Admission Information</h6>
                         <div class="row">
@@ -1118,9 +910,8 @@ function getStatusBadge($status) {
                             </div>
                         </div>
                     </div>
-                    <?php endif; ?>
 
-                    <!-- ===== FORMER BOARDING ===== -->
+                    <!-- FORMER BOARDING -->
                     <div class="print-section">
                         <h6><i class="fas fa-building me-2"></i>Boarding Information</h6>
                         <div class="row">
@@ -1139,7 +930,7 @@ function getStatusBadge($status) {
                         </div>
                     </div>
 
-                    <!-- ===== FOOTER ===== -->
+                    <!-- FOOTER -->
                     <div class="print-footer">
                         <i class="fas fa-print me-1"></i> 
                         Printed on <?php echo date('F d, Y h:i A'); ?> 
@@ -1149,9 +940,6 @@ function getStatusBadge($status) {
                         <span style="font-size: 10px; color: var(--text-muted);">This is a system-generated document.</span>
                     </div>
                 </div>
-                <!-- ============================================================
-                END PRINT CONTAINER
-                ============================================================ -->
                 
                 <?php endif; ?>
             </main>
@@ -1162,9 +950,6 @@ function getStatusBadge($status) {
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // ============================================================
-        // THEME TOGGLE
-        // ============================================================
         function toggleTheme() {
             const html = document.documentElement;
             const icon = document.getElementById('themeIcon');
@@ -1180,7 +965,6 @@ function getStatusBadge($status) {
             }
         }
 
-        // Load saved theme (default to dark)
         document.addEventListener('DOMContentLoaded', function() {
             const savedTheme = localStorage.getItem('theme');
             const icon = document.getElementById('themeIcon');
@@ -1194,7 +978,6 @@ function getStatusBadge($status) {
             }
         });
 
-        // Adjust action bar top position based on navbar height
         document.addEventListener('DOMContentLoaded', function() {
             const navbar = document.querySelector('.navbar');
             const actionBar = document.querySelector('.action-bar');
@@ -1205,7 +988,6 @@ function getStatusBadge($status) {
             }
         });
 
-        // Update on resize
         window.addEventListener('resize', function() {
             const navbar = document.querySelector('.navbar');
             const actionBar = document.querySelector('.action-bar');
