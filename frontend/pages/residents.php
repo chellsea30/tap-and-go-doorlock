@@ -2,6 +2,7 @@
 /**
  * Tap-and-Go Doorlock - Residents List
  * WITH APPROVAL SYSTEM + BULK APPROVE + REJECTION REASONS + AUDIT LOGGING
+ * ✅ FIXED: Modal clickability (z-index + stacking context)
  * Location: frontend/pages/residents.php
  */
 
@@ -63,7 +64,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_approve']) && !e
                 $upd->execute();
                 $upd->close();
 
-                // Audit (one row per student)
                 foreach ($targets as $t) {
                     auditLog(
                         $conn,
@@ -202,7 +202,6 @@ $success = '';
 $perPageOptions = [10, 25, 50, 100];
 if (!in_array($perPage, $perPageOptions)) $perPage = 10;
 
-// Dark mode
 $darkModeClass = '';
 if (isset($_SESSION['admin_id'])) {
     try {
@@ -328,7 +327,6 @@ try {
     $error = 'Error loading residents: ' . $e->getMessage();
 }
 
-// Success messages
 if (isset($_GET['msg'])) {
     switch ($_GET['msg']) {
         case 'deleted':        $success = 'Resident deleted successfully!'; break;
@@ -363,13 +361,15 @@ function getInitials($name) {
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         html, body {
             height: 100%;
             font-family: 'Inter', sans-serif;
             background: #0a0e1a !important;
             color: #e0e0e0 !important;
-            overflow-x: hidden;
+            overflow-x: clip; /* ✅ safe kaysa hidden */
         }
+
         .navbar {
             background: linear-gradient(135deg, #0d1528, #1a2a4a) !important;
             border-bottom: 1px solid #1a2a4a !important;
@@ -415,7 +415,6 @@ function getInitials($name) {
             padding: 15px 25px !important;
             min-height: calc(100vh - 56px) !important;
             background: #0a0e1a !important;
-            position: relative; z-index: 1;
             transition: margin-left 0.3s ease !important;
         }
         .footer {
@@ -429,6 +428,50 @@ function getInitials($name) {
             transition: margin-left 0.3s ease !important;
         }
 
+        /* ============================================================
+           ✅ MODAL STACKING + CLICKABILITY FIX (critical)
+           ============================================================ */
+        body.modal-open .main-content,
+        body.modal-open .footer {
+            position: static !important;
+            z-index: auto !important;
+            overflow: visible !important;
+        }
+        body.modal-open .navbar,
+        body.modal-open .sidebar {
+            z-index: 1 !important;
+        }
+        body.modal-open {
+            overflow: hidden !important;
+        }
+        .modal {
+            z-index: 10050 !important;
+        }
+        .modal-backdrop {
+            z-index: 10040 !important;
+            background-color: #000 !important;
+        }
+        .modal-dialog {
+            z-index: 10051 !important;
+            position: relative;
+        }
+        .modal,
+        .modal *,
+        .modal-content,
+        .modal-dialog,
+        .modal-body,
+        .modal-footer,
+        .modal button,
+        .modal a,
+        .modal input,
+        .modal textarea,
+        .modal select {
+            pointer-events: auto !important;
+        }
+
+        /* ============================================================
+           APPROVAL TABS
+           ============================================================ */
         .approval-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
         .approval-tab {
             display: inline-flex; align-items: center; gap: 6px;
@@ -787,7 +830,7 @@ function getInitials($name) {
             </div>
         <?php endif; ?>
 
-        <!-- BULK FORM (Para sa Bulk Approve lamang) -->
+        <!-- BULK FORM -->
         <form method="POST" action="" id="bulkForm">
             <input type="hidden" name="bulk_approve" value="1">
 
@@ -816,7 +859,6 @@ function getInitials($name) {
             </div>
             <?php endif; ?>
 
-            <!-- Search Bar -->
             <div class="row mb-3 g-2">
                 <div class="col-md-8">
                     <div class="search-box d-flex">
@@ -849,7 +891,6 @@ function getInitials($name) {
                 </div>
             </div>
 
-            <!-- RESIDENTS LIST -->
             <?php if (empty($residents)): ?>
                 <div class="card">
                     <div class="card-body text-center py-4">
@@ -922,7 +963,7 @@ function getInitials($name) {
                                          title="Click to upload/change photo">
                                         <?php if ($hasPhoto): ?>
                                             <img src="<?php echo $fullPhotoPath; ?>"
-                                                 alt="Photo of <?php echo htmlspecialchars($resident['full_name'] ?? ''); ?>"
+                                                 alt="Photo"
                                                  onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
                                             <span class="has-photo-overlay">
                                                 <i class="fas fa-check-circle"></i>
@@ -1016,15 +1057,15 @@ function getInitials($name) {
                                     <?php if ($approvalStatus === 'pending'): ?>
                                         <a href="approve-resident.php?approve=<?php echo $resident['user_id']; ?>"
                                            class="btn btn-action btn-approve"
-                                           onclick="return confirm('Approve this student registration?\n\nStudent: <?php echo htmlspecialchars(addslashes($resident['full_name'])); ?>\nID: <?php echo htmlspecialchars($resident['student_id']); ?>')">
+                                           onclick="return confirm('Approve this student registration?')">
                                             <i class="fas fa-check me-1"></i> Approve
                                         </a>
-                                        <a href="#"
+                                        <button type="button"
                                            class="btn btn-action btn-reject"
                                            data-bs-toggle="modal"
                                            data-bs-target="#rejectModal<?php echo $resident['user_id']; ?>">
                                             <i class="fas fa-times me-1"></i> Reject
-                                        </a>
+                                        </button>
                                         <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>"
                                            class="btn btn-action btn-view">
                                             <i class="fas fa-eye me-1"></i> View
@@ -1079,82 +1120,81 @@ function getInitials($name) {
                         </div>
                     </div>
                 <?php endforeach; ?>
-            <?php endif; ?>
 
-            <!-- PAGINATION (Nasa loob pa rin ng form para sa bulk action) -->
-            <?php if ($totalPages > 1 || $totalResidents > 0): ?>
-            <div class="pagination-container">
-                <div class="row align-items-center g-2">
-                    <div class="col-md-6">
-                        <div class="page-info">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalResidents); ?> of <?php echo $totalResidents; ?> residents
-                            <span class="mx-1 text-muted">|</span>
-                            <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="d-flex align-items-center justify-content-md-end justify-content-start gap-2 flex-wrap">
-                            <div class="per-page-selector d-flex align-items-center gap-1">
-                                <label>Show:</label>
-                                <select onchange="changePerPage(this.value)">
-                                    <?php foreach ($perPageOptions as $option): ?>
-                                        <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
-                                            <?php echo $option; ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
+                <!-- PAGINATION -->
+                <?php if ($totalPages > 1 || $totalResidents > 0): ?>
+                <div class="pagination-container">
+                    <div class="row align-items-center g-2">
+                        <div class="col-md-6">
+                            <div class="page-info">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Showing <?php echo $offset + 1; ?> to <?php echo min($offset + $perPage, $totalResidents); ?> of <?php echo $totalResidents; ?> residents
+                                <span class="mx-1 text-muted">|</span>
+                                <span class="text-muted">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
                             </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center justify-content-md-end justify-content-start gap-2 flex-wrap">
+                                <div class="per-page-selector d-flex align-items-center gap-1">
+                                    <label>Show:</label>
+                                    <select onchange="changePerPage(this.value)">
+                                        <?php foreach ($perPageOptions as $option): ?>
+                                            <option value="<?php echo $option; ?>" <?php echo $option == $perPage ? 'selected' : ''; ?>>
+                                                <?php echo $option; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
 
-                            <nav aria-label="Page navigation">
-                                <ul class="pagination justify-content-end mb-0">
-                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                        <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                            <i class="fas fa-angle-double-left"></i>
-                                        </a>
-                                    </li>
-                                    <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
-                                        <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                            <i class="fas fa-angle-left"></i>
-                                        </a>
-                                    </li>
-                                    <?php
-                                    $startPage = max(1, $page - 2);
-                                    $endPage = min($totalPages, $page + 2);
-                                    if ($startPage > 1) echo '<li class="page-item"><span class="page-link">...</span></li>';
-                                    for ($i = $startPage; $i <= $endPage; $i++):
-                                    ?>
-                                        <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
-                                            <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                                <?php echo $i; ?>
+                                <nav aria-label="Page navigation">
+                                    <ul class="pagination justify-content-end mb-0">
+                                        <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                            <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                <i class="fas fa-angle-double-left"></i>
                                             </a>
                                         </li>
-                                    <?php endfor; ?>
-                                    <?php if ($endPage < $totalPages) echo '<li class="page-item"><span class="page-link">...</span></li>'; ?>
+                                        <li class="page-item <?php echo ($page <= 1) ? 'disabled' : ''; ?>">
+                                            <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                <i class="fas fa-angle-left"></i>
+                                            </a>
+                                        </li>
+                                        <?php
+                                        $startPage = max(1, $page - 2);
+                                        $endPage = min($totalPages, $page + 2);
+                                        if ($startPage > 1) echo '<li class="page-item"><span class="page-link">...</span></li>';
+                                        for ($i = $startPage; $i <= $endPage; $i++):
+                                        ?>
+                                            <li class="page-item <?php echo ($i == $page) ? 'active' : ''; ?>">
+                                                <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                    <?php echo $i; ?>
+                                                </a>
+                                            </li>
+                                        <?php endfor; ?>
+                                        <?php if ($endPage < $totalPages) echo '<li class="page-item"><span class="page-link">...</span></li>'; ?>
 
-                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                        <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                            <i class="fas fa-angle-right"></i>
-                                        </a>
-                                    </li>
-                                    <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
-                                        <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
-                                            <i class="fas fa-angle-double-right"></i>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </nav>
+                                        <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                            <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                <i class="fas fa-angle-right"></i>
+                                            </a>
+                                        </li>
+                                        <li class="page-item <?php echo ($page >= $totalPages) ? 'disabled' : ''; ?>">
+                                            <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?><?php echo !empty($statusFilter) ? '&status=' . urlencode($statusFilter) : ''; ?><?php echo '&per_page=' . $perPage; ?>">
+                                                <i class="fas fa-angle-double-right"></i>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+                <?php endif; ?>
             <?php endif; ?>
+        </form>
 
-        </form> <!-- END BULK FORM -->
-
-        <!-- ============================================ -->
-        <!-- MGA MODAL (Nasa labas na ng form)             -->
-        <!-- ============================================ -->
+        <!-- ============================================================ -->
+        <!-- MODALS - LAHAT SA LABAS NG FORM + may click fix              -->
+        <!-- ============================================================ -->
         <?php foreach ($residents as $resident):
             $photoPath = $resident['profile_photo'] ?? '';
             $hasPhoto = false;
@@ -1173,7 +1213,7 @@ function getInitials($name) {
         ?>
 
             <!-- PHOTO MODAL -->
-            <div class="modal fade" id="photoModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+            <div class="modal fade" id="photoModal<?php echo $resident['user_id']; ?>" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -1233,7 +1273,7 @@ function getInitials($name) {
             </div>
 
             <!-- REJECT MODAL -->
-            <div class="modal fade" id="rejectModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+            <div class="modal fade" id="rejectModal<?php echo $resident['user_id']; ?>" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header" style="border-bottom-color: #7a2a2a !important;">
@@ -1295,7 +1335,7 @@ function getInitials($name) {
             </div>
 
             <!-- DELETE MODAL -->
-            <div class="modal fade" id="deleteModal<?php echo $resident['user_id']; ?>" tabindex="-1">
+            <div class="modal fade" id="deleteModal<?php echo $resident['user_id']; ?>" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -1343,6 +1383,42 @@ function getInitials($name) {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // ============================================================
+        // ✅ JS Fallback: i-force ang stacking kapag bukas ang modal
+        // ============================================================
+        document.addEventListener('show.bs.modal', function() {
+            const mc = document.querySelector('.main-content');
+            const ft = document.querySelector('.footer');
+            if (mc) {
+                mc.dataset._pos = mc.style.position || '';
+                mc.dataset._z = mc.style.zIndex || '';
+                mc.style.setProperty('position', 'static', 'important');
+                mc.style.setProperty('z-index', 'auto', 'important');
+            }
+            if (ft) {
+                ft.dataset._pos = ft.style.position || '';
+                ft.dataset._z = ft.style.zIndex || '';
+                ft.style.setProperty('position', 'static', 'important');
+                ft.style.setProperty('z-index', 'auto', 'important');
+            }
+        });
+
+        document.addEventListener('hidden.bs.modal', function() {
+            const mc = document.querySelector('.main-content');
+            const ft = document.querySelector('.footer');
+            if (mc) {
+                mc.style.removeProperty('position');
+                mc.style.removeProperty('z-index');
+            }
+            if (ft) {
+                ft.style.removeProperty('position');
+                ft.style.removeProperty('z-index');
+            }
+        });
+
+        // ============================================================
+        // BULK SELECTION
+        // ============================================================
         function toggleAllPending(src) {
             document.querySelectorAll('.pending-checkbox').forEach(cb => {
                 cb.checked = src.checked;
@@ -1352,7 +1428,8 @@ function getInitials($name) {
 
         function updateSelectedCount() {
             const n = document.querySelectorAll('.pending-checkbox:checked').length;
-            document.getElementById('selectedCount').textContent = n;
+            const counter = document.getElementById('selectedCount');
+            if (counter) counter.textContent = n;
 
             const total = document.querySelectorAll('.pending-checkbox').length;
             const selectAll = document.getElementById('selectAllPending');
@@ -1403,7 +1480,14 @@ function getInitials($name) {
             });
         }, 5000);
 
-        document.addEventListener('DOMContentLoaded', updateSelectedCount);
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSelectedCount();
+            // Remove any leftover backdrops
+            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        });
     </script>
 </body>
 </html>
