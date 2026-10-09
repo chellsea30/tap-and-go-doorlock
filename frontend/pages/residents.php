@@ -1068,7 +1068,7 @@ function getInitials($name) {
                                         </button>
 
                                     <?php else: ?>
-                                        <a href="view-resident.php?id=<?php echo $resident['user_id']; ?>"
+                                        <a href="view-profile.php?id=<?php echo $resident['user_id']; ?>"
                                            class="btn btn-action btn-view">
                                             <i class="fas fa-eye me-1"></i> View
                                         </a>
@@ -1326,10 +1326,6 @@ function getInitials($name) {
         </div>
 
     </main>
-
-    <footer class="footer">
-        &copy; <?php echo date('Y'); ?> Tap-and-Go Doorlock System - ISU-Echague Dormitory. All rights reserved.
-    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
