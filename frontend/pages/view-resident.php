@@ -2,15 +2,16 @@
 /**
  * Tap-and-Go Doorlock - View Resident Profile
  * FULL DARK MODE - With Fixed Action Bar Below Navbar
- * ✅ COMPLETE: All resident_profiles fields displayed (including cp_no)
- * Location: frontend/pages/view-resident.php
  */
 
+// Start session
 session_start();
 
+// Load config and functions
 require_once '../../backend/config/config.php';
 require_once '../../backend/helpers/functions.php';
 
+// Check authentication
 if (!isset($_SESSION['admin_id']) || !isSessionValid()) {
     header('Location: login.php');
     exit();
@@ -23,7 +24,8 @@ if ($user_id <= 0) {
     exit();
 }
 
-include '../includes/header.php';
+// Include header
+include '../includes/header.php'; 
 
 $resident = null;
 $profile = null;
@@ -33,56 +35,68 @@ $error = '';
 
 try {
     $conn = getDBConnection();
-
-    // USER
+    
+    // ============================================================
+    // GET USER DATA
+    // ============================================================
     $stmt = $conn->prepare("SELECT * FROM users WHERE user_id = ? AND status != 'deleted'");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
-    $resident = $stmt->get_result()->fetch_assoc();
+    $result = $stmt->get_result();
+    $resident = $result->fetch_assoc();
     $stmt->close();
-
+    
     if (!$resident) {
         header('Location: residents.php');
         exit();
     }
-
-    // PROFILE
+    
+    // ============================================================
+    // GET PROFILE DATA
+    // ============================================================
     $stmt = $conn->prepare("SELECT * FROM resident_profiles WHERE user_id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
-    $profile = $stmt->get_result()->fetch_assoc();
+    $result = $stmt->get_result();
+    $profile = $result->fetch_assoc();
     $stmt->close();
-
-    // ADMISSION
+    
+    // ============================================================
+    // GET ADMISSION DATA
+    // ============================================================
     $stmt = $conn->prepare("SELECT * FROM admission_records WHERE user_id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
-    $admission = $stmt->get_result()->fetch_assoc();
+    $result = $stmt->get_result();
+    $admission = $result->fetch_assoc();
     $stmt->close();
-
-    // RFID CARD
+    
+    // ============================================================
+    // GET RFID CARD DATA
+    // ============================================================
     $stmt = $conn->prepare("SELECT * FROM rfid_cards WHERE user_id = ? AND status = 'active'");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
-    $card = $stmt->get_result()->fetch_assoc();
+    $result = $stmt->get_result();
+    $card = $result->fetch_assoc();
     $stmt->close();
-
+    
 } catch (Exception $e) {
     $error = 'Error loading data: ' . $e->getMessage();
 }
 
 // ============================================================
-// HELPERS
+// HELPER FUNCTIONS
 // ============================================================
 function getVal($array, $key, $default = 'N/A') {
-    if ($array && isset($array[$key]) && $array[$key] !== null && trim((string)$array[$key]) !== '') {
+    if ($array && isset($array[$key]) && $array[$key] !== null && $array[$key] !== '') {
         return htmlspecialchars(trim($array[$key]));
     }
     return $default;
 }
 
 function displayVal($value, $default = 'N/A') {
-    if ($value !== null && trim((string)$value) !== '' && $value !== '0') {
+    if ($value !== null && $value !== '' && $value !== '0') {
         return htmlspecialchars(trim($value));
     }
     return $default;
@@ -96,17 +110,9 @@ function getStatusBadge($status) {
         'pending' => 'pending',
         'inactive' => 'inactive',
         'denied' => 'denied',
-        'rejected' => 'denied',
         'completed' => 'completed'
     ];
     return $colors[$status] ?? 'inactive';
-}
-
-function fmtDate($d, $format = 'F d, Y') {
-    if (empty($d) || $d === '0000-00-00' || $d === '0000-00-00 00:00:00') return 'N/A';
-    $ts = strtotime($d);
-    if ($ts === false) return 'N/A';
-    return date($format, $ts);
 }
 ?>
 <!DOCTYPE html>
@@ -120,6 +126,9 @@ function fmtDate($d, $format = 'F d, Y') {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
+        /* ============================================================
+           ROOT VARIABLES - FULL DARK MODE
+           ============================================================ */
         :root {
             --bg-primary: #0a0e17;
             --bg-card: #111927;
@@ -146,7 +155,14 @@ function fmtDate($d, $format = 'F d, Y') {
             --navbar-height: 60px;
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* ============================================================
+           GENERAL STYLES
+           ============================================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         html, body {
             background: var(--bg-primary) !important;
@@ -155,12 +171,21 @@ function fmtDate($d, $format = 'F d, Y') {
             min-height: 100vh;
         }
 
-        .container-fluid,
-        .row,
-        main { background: var(--bg-primary) !important; }
+        .container-fluid {
+            background: var(--bg-primary) !important;
+        }
+
+        .row {
+            background: var(--bg-primary) !important;
+        }
+
+        main {
+            background: var(--bg-primary) !important;
+            padding-top: 0 !important;
+        }
 
         /* ============================================================
-           FIXED ACTION BAR
+           FIXED ACTION BAR - BELOW NAVBAR
            ============================================================ */
         .action-bar {
             position: sticky;
@@ -193,7 +218,9 @@ function fmtDate($d, $format = 'F d, Y') {
             margin: 0;
         }
 
-        .action-bar .title-section .h2 i { color: var(--gold) !important; }
+        .action-bar .title-section .h2 i {
+            color: var(--gold) !important;
+        }
 
         .action-bar .btn-group-custom {
             display: flex;
@@ -203,40 +230,53 @@ function fmtDate($d, $format = 'F d, Y') {
         }
 
         /* ============================================================
-           BUTTONS
+           BUTTONS - DARK MODE
            ============================================================ */
         .btn-outline-secondary {
             color: var(--text-secondary) !important;
             border-color: var(--border-color) !important;
             background: transparent !important;
         }
+
         .btn-outline-secondary:hover {
             background: var(--bg-card-hover) !important;
             color: var(--text-primary) !important;
             border-color: var(--gold-dark) !important;
         }
+
         .btn-primary {
             background: var(--gold-dark) !important;
             border-color: var(--gold-dark) !important;
             color: #0a0e17 !important;
             font-weight: 600;
         }
+
         .btn-primary:hover {
             background: var(--gold) !important;
             border-color: var(--gold) !important;
             color: #0a0e17 !important;
         }
+
         .btn-outline-primary {
             color: var(--gold) !important;
             border-color: var(--gold-dark) !important;
             background: transparent !important;
         }
+
         .btn-outline-primary:hover {
             background: var(--gold-dark) !important;
             color: #0a0e17 !important;
         }
-        .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
 
+        .btn-sm {
+            padding: 5px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+
+        /* ============================================================
+           THEME TOGGLE
+           ============================================================ */
         .theme-toggle {
             background: var(--bg-card-hover) !important;
             border: 1px solid var(--border-color);
@@ -248,6 +288,7 @@ function fmtDate($d, $format = 'F d, Y') {
             transition: all 0.3s ease;
             line-height: 1.5;
         }
+
         .theme-toggle:hover {
             background: var(--gold-dark) !important;
             color: #0a0e17 !important;
@@ -255,7 +296,7 @@ function fmtDate($d, $format = 'F d, Y') {
         }
 
         /* ============================================================
-           PRINT SECTIONS
+           PRINT SECTION - DARK MODE
            ============================================================ */
         .print-section {
             background: var(--bg-card) !important;
@@ -266,7 +307,10 @@ function fmtDate($d, $format = 'F d, Y') {
             border: 1px solid var(--border-color);
             transition: all 0.3s ease;
         }
-        .print-section:hover { box-shadow: var(--shadow-hover); }
+
+        .print-section:hover {
+            box-shadow: var(--shadow-hover);
+        }
 
         .print-section h6 {
             color: var(--gold) !important;
@@ -303,11 +347,13 @@ function fmtDate($d, $format = 'F d, Y') {
             color: var(--gold) !important;
             letter-spacing: 2px;
         }
+
         .logo-sub {
             font-size: 12px;
             color: var(--text-secondary) !important;
             letter-spacing: 1px;
         }
+
         .logo-line {
             width: 80px;
             height: 3px;
@@ -316,14 +362,18 @@ function fmtDate($d, $format = 'F d, Y') {
         }
 
         /* ============================================================
-           DETAIL ROWS
+           DETAIL ROWS - DARK STYLE
            ============================================================ */
         .detail-row {
             padding: 6px 0;
             border-bottom: 1px solid var(--border-color);
             transition: all 0.3s ease;
         }
-        .detail-row:last-child { border-bottom: none; }
+
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+
         .detail-row:hover {
             background: var(--bg-card-hover);
             padding-left: 8px;
@@ -346,11 +396,10 @@ function fmtDate($d, $format = 'F d, Y') {
             color: var(--text-primary) !important;
             display: block;
             padding: 1px 0;
-            word-break: break-word;
         }
 
         /* ============================================================
-           AVATAR
+           PROFILE AVATAR - DARK MODE
            ============================================================ */
         .profile-avatar {
             width: 120px;
@@ -367,6 +416,7 @@ function fmtDate($d, $format = 'F d, Y') {
             border: 4px solid var(--gold-dark);
             margin: 0 auto;
         }
+
         .profile-avatar img {
             width: 100%;
             height: 100%;
@@ -374,7 +424,7 @@ function fmtDate($d, $format = 'F d, Y') {
         }
 
         /* ============================================================
-           BADGES
+           BADGES - DARK MODE
            ============================================================ */
         .badge-status {
             padding: 4px 12px;
@@ -384,31 +434,37 @@ function fmtDate($d, $format = 'F d, Y') {
             display: inline-block;
             letter-spacing: 0.3px;
         }
+
         .badge-active {
             background: var(--success-bg) !important;
             color: var(--success-text) !important;
             border: 1px solid rgba(110, 231, 183, 0.2);
         }
+
         .badge-pending {
             background: var(--warning-bg) !important;
             color: var(--warning-text) !important;
             border: 1px solid rgba(252, 211, 77, 0.2);
         }
+
         .badge-inactive {
             background: var(--secondary-bg) !important;
             color: var(--secondary-text) !important;
             border: 1px solid rgba(136, 153, 187, 0.2);
         }
+
         .badge-denied {
             background: var(--danger-bg) !important;
             color: var(--danger-text) !important;
             border: 1px solid rgba(252, 165, 165, 0.2);
         }
+
         .badge-completed {
             background: var(--info-bg) !important;
             color: var(--info-text) !important;
             border: 1px solid rgba(125, 211, 252, 0.2);
         }
+
         .badge-no-card {
             background: var(--secondary-bg) !important;
             color: var(--text-muted) !important;
@@ -416,15 +472,21 @@ function fmtDate($d, $format = 'F d, Y') {
         }
 
         /* ============================================================
-           ALERTS
+           ALERT - DARK MODE
            ============================================================ */
         .alert-danger {
             background: var(--danger-bg) !important;
             color: var(--danger-text) !important;
             border-color: rgba(252, 165, 165, 0.2) !important;
         }
-        .alert-danger .btn-close { filter: brightness(0.5) invert(1); }
 
+        .alert-danger .btn-close {
+            filter: brightness(0.5) invert(1);
+        }
+
+        /* ============================================================
+           PRINT FOOTER - DARK MODE
+           ============================================================ */
         .print-footer {
             text-align: center !important;
             margin-top: 20px !important;
@@ -434,21 +496,33 @@ function fmtDate($d, $format = 'F d, Y') {
             color: var(--text-muted) !important;
         }
 
-        .text-muted { color: var(--text-muted) !important; }
-        .text-muted i { color: var(--gold-dark) !important; }
+        .text-muted {
+            color: var(--text-muted) !important;
+        }
+
+        .text-muted i {
+            color: var(--gold-dark) !important;
+        }
 
         /* ============================================================
-           PRINT
+           PRINT STYLES
            ============================================================ */
         @media print {
             .no-print { display: none !important; }
-            .action-bar { display: none !important; }
-
-            body * { visibility: hidden !important; }
-
-            #printContainer,
-            #printContainer * { visibility: visible !important; }
-
+            
+            .action-bar {
+                display: none !important;
+            }
+            
+            body * {
+                visibility: hidden !important;
+            }
+            
+            #printContainer, 
+            #printContainer * {
+                visibility: visible !important;
+            }
+            
             #printContainer {
                 position: absolute !important;
                 left: 0 !important;
@@ -458,7 +532,7 @@ function fmtDate($d, $format = 'F d, Y') {
                 background: #0a0e17 !important;
                 margin: 0 !important;
             }
-
+            
             .print-section {
                 box-shadow: none !important;
                 border: 1px solid #1a2a44 !important;
@@ -469,50 +543,89 @@ function fmtDate($d, $format = 'F d, Y') {
                 padding: 20px !important;
                 background: #0a0e17 !important;
             }
-
+            
             .print-header {
                 text-align: center !important;
                 margin-bottom: 20px !important;
                 border-bottom: 2px solid var(--gold-dark) !important;
                 padding-bottom: 15px !important;
             }
+            
             .print-header .logo-text {
                 font-size: 22px !important;
                 font-weight: 800 !important;
                 color: var(--gold) !important;
                 letter-spacing: 3px !important;
             }
+            
             .print-header .logo-sub {
                 font-size: 12px !important;
                 color: var(--text-secondary) !important;
                 letter-spacing: 2px !important;
             }
+            
             .print-header .logo-line {
                 width: 100px !important;
                 height: 3px !important;
                 background: var(--gold) !important;
                 margin: 8px auto !important;
             }
-
+            
+            .print-label {
+                font-weight: 600 !important;
+                color: var(--gold) !important;
+                font-size: 12px !important;
+            }
+            
+            .print-value {
+                font-weight: 500 !important;
+                color: var(--text-primary) !important;
+                font-size: 14px !important;
+            }
+            
+            .print-footer {
+                text-align: center !important;
+                margin-top: 20px !important;
+                padding-top: 10px !important;
+                border-top: 1px solid var(--border-color) !important;
+                font-size: 11px !important;
+                color: var(--text-muted) !important;
+            }
+            
             .badge-status {
                 border: 1px solid var(--gold-dark) !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
-
-            .profile-avatar { border: 2px solid var(--gold-dark) !important; }
-
-            .detail-row { border-bottom: 1px solid var(--border-color) !important; }
-            .info-label { color: var(--text-secondary) !important; }
-            .info-value { color: var(--text-primary) !important; }
+            
+            .profile-avatar {
+                border: 2px solid var(--gold-dark) !important;
+            }
+            
+            .detail-row {
+                border-bottom: 1px solid var(--border-color) !important;
+            }
+            
+            .info-label {
+                color: var(--text-secondary) !important;
+            }
+            
+            .info-value {
+                color: var(--text-primary) !important;
+            }
         }
 
         /* ============================================================
            RESPONSIVE
            ============================================================ */
         @media (max-width: 992px) {
-            .action-bar { top: var(--navbar-height, 56px); padding: 8px 16px; min-height: 50px; }
+            .action-bar {
+                top: var(--navbar-height, 56px);
+                padding: 8px 16px;
+                min-height: 50px;
+            }
         }
+
         @media (max-width: 768px) {
             .action-bar {
                 top: var(--navbar-height, 56px);
@@ -523,32 +636,111 @@ function fmtDate($d, $format = 'F d, Y') {
                 margin: 0 -8px 15px -8px;
                 min-height: auto;
             }
-            .action-bar .title-section { justify-content: center; }
-            .action-bar .title-section .h2 { font-size: 16px; }
-            .action-bar .btn-group-custom { justify-content: center; }
-            .action-bar .btn-group-custom .btn { font-size: 11px; padding: 4px 8px; }
-            .theme-toggle { font-size: 13px; padding: 4px 8px; }
-            .print-section { padding: 15px; }
-            .print-header-logo { flex-direction: column; text-align: center; }
-            .profile-avatar { width: 80px; height: 80px; font-size: 32px; }
-            .logo-text { font-size: 16px; }
+            
+            .action-bar .title-section {
+                justify-content: center;
+            }
+            
+            .action-bar .title-section .h2 {
+                font-size: 16px;
+            }
+            
+            .action-bar .btn-group-custom {
+                justify-content: center;
+            }
+            
+            .action-bar .btn-group-custom .btn {
+                font-size: 11px;
+                padding: 4px 8px;
+            }
+            
+            .theme-toggle {
+                font-size: 13px;
+                padding: 4px 8px;
+            }
+            
+            .print-section {
+                padding: 15px;
+            }
+            
+            .print-header-logo {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .profile-avatar {
+                width: 80px;
+                height: 80px;
+                font-size: 32px;
+            }
+            
+            .logo-text {
+                font-size: 16px;
+            }
         }
+
         @media (max-width: 576px) {
-            .action-bar { top: var(--navbar-height, 56px); padding: 6px 10px; margin: 0 -4px 12px -4px; }
-            .action-bar .title-section .h2 { font-size: 14px; }
-            .action-bar .btn-group-custom { gap: 4px; }
-            .action-bar .btn-group-custom .btn { font-size: 10px; padding: 3px 6px; }
-            .theme-toggle { font-size: 12px; padding: 3px 6px; }
-            .print-section { padding: 12px; }
-            .info-label { font-size: 9px; }
-            .info-value { font-size: 11px; }
+            .action-bar {
+                top: var(--navbar-height, 56px);
+                padding: 6px 10px;
+                margin: 0 -4px 12px -4px;
+            }
+            
+            .action-bar .title-section .h2 {
+                font-size: 14px;
+            }
+            
+            .action-bar .btn-group-custom {
+                gap: 4px;
+            }
+            
+            .action-bar .btn-group-custom .btn {
+                font-size: 10px;
+                padding: 3px 6px;
+            }
+            
+            .theme-toggle {
+                font-size: 12px;
+                padding: 3px 6px;
+            }
+            
+            .print-section {
+                padding: 12px;
+            }
+            
+            .info-label {
+                font-size: 9px;
+            }
+            
+            .info-value {
+                font-size: 11px;
+            }
         }
 
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg-primary); }
-        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--gold-dark); }
+        /* ============================================================
+           SCROLLBAR - DARK STYLE
+           ============================================================ */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
 
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gold-dark);
+        }
+
+        /* ============================================================
+           NAVBAR OVERRIDES
+           ============================================================ */
         .navbar {
             background: var(--bg-card) !important;
             border-bottom: 1px solid var(--border-color) !important;
@@ -556,21 +748,34 @@ function fmtDate($d, $format = 'F d, Y') {
             top: 0 !important;
             z-index: 1060 !important;
         }
+
         .navbar .navbar-brand,
-        .navbar .nav-link { color: var(--text-primary) !important; }
-        .navbar .nav-link:hover { color: var(--gold) !important; }
+        .navbar .nav-link {
+            color: var(--text-primary) !important;
+        }
+
+        .navbar .nav-link:hover {
+            color: var(--gold) !important;
+        }
 
         .sidebar {
             background: var(--bg-card) !important;
             border-right: 1px solid var(--border-color) !important;
         }
-        .sidebar .nav-link { color: var(--text-secondary) !important; }
+
+        .sidebar .nav-link {
+            color: var(--text-secondary) !important;
+        }
+
         .sidebar .nav-link:hover,
         .sidebar .nav-link.active {
             color: var(--gold) !important;
             background: var(--bg-card-hover) !important;
         }
 
+        /* ============================================================
+           ADJUST FOR SIDEBAR
+           ============================================================ */
         @media (min-width: 768px) {
             .col-md-9 {
                 padding-left: 20px !important;
@@ -581,14 +786,16 @@ function fmtDate($d, $format = 'F d, Y') {
 </head>
 <body>
     <?php include '../includes/navbar.php'; ?>
-
+    
     <div class="container-fluid">
         <div class="row">
             <?php include '../includes/sidebar.php'; ?>
-
+            
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-
-                <!-- ACTION BAR -->
+                
+                <!-- ============================================================
+                FIXED ACTION BAR - BELOW NAVBAR
+                ============================================================ -->
                 <div class="action-bar no-print">
                     <div class="title-section">
                         <h1 class="h2">
@@ -614,16 +821,19 @@ function fmtDate($d, $format = 'F d, Y') {
 
                 <?php if (!empty($error)): ?>
                     <div class="alert alert-danger alert-dismissible fade show">
-                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <i class="fas fa-exclamation-circle me-2"></i> 
                         <?php echo $error; ?>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 <?php endif; ?>
 
                 <?php if ($resident): ?>
+                <!-- ============================================================
+                PRINT CONTAINER
+                ============================================================ -->
                 <div id="printContainer">
-
-                    <!-- ===== HEADER ===== -->
+                    
+                    <!-- ===== HEADER WITH ISU LOGO ===== -->
                     <div class="print-section">
                         <div class="print-header-logo">
                             <div class="logo-icon no-print">ISU</div>
@@ -646,22 +856,25 @@ function fmtDate($d, $format = 'F d, Y') {
                                     </div>
                                 </div>
                             </div>
+                            <!-- Profile Photo -->
                             <div class="no-print" style="text-align:center;">
                                 <div class="profile-avatar" style="width:100px; height:100px; font-size:40px;">
-                                    <?php
+                                    <?php 
                                         $photoPath = $resident['profile_photo'] ?? '';
                                         $fullPath = '../../' . $photoPath;
                                         if (!empty($photoPath) && file_exists($fullPath)):
                                     ?>
-                                        <img src="<?php echo $fullPath; ?>" alt="Profile Photo">
+                                        <img src="<?php echo $fullPath; ?>" alt="Profile Photo" style="width:100%; height:100%; object-fit:cover;">
                                     <?php else:
                                         $nameParts = explode(' ', $resident['full_name'] ?? '');
                                         $initials = '';
                                         foreach ($nameParts as $part) {
-                                            if (!empty($part)) $initials .= strtoupper($part[0]);
+                                            if (!empty($part)) {
+                                                $initials .= strtoupper($part[0]);
+                                            }
                                         }
                                         echo substr($initials, 0, 2) ?: '?';
-                                    endif;
+                                    endif; 
                                     ?>
                                 </div>
                                 <div style="font-size:10px; color:var(--text-muted); margin-top:5px;">ID Photo</div>
@@ -705,7 +918,7 @@ function fmtDate($d, $format = 'F d, Y') {
                                 </div>
                                 <div class="detail-row">
                                     <span class="info-label">Date Registered</span>
-                                    <span class="info-value"><?php echo fmtDate($resident['created_at']); ?></span>
+                                    <span class="info-value"><?php echo !empty($resident['created_at']) ? date('F d, Y', strtotime($resident['created_at'])) : 'N/A'; ?></span>
                                 </div>
                                 <div class="detail-row">
                                     <span class="info-label">RFID Card</span>
@@ -724,7 +937,7 @@ function fmtDate($d, $format = 'F d, Y') {
                         </div>
                     </div>
 
-                    <!-- ===== PERSONAL INFORMATION (may cp_no na) ===== -->
+                    <!-- ===== PERSONAL INFORMATION ===== -->
                     <div class="print-section">
                         <h6><i class="fas fa-user me-2"></i>Personal Information</h6>
                         <div class="row">
@@ -735,7 +948,7 @@ function fmtDate($d, $format = 'F d, Y') {
                                 </div>
                                 <div class="detail-row">
                                     <span class="info-label">Birth Date</span>
-                                    <span class="info-value"><?php echo fmtDate($profile['birth_date'] ?? null); ?></span>
+                                    <span class="info-value"><?php echo getVal($profile, 'birth_date'); ?></span>
                                 </div>
                                 <div class="detail-row">
                                     <span class="info-label">Age</span>
@@ -744,18 +957,6 @@ function fmtDate($d, $format = 'F d, Y') {
                                 <div class="detail-row">
                                     <span class="info-label">Religion</span>
                                     <span class="info-value"><?php echo getVal($profile, 'religion'); ?></span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="info-label">CP Number</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'cp_no'); ?></span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="info-label">Birth No.</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'birth_no'); ?></span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="info-label">No. of Siblings</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'no_siblings'); ?></span>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -774,18 +975,6 @@ function fmtDate($d, $format = 'F d, Y') {
                                 <div class="detail-row">
                                     <span class="info-label">Civil Status</span>
                                     <span class="info-value"><?php echo getVal($profile, 'civil_status'); ?></span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="info-label">Cultural Origin</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'cultural_origin'); ?></span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="info-label">Scholarship</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'scholarship'); ?></span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="info-label">Allowance Source</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'allowance_source'); ?></span>
                                 </div>
                             </div>
                         </div>
@@ -831,7 +1020,7 @@ function fmtDate($d, $format = 'F d, Y') {
                         </div>
                     </div>
 
-                    <!-- ===== PARENT / GUARDIAN ===== -->
+                    <!-- ===== PARENT/GUARDIAN INFORMATION ===== -->
                     <div class="print-section">
                         <h6><i class="fas fa-users me-2"></i>Parent / Guardian Information</h6>
                         <div class="row">
@@ -891,7 +1080,7 @@ function fmtDate($d, $format = 'F d, Y') {
                         </div>
                     </div>
 
-                    <!-- ===== ADMISSION ===== -->
+                    <!-- ===== ADMISSION INFORMATION ===== -->
                     <?php if ($admission): ?>
                     <div class="print-section">
                         <h6><i class="fas fa-clipboard-list me-2"></i>Admission Information</h6>
@@ -908,10 +1097,6 @@ function fmtDate($d, $format = 'F d, Y') {
                                 <div class="detail-row">
                                     <span class="info-label">Guardian Contact</span>
                                     <span class="info-value"><?php echo getVal($admission, 'guardian_contact'); ?></span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="info-label">Year Level (Old)</span>
-                                    <span class="info-value"><?php echo getVal($admission, 'year_level_old'); ?></span>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -930,16 +1115,12 @@ function fmtDate($d, $format = 'F d, Y') {
                                     <span class="info-label">Student Signature</span>
                                     <span class="info-value"><?php echo getVal($admission, 'student_signature'); ?></span>
                                 </div>
-                                <div class="detail-row">
-                                    <span class="info-label">Home Address (Admission)</span>
-                                    <span class="info-value"><?php echo nl2br(getVal($admission, 'home_address')); ?></span>
-                                </div>
                             </div>
                         </div>
                     </div>
                     <?php endif; ?>
 
-                    <!-- ===== BOARDING INFO ===== -->
+                    <!-- ===== FORMER BOARDING ===== -->
                     <div class="print-section">
                         <h6><i class="fas fa-building me-2"></i>Boarding Information</h6>
                         <div class="row">
@@ -948,19 +1129,11 @@ function fmtDate($d, $format = 'F d, Y') {
                                     <span class="info-label">Former Boarding House</span>
                                     <span class="info-value"><?php echo getVal($admission, 'former_bh', 'None'); ?></span>
                                 </div>
-                                <div class="detail-row">
-                                    <span class="info-label">Former Boarding Years</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'former_boarding_years'); ?></span>
-                                </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="detail-row">
                                     <span class="info-label">Former Address</span>
                                     <span class="info-value"><?php echo getVal($admission, 'former_address', 'N/A'); ?></span>
-                                </div>
-                                <div class="detail-row">
-                                    <span class="info-label">Plan to Transfer</span>
-                                    <span class="info-value"><?php echo getVal($profile, 'plan_transfer'); ?></span>
                                 </div>
                             </div>
                         </div>
@@ -968,27 +1141,34 @@ function fmtDate($d, $format = 'F d, Y') {
 
                     <!-- ===== FOOTER ===== -->
                     <div class="print-footer">
-                        <i class="fas fa-print me-1"></i>
-                        Printed on <?php echo date('F d, Y h:i A'); ?>
+                        <i class="fas fa-print me-1"></i> 
+                        Printed on <?php echo date('F d, Y h:i A'); ?> 
                         <span class="mx-2">|</span>
                         ISUE-OSS-SDP-025 | Effectivity: 01/09/2013 | Revision: 0
                         <br>
                         <span style="font-size: 10px; color: var(--text-muted);">This is a system-generated document.</span>
                     </div>
                 </div>
+                <!-- ============================================================
+                END PRINT CONTAINER
+                ============================================================ -->
+                
                 <?php endif; ?>
             </main>
         </div>
     </div>
 
     <?php include '../includes/footer.php'; ?>
-
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // ============================================================
+        // THEME TOGGLE
+        // ============================================================
         function toggleTheme() {
             const html = document.documentElement;
             const icon = document.getElementById('themeIcon');
-
+            
             if (html.getAttribute('data-theme') === 'light') {
                 html.removeAttribute('data-theme');
                 icon.className = 'fas fa-moon';
@@ -1000,9 +1180,11 @@ function fmtDate($d, $format = 'F d, Y') {
             }
         }
 
+        // Load saved theme (default to dark)
         document.addEventListener('DOMContentLoaded', function() {
             const savedTheme = localStorage.getItem('theme');
             const icon = document.getElementById('themeIcon');
+            
             if (savedTheme === 'light') {
                 document.documentElement.setAttribute('data-theme', 'light');
                 if (icon) icon.className = 'fas fa-sun';
@@ -1012,17 +1194,25 @@ function fmtDate($d, $format = 'F d, Y') {
             }
         });
 
+        // Adjust action bar top position based on navbar height
         document.addEventListener('DOMContentLoaded', function() {
             const navbar = document.querySelector('.navbar');
-            if (navbar) {
-                document.documentElement.style.setProperty('--navbar-height', navbar.offsetHeight + 'px');
+            const actionBar = document.querySelector('.action-bar');
+            
+            if (navbar && actionBar) {
+                const navbarHeight = navbar.offsetHeight;
+                document.documentElement.style.setProperty('--navbar-height', navbarHeight + 'px');
             }
         });
 
+        // Update on resize
         window.addEventListener('resize', function() {
             const navbar = document.querySelector('.navbar');
-            if (navbar) {
-                document.documentElement.style.setProperty('--navbar-height', navbar.offsetHeight + 'px');
+            const actionBar = document.querySelector('.action-bar');
+            
+            if (navbar && actionBar) {
+                const navbarHeight = navbar.offsetHeight;
+                document.documentElement.style.setProperty('--navbar-height', navbarHeight + 'px');
             }
         });
     </script>
