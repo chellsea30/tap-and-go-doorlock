@@ -6,6 +6,7 @@
  * ✅ ALL FIELDS REQUIRED EXCEPT EYE COLOR
  * ✅ AUTO-SCROLL sa unang missing field
  * ✅ RED HIGHLIGHT sa missing fields
+ * ✅ SEQUENTIAL STUDENT ID: STU-2026-0001, STU-2026-0002, ...
  */
 
 session_start();
@@ -120,17 +121,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
         try {
             $conn = getDBConnection();
             
-            // Generate unique student ID
-            $student_id = 'STU-' . date('Y') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT);
-            $check = $conn->prepare("SELECT user_id FROM users WHERE student_id = ?");
-            $check->bind_param("s", $student_id);
-            $check->execute();
-            if ($check->get_result()->num_rows > 0) {
-                $student_id = 'STU-' . date('Y') . '-' . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);
-            }
-            $check->close();
+            // ============================================================
+            // ✅ SEQUENTIAL STUDENT ID GENERATION
+            // Format: STU-YYYY-XXXX (0001, 0002, 0003, ...)
+            // Base sa bilang ng residents na naka-register sa system
+            // ============================================================
+            $year = date('Y');
+            $prefix = 'STU-' . $year . '-';
             
-            // Handle photo upload
+            // Kunin ang pinakamataas na existing student_id para sa taon
+            $lastIdQuery = $conn->prepare("
+                SELECT student_id 
+                FROM users 
+                WHERE student_id LIKE ? 
+                  AND status != 'deleted'
+                ORDER BY CAST(SUBSTRING(student_id, -4) AS UNSIGNED) DESC 
+                LIMIT 1
+            ");
+            $likePattern = $prefix . '%';
+            $lastIdQuery->bind_param("s", $likePattern);
+            $lastIdQuery->execute();
+            $lastResult = $lastIdQuery->get_result();
+            
+            if ($lastRow = $lastResult->fetch_assoc()) {
+                // Kunin ang last 4 digits at dagdagan ng 1
+                $lastNumber = (int)substr($lastRow['student_id'], -4);
+                $newNumber = $lastNumber + 1;
+            } else {
+                // Kung wala pa, magsimula sa 1
+                $newNumber = 1;
+            }
+            $lastIdQuery->close();
+            
+            // Format: STU-2026-0001
+            $student_id = $prefix . str_pad($newNumber, 4, '0', STR_PAD_LEFT);
+            
+            // ✅ Safety net: Kung may collision pa rin, dagdagan ng 1 hanggang maging unique
+            $maxAttempts = 100;
+            $attempts = 0;
+            while ($attempts < $maxAttempts) {
+                $check = $conn->prepare("SELECT user_id FROM users WHERE student_id = ?");
+                $check->bind_param("s", $student_id);
+                $check->execute();
+                $exists = $check->get_result()->num_rows > 0;
+                $check->close();
+                
+                if (!$exists) break;
+                
+                // May collision, dagdagan ng 1
+                $newNumber++;
+                $student_id = $prefix . str_pad($newNumber, 4, '0', STR_PAD_LEFT);
+                $attempts++;
+            }
+            
+            // ============================================================
+            // HANDLE PHOTO UPLOAD
+            // ============================================================
             $photo_path = '';
             $upload_dir = '../../uploads/resident_photos/';
             if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
@@ -145,7 +191,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 }
             }
             
-            // Insert into users (PENDING approval)
+            // ============================================================
+            // INSERT INTO USERS (PENDING APPROVAL)
+            // ============================================================
             $email_placeholder = strtolower(str_replace(' ', '.', $full_name)) . '@student.isu.edu.ph';
             
             $stmt = $conn->prepare("
@@ -160,8 +208,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 $user_id = $conn->insert_id;
                 $stmt->close();
                 
-                // Insert into resident_profiles
+                // ============================================================
+                // INSERT INTO RESIDENT_PROFILES
                 // ✅ EYE COLOR ADDED (after religion)
+                // ============================================================
                 $profileStmt = $conn->prepare("
                     INSERT INTO resident_profiles (
                         user_id, date_registered, gender, gender_other, birth_date, age,
@@ -189,7 +239,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 $profileStmt->execute();
                 $profileStmt->close();
                 
-                // Log registration
+                // ============================================================
+                // LOG REGISTRATION
+                // ============================================================
                 $logStmt = $conn->prepare("
                     INSERT INTO student_registration_logs (user_id, action, details, performed_by, ip_address)
                     VALUES (?, 'self_registration', ?, 'student', ?)
@@ -255,7 +307,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             margin-bottom: 18px;
             transition: all 0.3s ease;
         }
-        /* ✅ SECTION WITH MISSING FIELDS */
         .form-section.has-error {
             border-color: rgba(239,68,68,0.5);
             background: rgba(239,68,68,0.05);
@@ -296,8 +347,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             font-weight: 400;
             font-style: italic;
         }
-        
-        /* ✅ ERROR HIGHLIGHT */
         .form-control.error-field,
         .form-select.error-field {
             border-color: #ef4444 !important;
@@ -320,7 +369,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             display: none;
         }
         .error-message.show { display: block; }
-        
         .photo-upload {
             text-align: center; padding: 25px;
             border: 2px dashed rgba(255,215,0,0.3);
@@ -370,8 +418,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             margin: 15px 0;
             font-family: monospace;
         }
-        
-        /* ✅ Required notice banner */
         .required-notice {
             background: rgba(239,68,68,0.1);
             border: 1px solid rgba(239,68,68,0.3);
@@ -388,7 +434,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             color: #ef4444;
             font-size: 20px;
         }
-        
         @media (max-width: 768px) {
             .form-section { padding: 18px; }
             .header-section { padding: 20px; }
@@ -438,7 +483,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 </div>
             <?php endif; ?>
 
-            <!-- ✅ REQUIRED NOTICE -->
             <div class="required-notice">
                 <i class="fas fa-exclamation-triangle"></i>
                 <div>
@@ -533,7 +577,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                             </select>
                             <div class="error-message" id="error_civil_status">Civil status is required</div>
                         </div>
-                        <!-- ✅ EYE COLOR - OPTIONAL (WALANG required attribute) -->
                         <div class="col-md-4">
                             <label class="form-label">Eye Color <span class="optional-tag">(Optional)</span></label>
                             <input type="text" class="form-control auto-upper" name="eye_color" id="eye_color" 
@@ -781,7 +824,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                     preview.style.display = 'block';
                     icon.style.display = 'none';
                     
-                    // Remove error state
                     document.getElementById('photoUploadBox').classList.remove('error-field');
                     document.getElementById('error_profile_photo').classList.remove('show');
                 };
@@ -821,7 +863,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
         });
 
         // ============================================================
-        // ✅ REAL-TIME VALIDATION - Remove error kapag may laman na
+        // REAL-TIME VALIDATION - Remove error kapag may laman na
         // ============================================================
         document.querySelectorAll('.form-control, .form-select').forEach(function(input) {
             input.addEventListener('input', function() {
@@ -863,7 +905,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
         });
 
         // ============================================================
-        // ✅ VALIDATION ON SUBMIT - CHECK ALL FIELDS
+        // VALIDATION ON SUBMIT
         // ============================================================
         document.getElementById('registrationForm').addEventListener('submit', function(e) {
             const missing = [];
@@ -876,8 +918,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 document.getElementById('error_profile_photo').classList.add('show');
             }
             
-            // 2. Check all text/select/date inputs with required attribute
-            // ✅ EYE COLOR AY HINDI KASAMA DAHIL WALANG required attribute
+            // 2. Check all required inputs
             const requiredInputs = this.querySelectorAll('.form-control[required], .form-select[required]');
             requiredInputs.forEach(function(input) {
                 if (!input.value || input.value.trim() === '') {
@@ -910,7 +951,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 document.querySelectorAll('.plan-radio').forEach(r => r.classList.add('error-field'));
                 document.getElementById('error_plan_transfer').classList.add('show');
             } else {
-                // Check conditional fields
                 if (planSelected.value === 'Yes') {
                     const yesVal = document.getElementById('plan_transfer_yes').value.trim();
                     if (!yesVal) {
@@ -932,7 +972,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
             if (missing.length > 0) {
                 e.preventDefault();
                 
-                // Show alert
                 const alertDiv = document.createElement('div');
                 alertDiv.className = 'alert-custom alert-danger';
                 alertDiv.style.position = 'fixed';
@@ -947,7 +986,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
                 
                 setTimeout(() => alertDiv.remove(), 5000);
                 
-                // Scroll to first error
                 const firstError = document.querySelector('.error-field');
                 if (firstError) {
                     firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -961,7 +999,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_registration']
         });
 
         // ============================================================
-        // ✅ SCROLL TO TOP KAPAG MAY ERROR FROM PHP (page reload)
+        // SCROLL TO TOP KAPAG MAY ERROR FROM PHP
         // ============================================================
         <?php if (!empty($error)): ?>
         window.addEventListener('DOMContentLoaded', function() {
