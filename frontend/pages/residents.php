@@ -7,7 +7,7 @@
  * ✅ FIXED: All modals working (Photo, Reject, Delete)
  * ✅ FIXED: Single modal per type (dynamic content)
  * ✅ FIXED: Modals outside bulkForm
- * ✅ FIXED: z-index para hindi matakpan ng navbar
+ * ✅ FIXED: z-index + pointer-events para ma-click ang buttons
  * ✅ FIXED: View button now points to view-profile.php
  */
 
@@ -648,18 +648,44 @@ function getInitials($name) {
             white-space: nowrap;
         }
 
-        /* ✅ FIX: Modal z-index and pointer events */
+        /* ✅ FINAL FIX: Modal z-index + pointer-events */
         .modal { 
-            z-index: 99999 !important; 
+            z-index: 999999 !important; 
         }
         .modal-backdrop { 
-            z-index: 99998 !important; 
+            z-index: 999998 !important; 
+            pointer-events: none !important;
+        }
+        .modal-backdrop.show {
+            pointer-events: auto !important;
         }
         .modal-dialog { 
             pointer-events: auto !important; 
+            z-index: 1000000 !important;
+            position: relative;
         }
         .modal-content { 
             pointer-events: auto !important; 
+            position: relative;
+            z-index: 1000001 !important;
+        }
+        .modal-header, 
+        .modal-body, 
+        .modal-footer { 
+            pointer-events: auto !important; 
+            position: relative;
+            z-index: 1000002 !important;
+        }
+        .modal button, 
+        .modal a.btn, 
+        .modal input, 
+        .modal textarea, 
+        .modal select,
+        .modal .btn-close { 
+            pointer-events: auto !important; 
+            cursor: pointer !important;
+            position: relative;
+            z-index: 1000003 !important;
         }
 
         @media (max-width: 1400px) {
@@ -801,7 +827,7 @@ function getInitials($name) {
             </div>
         <?php endif; ?>
 
-        <!-- BULK FORM: contains ONLY checkboxes + bulk bar + search + cards -->
+        <!-- BULK FORM -->
         <form method="POST" action="" id="bulkForm">
             <input type="hidden" name="bulk_approve" value="1">
 
@@ -1164,11 +1190,11 @@ function getInitials($name) {
         <!-- END BULK FORM -->
 
         <!-- ============================================================ -->
-        <!-- ✅ SINGLE MODALS - ISA LANG SA BUONG PAGE -->
+        <!-- ✅ SINGLE MODALS -->
         <!-- ============================================================ -->
 
-        <!-- PHOTO MODAL (Single) -->
-        <div class="modal fade" id="photoModal" tabindex="-1">
+        <!-- PHOTO MODAL -->
+        <div class="modal fade" id="photoModal" tabindex="-1" data-bs-backdrop="false">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -1224,8 +1250,8 @@ function getInitials($name) {
             </div>
         </div>
 
-        <!-- REJECT MODAL (Single) -->
-        <div class="modal fade" id="rejectModal" tabindex="-1">
+        <!-- REJECT MODAL -->
+        <div class="modal fade" id="rejectModal" tabindex="-1" data-bs-backdrop="false">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header" style="border-bottom-color: #7a2a2a !important;">
@@ -1287,8 +1313,8 @@ function getInitials($name) {
             </div>
         </div>
 
-        <!-- DELETE MODAL (Single) -->
-        <div class="modal fade" id="deleteModal" tabindex="-1">
+        <!-- DELETE MODAL -->
+        <div class="modal fade" id="deleteModal" tabindex="-1" data-bs-backdrop="false">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -1386,7 +1412,6 @@ function getInitials($name) {
             const noPhotoMsg = document.getElementById('photoModalNoPhoto');
             const removeLink = document.getElementById('photoModalRemoveLink');
 
-            // I-reset ang lahat
             preview.style.display = 'none';
             preview.src = '';
             initialsDiv.style.display = 'flex';
@@ -1394,25 +1419,31 @@ function getInitials($name) {
             noPhotoMsg.style.display = 'none';
 
             if (photoPath && photoPath !== '') {
-                // May photo
                 preview.src = photoPath;
                 preview.style.display = 'block';
                 initialsDiv.style.display = 'none';
                 removeBtn.style.display = 'block';
                 removeLink.href = '?remove_photo=' + userId;
             } else {
-                // Walang photo
                 initialsDiv.textContent = initials;
                 initialsDiv.style.display = 'flex';
                 noPhotoMsg.style.display = 'block';
             }
 
-            // Reset file input
             const fileInput = document.querySelector('#photoModal input[type="file"]');
             if (fileInput) fileInput.value = '';
 
-            const modal = new bootstrap.Modal(document.getElementById('photoModal'));
+            const modalEl = document.getElementById('photoModal');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
             modal.show();
+
+            // ✅ Force pointer events sa lahat ng buttons
+            setTimeout(() => {
+                modalEl.querySelectorAll('button, a.btn, input, textarea').forEach(el => {
+                    el.style.pointerEvents = 'auto';
+                    el.style.cursor = 'pointer';
+                });
+            }, 100);
         }
 
         // ============================================================
@@ -1424,8 +1455,16 @@ function getInitials($name) {
             document.getElementById('rejectModalId').textContent = studentId;
             document.getElementById('rejectModalReason').value = '';
 
-            const modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+            const modalEl = document.getElementById('rejectModal');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
             modal.show();
+
+            setTimeout(() => {
+                modalEl.querySelectorAll('button, a.btn, input, textarea').forEach(el => {
+                    el.style.pointerEvents = 'auto';
+                    el.style.cursor = 'pointer';
+                });
+            }, 100);
         }
 
         // ============================================================
@@ -1438,8 +1477,16 @@ function getInitials($name) {
             const page = <?php echo (int)$page; ?>;
             document.getElementById('deleteModalConfirm').href = '?delete=' + userId + '&page=' + page;
 
-            const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            const modalEl = document.getElementById('deleteModal');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
             modal.show();
+
+            setTimeout(() => {
+                modalEl.querySelectorAll('button, a.btn').forEach(el => {
+                    el.style.pointerEvents = 'auto';
+                    el.style.cursor = 'pointer';
+                });
+            }, 100);
         }
 
         // ============================================================
