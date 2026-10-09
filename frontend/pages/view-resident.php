@@ -590,7 +590,7 @@ function getStatusBadge($status) {
                         <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">
                             <i class="fas fa-moon" id="themeIcon"></i>
                         </button>
-                        <a href="residents.php" class="btn btn-outline-secondary btn-sm">
+                        <a href="residents-report.php" class="btn btn-outline-secondary btn-sm">
                             <i class="fas fa-arrow-left me-1"></i> Back
                         </a>
                         <a href="edit-resident.php?id=<?php echo $user_id; ?>" class="btn btn-primary btn-sm">
