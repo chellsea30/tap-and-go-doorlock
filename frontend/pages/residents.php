@@ -9,7 +9,6 @@
  * ✅ FIXED: Modals outside bulkForm
  * ✅ FIXED: z-index + pointer-events para ma-click ang buttons
  * ✅ FIXED: View button now points to view-profile.php
- * ✅ FIXED: Modal backdrop z-index BELOW sidebar/navbar (hindi na nag-o-overlap)
  */
 
 session_start();
@@ -649,15 +648,12 @@ function getInitials($name) {
             white-space: nowrap;
         }
 
-        /* ============================================================
-           ✅ FINAL FIX: Modal z-index + pointer-events
-           ✅ Backdrop ay MAS MABABA sa sidebar/navbar
-           ============================================================ */
+        /* ✅ FINAL FIX: Modal z-index + pointer-events */
         .modal { 
             z-index: 999999 !important; 
         }
         .modal-backdrop { 
-            z-index: 900 !important;  /* ✅ MAS MABABA sa sidebar (1040) at navbar (1050) */
+            z-index: 999998 !important; 
             pointer-events: none !important;
         }
         .modal-backdrop.show {
@@ -1198,7 +1194,7 @@ function getInitials($name) {
         <!-- ============================================================ -->
 
         <!-- PHOTO MODAL -->
-        <div class="modal fade" id="photoModal" tabindex="-1">
+        <div class="modal fade" id="photoModal" tabindex="-1" data-bs-backdrop="false">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -1255,7 +1251,7 @@ function getInitials($name) {
         </div>
 
         <!-- REJECT MODAL -->
-        <div class="modal fade" id="rejectModal" tabindex="-1">
+        <div class="modal fade" id="rejectModal" tabindex="-1" data-bs-backdrop="false">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header" style="border-bottom-color: #7a2a2a !important;">
@@ -1318,7 +1314,7 @@ function getInitials($name) {
         </div>
 
         <!-- DELETE MODAL -->
-        <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal fade" id="deleteModal" tabindex="-1" data-bs-backdrop="false">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -1441,6 +1437,7 @@ function getInitials($name) {
             const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
             modal.show();
 
+            // ✅ Force pointer events sa lahat ng buttons
             setTimeout(() => {
                 modalEl.querySelectorAll('button, a.btn, input, textarea').forEach(el => {
                     el.style.pointerEvents = 'auto';
