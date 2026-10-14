@@ -2,6 +2,7 @@
 /**
  * Tap-and-Go Doorlock - Student Profile
  * DARK MODE - WITH PROFILE PHOTO FROM users TABLE
+ * ✅ WITH PROFILE PHOTO UPLOAD
  */
 
 session_start();
@@ -74,23 +75,20 @@ if (empty($profilePhoto) && !empty($_SESSION['full_name'])) {
     $stmt->close();
 }
 
-// Determine full photo path (same as residents)
+// Determine full photo path
 $fullPhotoPath = '';
 $hasPhoto = false;
 
 if (!empty($profilePhoto)) {
-    // Check if path already has 'uploads/'
     if (strpos($profilePhoto, 'uploads/') === 0) {
         $fullPhotoPath = '../../../' . $profilePhoto;
     } else {
         $fullPhotoPath = '../../../uploads/resident_photos/' . $profilePhoto;
     }
     
-    // Check if file exists
     if (file_exists($fullPhotoPath)) {
         $hasPhoto = true;
     } else {
-        // Try alternative path
         $altPath = '../../../uploads/' . $profilePhoto;
         if (file_exists($altPath)) {
             $fullPhotoPath = $altPath;
@@ -113,7 +111,116 @@ if ($user_id) {
 }
 
 // ============================================================
-// HANDLE FORM SUBMISSION
+// ✅ HANDLE PROFILE PHOTO UPLOAD
+// ============================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_photo'])) {
+    if (!isset($_FILES['profile_photo']) || $_FILES['profile_photo']['error'] !== UPLOAD_ERR_OK) {
+        $error = "Please select a photo to upload.";
+    } else {
+        $file = $_FILES['profile_photo'];
+        
+        // ✅ VALIDATE FILE TYPE
+        $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        $fileType = mime_content_type($file['tmp_name']);
+        
+        // ✅ VALIDATE FILE SIZE (MAX 5MB)
+        $maxSize = 5 * 1024 * 1024;
+        
+        if (!in_array($fileType, $allowedTypes)) {
+            $error = "Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.";
+        } elseif ($file['size'] > $maxSize) {
+            $error = "File too large. Maximum size is 5MB.";
+        } elseif (empty($user_id)) {
+            $error = "User account not found. Please contact admin.";
+        } else {
+            // ✅ CREATE UPLOAD DIRECTORY IF NOT EXISTS
+            $uploadDir = '../../../uploads/resident_photos/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            
+            // ✅ GENERATE UNIQUE FILENAME
+            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $newFileName = 'student_' . $user_id . '_' . time() . '.' . $extension;
+            $uploadPath = $uploadDir . $newFileName;
+            
+            // ✅ DELETE OLD PHOTO IF EXISTS
+            if (!empty($profilePhoto)) {
+                $oldPhotoPath = '';
+                if (strpos($profilePhoto, 'uploads/') === 0) {
+                    $oldPhotoPath = '../../../' . $profilePhoto;
+                } else {
+                    $oldPhotoPath = $uploadDir . $profilePhoto;
+                }
+                
+                if (file_exists($oldPhotoPath) && is_file($oldPhotoPath)) {
+                    // Huwag i-delete ang default photos
+                    if (strpos(basename($oldPhotoPath), 'default') === false) {
+                        @unlink($oldPhotoPath);
+                    }
+                }
+            }
+            
+            // ✅ MOVE UPLOADED FILE
+            if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
+                // ✅ UPDATE DATABASE
+                $dbPath = 'uploads/resident_photos/' . $newFileName;
+                $stmt = $conn->prepare("UPDATE users SET profile_photo = ? WHERE user_id = ?");
+                $stmt->bind_param("si", $dbPath, $user_id);
+                
+                if ($stmt->execute()) {
+                    $success = "✅ Profile photo uploaded successfully!";
+                    $profilePhoto = $dbPath;
+                    $fullPhotoPath = '../../../' . $dbPath;
+                    $hasPhoto = true;
+                    logAudit($_SESSION['student_id'], 'Upload Photo', "Student uploaded profile photo");
+                } else {
+                    $error = "Failed to update database: " . $stmt->error;
+                    @unlink($uploadPath); // Delete uploaded file kung failed
+                }
+                $stmt->close();
+            } else {
+                $error = "Failed to upload file. Please try again.";
+            }
+        }
+    }
+}
+
+// ============================================================
+// ✅ HANDLE PHOTO DELETE
+// ============================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_photo'])) {
+    if (!empty($profilePhoto) && !empty($user_id)) {
+        // Delete file
+        if (strpos($profilePhoto, 'uploads/') === 0) {
+            $oldPhotoPath = '../../../' . $profilePhoto;
+        } else {
+            $oldPhotoPath = '../../../uploads/resident_photos/' . $profilePhoto;
+        }
+        
+        if (file_exists($oldPhotoPath) && is_file($oldPhotoPath)) {
+            @unlink($oldPhotoPath);
+        }
+        
+        // Update database
+        $stmt = $conn->prepare("UPDATE users SET profile_photo = NULL WHERE user_id = ?");
+        $stmt->bind_param("i", $user_id);
+        if ($stmt->execute()) {
+            $success = "✅ Profile photo removed successfully!";
+            $profilePhoto = '';
+            $fullPhotoPath = '';
+            $hasPhoto = false;
+        } else {
+            $error = "Failed to remove photo from database.";
+        }
+        $stmt->close();
+    } else {
+        $error = "No photo to delete.";
+    }
+}
+
+// ============================================================
+// HANDLE FORM SUBMISSION (PROFILE UPDATE)
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     $phone = trim($_POST['phone'] ?? '');
@@ -149,12 +256,7 @@ $initials = substr($initials, 0, 2) ?: 'S';
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../../assets/css/dashboard.css">
     <style>
-        /* ================================================================
-           DARK MODE STYLES - NO WHITE BACKGROUNDS
-           ================================================================ */
-        * {
-            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-        }
+        * { transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
         
         body {
             font-family: 'Inter', sans-serif;
@@ -164,7 +266,6 @@ $initials = substr($initials, 0, 2) ?: 'S';
             min-height: 100vh;
         }
         
-        /* ===== NAVBAR ===== */
         .navbar {
             background: linear-gradient(135deg, #0a1628, #1a2a4a) !important;
             border-bottom: 1px solid #1e2a3a;
@@ -179,7 +280,6 @@ $initials = substr($initials, 0, 2) ?: 'S';
             font-size: 14px;
             padding: 8px 15px;
             border-radius: 8px;
-            transition: all 0.3s ease;
         }
         .navbar .nav-link:hover { color: white !important; background: rgba(255,255,255,0.08); }
         .navbar .nav-link.active { color: white !important; background: rgba(255,215,0,0.15); }
@@ -191,7 +291,6 @@ $initials = substr($initials, 0, 2) ?: 'S';
             border: 1px solid rgba(255,255,255,0.15);
             text-decoration: none;
             font-size: 14px;
-            transition: all 0.3s ease;
         }
         .logout-btn:hover { background: rgba(255,255,255,0.1); color: white !important; }
         .student-badge {
@@ -203,7 +302,6 @@ $initials = substr($initials, 0, 2) ?: 'S';
         }
         .navbar-text { color: rgba(255,255,255,0.8) !important; font-size: 14px; }
         
-        /* ===== SIDEBAR ===== */
         .sidebar {
             position: fixed;
             top: 56px;
@@ -214,14 +312,12 @@ $initials = substr($initials, 0, 2) ?: 'S';
             border-right: 1px solid #1e2a3a;
             overflow-y: auto;
             z-index: 999;
-            transition: transform 0.3s ease;
         }
         .sidebar .nav-link {
             color: #9ca3af !important;
             padding: 10px 18px;
             border-radius: 8px;
             margin: 2px 8px;
-            transition: all 0.3s ease;
             font-weight: 500;
             font-size: 14px;
         }
@@ -233,22 +329,10 @@ $initials = substr($initials, 0, 2) ?: 'S';
             background: rgba(255, 215, 0, 0.12);
             color: #ffd700 !important;
         }
-        .sidebar .nav-link i {
-            width: 20px;
-            text-align: center;
-            margin-right: 10px;
-        }
-        .sidebar-footer {
-            padding: 12px 18px;
-            border-top: 1px solid #1e2a3a;
-            margin-top: 5px;
-        }
-        .sidebar-footer .text-muted {
-            color: #6b7280 !important;
-            font-size: 11px;
-        }
+        .sidebar .nav-link i { width: 20px; text-align: center; margin-right: 10px; }
+        .sidebar-footer { padding: 12px 18px; border-top: 1px solid #1e2a3a; margin-top: 5px; }
+        .sidebar-footer .text-muted { color: #6b7280 !important; font-size: 11px; }
         
-        /* ===== MAIN CONTENT ===== */
         .main-content {
             margin-left: 260px;
             padding: 20px 30px;
@@ -256,7 +340,6 @@ $initials = substr($initials, 0, 2) ?: 'S';
             background: #0a0e1a;
         }
         
-        /* ===== PROFILE CARD ===== */
         .profile-card {
             background: #131926 !important;
             border-radius: 16px;
@@ -264,21 +347,11 @@ $initials = substr($initials, 0, 2) ?: 'S';
             box-shadow: 0 2px 15px rgba(0,0,0,0.4);
             border: 1px solid #1e2a3a;
         }
-        .profile-card hr {
-            border-color: #1e2a3a;
-        }
-        .profile-card h4 {
-            color: #ffd700 !important;
-        }
-        .profile-card h5 {
-            color: #ffd700 !important;
-        }
-        .profile-card h6 {
-            color: #d1d5db !important;
-        }
-        .profile-card .text-muted {
-            color: #6b7280 !important;
-        }
+        .profile-card hr { border-color: #1e2a3a; }
+        .profile-card h4 { color: #ffd700 !important; }
+        .profile-card h5 { color: #ffd700 !important; }
+        .profile-card h6 { color: #d1d5db !important; }
+        .profile-card .text-muted { color: #6b7280 !important; }
         .profile-card .badge.bg-success {
             background: rgba(16, 185, 129, 0.2) !important;
             color: #6ee7b7 !important;
@@ -288,7 +361,12 @@ $initials = substr($initials, 0, 2) ?: 'S';
             color: #67e8f9 !important;
         }
         
-        /* ===== PROFILE AVATAR ===== */
+        /* ===== PROFILE AVATAR WITH UPLOAD ===== */
+        .profile-avatar-wrapper {
+            position: relative;
+            display: inline-block;
+            margin: 0 auto 15px;
+        }
         .profile-avatar {
             width: 120px;
             height: 120px;
@@ -298,11 +376,11 @@ $initials = substr($initials, 0, 2) ?: 'S';
             justify-content: center;
             font-size: 48px;
             color: white;
-            margin: 0 auto 15px;
             font-weight: 700;
             overflow: hidden;
             border: 4px solid #1e2a3a;
             background: linear-gradient(135deg, #667eea, #764ba2);
+            position: relative;
         }
         .profile-avatar img {
             width: 100%;
@@ -319,6 +397,33 @@ $initials = substr($initials, 0, 2) ?: 'S';
             font-weight: 700;
             color: white;
             background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+        
+        /* ✅ UPLOAD OVERLAY */
+        .avatar-upload-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            cursor: pointer;
+            color: white;
+            font-size: 14px;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .avatar-upload-overlay:hover {
+            opacity: 1;
+        }
+        .avatar-upload-overlay i {
+            font-size: 28px;
         }
         
         .photo-badge {
@@ -339,6 +444,45 @@ $initials = substr($initials, 0, 2) ?: 'S';
             justify-content: center;
             font-size: 16px;
             border: 3px solid #131926;
+            z-index: 2;
+        }
+        
+        /* ✅ UPLOAD BUTTONS */
+        .photo-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .btn-upload-photo {
+            background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
+            border: none !important;
+            padding: 8px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #0a0e1a !important;
+            transition: all 0.3s ease;
+        }
+        .btn-upload-photo:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.3);
+            color: #0a0e1a !important;
+        }
+        .btn-delete-photo {
+            background: transparent !important;
+            border: 1px solid rgba(239, 68, 68, 0.4) !important;
+            color: #fca5a5 !important;
+            padding: 8px 20px;
+            border-radius: 10px;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 0.3s ease;
+        }
+        .btn-delete-photo:hover {
+            background: rgba(239, 68, 68, 0.15) !important;
+            color: #fca5a5 !important;
         }
         
         /* ===== FORM ===== */
@@ -366,9 +510,7 @@ $initials = substr($initials, 0, 2) ?: 'S';
             color: #6b7280 !important;
             cursor: not-allowed;
         }
-        .form-control::placeholder {
-            color: #6b7280 !important;
-        }
+        .form-control::placeholder { color: #6b7280 !important; }
         
         .btn-submit {
             background: linear-gradient(135deg, #ffd700, #f59e0b) !important;
@@ -393,7 +535,6 @@ $initials = substr($initials, 0, 2) ?: 'S';
             color: #ffd700 !important;
         }
         
-        /* ===== RFID CARD BOX ===== */
         .rfid-card-box {
             background: #0d1220 !important;
             border-radius: 12px;
@@ -408,9 +549,7 @@ $initials = substr($initials, 0, 2) ?: 'S';
             color: #ffd700 !important;
             letter-spacing: 2px;
         }
-        .rfid-card-box .text-muted {
-            color: #6b7280 !important;
-        }
+        .rfid-card-box .text-muted { color: #6b7280 !important; }
         .rfid-card-box .badge.bg-success {
             background: rgba(16, 185, 129, 0.2) !important;
             color: #6ee7b7 !important;
@@ -419,9 +558,7 @@ $initials = substr($initials, 0, 2) ?: 'S';
             background: rgba(6, 182, 212, 0.2) !important;
             color: #67e8f9 !important;
         }
-        .rfid-card-box .text-primary {
-            color: #93c5fd !important;
-        }
+        .rfid-card-box .text-primary { color: #93c5fd !important; }
         
         /* ===== ALERTS ===== */
         .alert-success {
@@ -434,93 +571,57 @@ $initials = substr($initials, 0, 2) ?: 'S';
             border-color: #ef4444 !important;
             color: #fca5a5 !important;
         }
-        .btn-close {
-            filter: invert(1) !important;
+        .btn-close { filter: invert(1) !important; }
+        
+        .h1, .h2, .h3, .h4, .h5, h1, h2, h3, h4, h5 { color: #e5e7eb !important; }
+        .border-bottom { border-color: #1e2a3a !important; }
+        .text-muted { color: #6b7280 !important; }
+        
+        /* ✅ HIDDEN FILE INPUT */
+        #photoInput {
+            display: none;
         }
         
-        /* ===== HEADINGS ===== */
-        .h1, .h2, .h3, .h4, .h5, h1, h2, h3, h4, h5 {
-            color: #e5e7eb !important;
-        }
-        .border-bottom {
-            border-color: #1e2a3a !important;
-        }
-        .text-muted {
-            color: #6b7280 !important;
-        }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #0a0e1a; }
+        ::-webkit-scrollbar-thumb { background: #1e2a3a; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ffd700; }
         
-        /* ===== SCROLLBAR ===== */
-        ::-webkit-scrollbar {
-            width: 10px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0a0e1a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #1e2a3a;
-            border-radius: 5px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #ffd700;
-        }
-        
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
         @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-            .sidebar.show {
-                transform: translateX(0);
-            }
-            .main-content {
-                margin-left: 0;
-                padding: 15px;
-            }
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.show { transform: translateX(0); }
+            .main-content { margin-left: 0; padding: 15px; }
             .sidebar-overlay {
                 display: none;
                 position: fixed;
-                top: 56px;
-                left: 0;
-                right: 0;
-                bottom: 0;
+                top: 56px; left: 0; right: 0; bottom: 0;
                 background: rgba(0,0,0,0.5);
                 z-index: 998;
             }
             .sidebar-overlay.show { display: block; }
-            .navbar-toggler {
-                border-color: rgba(255,255,255,0.1) !important;
-            }
+            .navbar-toggler { border-color: rgba(255,255,255,0.1) !important; }
             .navbar-toggler-icon {
                 background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255,255,255,0.8)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
             }
-            .profile-card {
-                padding: 20px;
-            }
-            .profile-avatar {
-                width: 80px;
-                height: 80px;
-                font-size: 32px;
-            }
+            .profile-card { padding: 20px; }
+            .profile-avatar, .avatar-upload-overlay { width: 80px; height: 80px; }
+            .profile-avatar { font-size: 32px; }
         }
     </style>
 </head>
 <body>
 
-    <!-- ===== NAVBAR (Separate file) ===== -->
     <?php include 'includes/navbar.php'; ?>
 
-    <!-- ===== SIDEBAR OVERLAY (mobile) ===== -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 
-    <!-- ===== SIDEBAR ===== -->
     <?php include 'includes/sidebar.php'; ?>
 
-    <!-- ===== MAIN CONTENT ===== -->
     <main class="main-content">
         <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2" style="font-size:24px; font-weight:700;"><i class="fas fa-user me-2" style="color: #ffd700;"></i>My Profile</h1>
+            <h1 class="h2" style="font-size:24px; font-weight:700;">
+                <i class="fas fa-user me-2" style="color: #ffd700;"></i>My Profile
+            </h1>
             <span class="badge bg-success"><i class="fas fa-circle me-1"></i> Active</span>
         </div>
 
@@ -543,22 +644,50 @@ $initials = substr($initials, 0, 2) ?: 'S';
                 <div class="profile-card">
                     <div class="text-center">
                         <div class="photo-badge">
-                            <div class="profile-avatar">
-                                <?php if ($hasPhoto): ?>
-                                    <img src="<?php echo $fullPhotoPath; ?>" alt="Profile Photo" 
-                                         onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
-                                    <div class="no-photo" style="display:none;">
-                                        <?php echo $initials; ?>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="no-photo"><?php echo $initials; ?></div>
-                                <?php endif; ?>
+                            <!-- ✅ AVATAR WITH UPLOAD OVERLAY -->
+                            <div class="profile-avatar-wrapper">
+                                <div class="profile-avatar" id="avatarPreview">
+                                    <?php if ($hasPhoto): ?>
+                                        <img src="<?php echo $fullPhotoPath . '?t=' . time(); ?>" alt="Profile Photo" id="avatarImg"
+                                             onerror="this.style.display='none'; this.parentElement.querySelector('.no-photo').style.display='flex';">
+                                        <div class="no-photo" style="display:none;"><?php echo $initials; ?></div>
+                                    <?php else: ?>
+                                        <div class="no-photo" id="noPhotoDiv"><?php echo $initials; ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <!-- ✅ CLICKABLE UPLOAD OVERLAY -->
+                                <div class="avatar-upload-overlay" onclick="document.getElementById('photoInput').click()">
+                                    <i class="fas fa-camera"></i>
+                                    <span>Change Photo</span>
+                                </div>
                             </div>
                             <?php if ($hasPhoto): ?>
                                 <span class="badge-icon"><i class="fas fa-check-circle"></i></span>
                             <?php endif; ?>
                         </div>
-                        <h4 class="mt-2"><?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?></h4>
+
+                        <!-- ✅ HIDDEN FILE INPUT + FORM -->
+                        <form method="POST" enctype="multipart/form-data" id="photoForm">
+                            <input type="file" name="profile_photo" id="photoInput" accept="image/*" onchange="previewAndSubmit(this)">
+                        </form>
+                        
+                        <!-- ✅ PHOTO ACTION BUTTONS -->
+                        <div class="photo-actions">
+                            <button type="button" class="btn-upload-photo" onclick="document.getElementById('photoInput').click()">
+                                <i class="fas fa-camera me-1"></i> 
+                                <?php echo $hasPhoto ? 'Change Photo' : 'Upload Photo'; ?>
+                            </button>
+                            
+                            <?php if ($hasPhoto): ?>
+                                <form method="POST" style="display:inline;" onsubmit="return confirm('Remove your profile photo?')">
+                                    <button type="submit" name="delete_photo" class="btn-delete-photo">
+                                        <i class="fas fa-trash me-1"></i> Remove
+                                    </button>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+
+                        <h4 class="mt-3"><?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Student'); ?></h4>
                         <p class="text-muted"><?php echo htmlspecialchars($_SESSION['student_id_number'] ?? 'N/A'); ?></p>
                         <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Active</span>
                     </div>
@@ -665,15 +794,64 @@ $initials = substr($initials, 0, 2) ?: 'S';
             document.getElementById('sidebarOverlay').classList.toggle('show');
         }
 
+        // ============================================================
+        // ✅ PREVIEW + AUTO-SUBMIT PHOTO
+        // ============================================================
+        function previewAndSubmit(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                
+                // ✅ VALIDATE SIZE (MAX 5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('File is too large. Maximum size is 5MB.');
+                    input.value = '';
+                    return;
+                }
+                
+                // ✅ VALIDATE TYPE
+                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+                if (!allowedTypes.includes(file.type)) {
+                    alert('Invalid file type. Please use JPG, PNG, GIF, or WEBP.');
+                    input.value = '';
+                    return;
+                }
+                
+                // ✅ PREVIEW
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const avatar = document.getElementById('avatarPreview');
+                    avatar.innerHTML = '<img src="' + e.target.result + '" alt="Preview">';
+                };
+                reader.readAsDataURL(file);
+                
+                // ✅ AUTO-SUBMIT FORM
+                const form = document.getElementById('photoForm');
+                
+                // Add hidden input for upload_photo
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'upload_photo';
+                hiddenInput.value = '1';
+                form.appendChild(hiddenInput);
+                
+                // Show loading state
+                const uploadBtn = document.querySelector('.btn-upload-photo');
+                if (uploadBtn) {
+                    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Uploading...';
+                    uploadBtn.disabled = true;
+                }
+                
+                form.submit();
+            }
+        }
+
         // Auto-dismiss alerts after 5 seconds
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
                 const alerts = document.querySelectorAll('.alert');
                 alerts.forEach(function(alert) {
                     const closeBtn = alert.querySelector('.btn-close');
-                    if (closeBtn) {
-                        closeBtn.click();
-                    }
+                    if (closeBtn) closeBtn.click();
                 });
             }, 5000);
         });
