@@ -9,6 +9,7 @@
  * ✅ FIXED: COALESCE for orphan cards (walang users match)
  * ✅ FIXED: Consistent version_hash
  * ✅ FIXED: Auto-resolve alerts kapag granted
+ * ✅ FIXED: MySQL 9.x compatibility (MD5 removed — using PHP md5())
  */
 
 header('Content-Type: application/json');
@@ -22,7 +23,7 @@ require_once '../../helpers/functions.php';
 $conn = getDBConnection();
 
 // ============================================================
-// API KEY AUTHENTICATION (Optional but recommended)
+// API KEY AUTHENTICATION (Optional)
 // ============================================================
 $api_key = isset($_SERVER['HTTP_X_API_KEY']) ? $_SERVER['HTTP_X_API_KEY'] : '';
 $valid_api_key = 'TAP_AND_GO_2024_SECURE_KEY';
@@ -112,8 +113,6 @@ switch ($action) {
     
     // ============================================================
     // ✅ GET ALL AUTHORIZED CARDS - WITH VERSION HASH
-    // Only ACTIVE cards are returned.
-    // ✅ FIXED: COALESCE for orphan cards (walang users match)
     // ============================================================
     case 'get_cards':
         $cards = [];
@@ -178,18 +177,20 @@ switch ($action) {
             }
         }
         
-        // ✅ Version hash - uppercase UIDs para consistent
+        // ✅ FIXED: MySQL 9.x walang MD5() — gamitin ang PHP md5()
         $versionResult = $conn->query("
             SELECT 
                 COUNT(*) as total,
-                MD5(GROUP_CONCAT(CONCAT(UPPER(card_uid), ':', status) ORDER BY UPPER(card_uid))) as version_hash
+                GROUP_CONCAT(CONCAT(UPPER(card_uid), ':', status) ORDER BY UPPER(card_uid)) as hash_data
             FROM rfid_cards
         ");
         $version_hash = 'v0';
         $total_cards = 0;
         if ($versionResult && $row = $versionResult->fetch_assoc()) {
-            $version_hash = $row['version_hash'] ?? md5((string)$row['total']);
             $total_cards = (int)$row['total'];
+            $hash_data = $row['hash_data'] ?? '';
+            // ✅ I-hash sa PHP, hindi sa MySQL
+            $version_hash = md5($hash_data . '_' . $total_cards);
         }
         
         sendResponse(true, 'Cards loaded successfully', [
@@ -201,7 +202,7 @@ switch ($action) {
         break;
     
     // ============================================================
-    // ✅ CHECK SINGLE CARD STATUS - REAL-TIME VERIFICATION
+    // ✅ CHECK SINGLE CARD STATUS
     // ============================================================
     case 'check_card_status':
         $uid = normalizeUID($input['uid'] ?? '');
@@ -270,8 +271,7 @@ switch ($action) {
         break;
     
     // ============================================================
-    // ✅ LOG ACCESS ATTEMPT - WITH FORCED DENY FOR DEACTIVATED
-    // ✅ AUTO-RESOLVE alerts kapag granted
+    // ✅ LOG ACCESS ATTEMPT
     // ============================================================
     case 'log_access':
         $uid = normalizeUID($input['uid'] ?? '');
@@ -297,9 +297,7 @@ switch ($action) {
         $card_status = 'unknown';
         $forced_deny = false;
         
-        // ------------------------------------------------------------
         // STEP 1: Check rfid_cards
-        // ------------------------------------------------------------
         $stmt = $conn->prepare("
             SELECT 
                 c.user_id, 
@@ -413,9 +411,7 @@ switch ($action) {
         }
         $stmt->close();
         
-        // ------------------------------------------------------------
-        // STEP 2: If not found, check visitor_logs
-        // ------------------------------------------------------------
+        // STEP 2: Check visitor_logs
         if (!$card_exists) {
             $stmt = $conn->prepare("
                 SELECT 
@@ -461,9 +457,7 @@ switch ($action) {
             $stmt->close();
         }
         
-        // ------------------------------------------------------------
         // STEP 3: If card doesn't exist at all
-        // ------------------------------------------------------------
         if (!$card_exists) {
             $granted = false;
             $isAuthorized = false;
@@ -472,18 +466,14 @@ switch ($action) {
             $card_status = 'not_found';
         }
         
-        // ------------------------------------------------------------
         // STEP 4: FINAL SAFETY CHECK
-        // ------------------------------------------------------------
         if ($card_exists && $card_status !== 'active' && $card_status !== 'not_found' && $card_status !== 'unknown') {
             $granted = false;
             $isAuthorized = false;
             $forced_deny = true;
         }
         
-        // ------------------------------------------------------------
         // ✅ AUTO-RESOLVE PENDING ALERTS KAPAG GRANTED
-        // ------------------------------------------------------------
         if ($granted) {
             $resolveStmt = $conn->prepare("
                 UPDATE alert_logs 
@@ -497,9 +487,7 @@ switch ($action) {
             $resolveStmt->close();
         }
         
-        // ------------------------------------------------------------
         // INSERT ACCESS LOG
-        // ------------------------------------------------------------
         $status = $granted ? 'granted' : 'denied';
         $alert_triggered = $granted ? 0 : 1;
         
@@ -512,9 +500,6 @@ switch ($action) {
         $stmt->bind_param("sssiss", $uid, $status, $type, $user_id, $alert_triggered, $power_source);
         
         if ($stmt->execute()) {
-            // ------------------------------------------------------------
-            // CREATE ALERT FOR DENIED ACCESS
-            // ------------------------------------------------------------
             if (!$granted) {
                 if ($user_name == 'Unknown Card') {
                     $reason = 'Unknown card detected: ' . $uid;
@@ -1128,7 +1113,7 @@ switch ($action) {
             }
         }
         
-        // ✅ Laging nagbabagong hash para siguradong mag-refresh ang ESP32
+        // ✅ PHP md5() — hindi MySQL
         sendResponse(true, 'Force refresh data', [
             'cards' => $cards,
             'total' => count($cards),
