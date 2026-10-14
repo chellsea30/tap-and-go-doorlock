@@ -5,6 +5,7 @@
  * WITH ACCESS CONTROL
  * WITH CARD STATUS VERIFICATION (DEACTIVATE/ACTIVATE SYNC)
  * ✅ WITH FORCED DENY FOR DEACTIVATED CARDS
+ * ✅ FIXED: Uppercase UID, JOIN issues, at hash consistency
  */
 
 header('Content-Type: application/json');
@@ -23,13 +24,6 @@ $conn = getDBConnection();
 $api_key = isset($_SERVER['HTTP_X_API_KEY']) ? $_SERVER['HTTP_X_API_KEY'] : '';
 $valid_api_key = 'TAP_AND_GO_2024_SECURE_KEY';
 
-if ($_SERVER['REQUEST_METHOD'] !== 'OPTIONS') {
-    // Uncomment to enable API key validation
-    // if (empty($api_key) || $api_key !== $valid_api_key) {
-    //     sendResponse(false, 'Invalid API Key', [], 401);
-    // }
-}
-
 // Get request data
 $input = json_decode(file_get_contents('php://input'), true);
 $action = isset($input['action']) ? $input['action'] : '';
@@ -42,6 +36,13 @@ function sendResponse($success, $message, $data = [], $statusCode = 200) {
     }
     echo json_encode($response);
     exit();
+}
+
+// ============================================================
+// ✅ NORMALIZE UID - Consistent uppercase, trim
+// ============================================================
+function normalizeUID($uid) {
+    return strtoupper(trim($uid));
 }
 
 // ============================================================
@@ -83,15 +84,8 @@ function createAlertNotification($uid, $reason, $user_name, $card_type, $access_
     
     $stmt = $conn->prepare("
         INSERT INTO notifications (
-            notification_type,
-            card_uid,
-            user_name,
-            card_type,
-            reason,
-            access_type,
-            status,
-            created_at,
-            expires_at
+            notification_type, card_uid, user_name, card_type, reason,
+            access_type, status, created_at, expires_at
         ) VALUES ('unauthorized', ?, ?, ?, ?, ?, 'unread', NOW(), DATE_ADD(NOW(), INTERVAL 1 HOUR))
     ");
     $stmt->bind_param("sssss", $uid, $user_name, $card_type, $reason, $access_type);
@@ -109,7 +103,7 @@ switch ($action) {
     
     // ============================================================
     // ✅ GET ALL AUTHORIZED CARDS - WITH VERSION HASH
-    // Only ACTIVE cards are returned. Deactivated/expired/lost are EXCLUDED.
+    // ✅ FIXED: Simple JOIN, uppercase UID, active only
     // ============================================================
     case 'get_cards':
         $cards = [];
@@ -123,8 +117,9 @@ switch ($action) {
                 c.visitor_name,
                 c.purpose_of_visit,
                 c.resident_visited,
+                c.room_number as card_room_number,
                 u.full_name as user_name, 
-                u.room_number,
+                u.room_number as user_room_number,
                 u.student_id,
                 ru.full_name as resident_visited_name
             FROM rfid_cards c
@@ -136,9 +131,12 @@ switch ($action) {
         
         if ($result && $result->num_rows > 0) {
             while ($row = $result->fetch_assoc()) {
-                $displayName = '';
-                $roomNumber = $row['room_number'] ?? 'N/A';
                 $cardType = $row['card_type'] ?? 'resident';
+                $displayName = '';
+                $roomNumber = $row['user_room_number'] ?? $row['card_room_number'] ?? 'N/A';
+                
+                // ✅ SIGURADUHING NORMALIZED ANG UID
+                $normalizedUID = normalizeUID($row['card_uid']);
                 
                 switch ($cardType) {
                     case 'visitor':
@@ -159,7 +157,7 @@ switch ($action) {
                 }
                 
                 $cards[] = [
-                    'uid' => $row['card_uid'],
+                    'uid' => $normalizedUID,  // ✅ NORMALIZED
                     'user_id' => $row['user_id'],
                     'user_name' => $displayName,
                     'room_number' => $roomNumber,
@@ -174,10 +172,11 @@ switch ($action) {
             }
         }
         
+        // ✅ VERSION HASH - simple at consistent
         $versionResult = $conn->query("
             SELECT 
                 COUNT(*) as total,
-                MD5(GROUP_CONCAT(CONCAT(card_uid, ':', status) ORDER BY card_uid)) as version_hash
+                MD5(GROUP_CONCAT(CONCAT(UPPER(card_uid), ':', status) ORDER BY UPPER(card_uid))) as version_hash
             FROM rfid_cards
         ");
         $version_hash = 'v0';
@@ -197,9 +196,10 @@ switch ($action) {
     
     // ============================================================
     // ✅ CHECK SINGLE CARD STATUS - REAL-TIME VERIFICATION
+    // ✅ FIXED: Uppercase comparison
     // ============================================================
     case 'check_card_status':
-        $uid = isset($input['uid']) ? strtoupper(trim($input['uid'])) : '';
+        $uid = normalizeUID($input['uid'] ?? '');
         
         if (empty($uid)) {
             sendResponse(false, 'Card UID required');
@@ -215,7 +215,7 @@ switch ($action) {
                 u.room_number
             FROM rfid_cards c
             LEFT JOIN users u ON c.user_id = u.user_id
-            WHERE c.card_uid = ?
+            WHERE UPPER(c.card_uid) = ?
         ");
         $stmt->bind_param("s", $uid);
         $stmt->execute();
@@ -229,7 +229,7 @@ switch ($action) {
                 $vCheck = $conn->prepare("
                     SELECT validity_end 
                     FROM visitor_logs 
-                    WHERE temporary_card_uid = ? 
+                    WHERE UPPER(temporary_card_uid) = ? 
                     ORDER BY created_at DESC LIMIT 1
                 ");
                 $vCheck->bind_param("s", $uid);
@@ -265,12 +265,11 @@ switch ($action) {
         break;
     
     // ============================================================
-    // ✅ LOG ACCESS ATTEMPT - WITH FORCED DENY FOR DEACTIVATED CARDS
-    // ✅ Kahit sabihin ng ESP32 na "granted", kung deactivated ang card,
-    //    idi-deny pa rin ito ng server.
+    // ✅ LOG ACCESS ATTEMPT
+    // ✅ FIXED: Uppercase comparison at auto-resolve kapag granted
     // ============================================================
     case 'log_access':
-        $uid = isset($input['uid']) ? strtoupper(trim($input['uid'])) : '';
+        $uid = normalizeUID($input['uid'] ?? '');
         $type = isset($input['type']) ? $input['type'] : 'entry';
         $granted = isset($input['granted']) ? (bool)$input['granted'] : false;
         $power_source = isset($input['power_source']) ? $input['power_source'] : 'main';
@@ -290,11 +289,11 @@ switch ($action) {
         $resident_visited = null;
         $card_exists = false;
         $alert_created = false;
-        $card_status = 'unknown';        // ✅ BAGO: Track card status
-        $forced_deny = false;             // ✅ BAGO: Track if we forced deny
+        $card_status = 'unknown';
+        $forced_deny = false;
         
         // ------------------------------------------------------------
-        // STEP 1: Check rfid_cards table - INCLUDING STATUS
+        // STEP 1: Check rfid_cards table
         // ------------------------------------------------------------
         $stmt = $conn->prepare("
             SELECT 
@@ -312,7 +311,7 @@ switch ($action) {
             FROM rfid_cards c
             LEFT JOIN users u ON c.user_id = u.user_id
             LEFT JOIN users ru ON c.resident_visited = ru.user_id
-            WHERE c.card_uid = ?
+            WHERE UPPER(c.card_uid) = ?
         ");
         $stmt->bind_param("s", $uid);
         $stmt->execute();
@@ -322,12 +321,11 @@ switch ($action) {
             $card_exists = true;
             $cardType = $row['card_type'] ?? 'unknown';
             $cardStatus = $row['status'] ?? 'inactive';
-            $card_status = $cardStatus;    // ✅ Save for response
+            $card_status = $cardStatus;
             $visitor_name = $row['visitor_name'] ?? '';
             $purpose = $row['purpose_of_visit'] ?? '';
             $resident_visited = $row['resident_visited'] ?? null;
             
-            // ✅ CRITICAL CHECK: Card must be ACTIVE
             if ($cardStatus == 'active') {
                 switch ($cardType) {
                     case 'visitor':
@@ -335,7 +333,7 @@ switch ($action) {
                         $visitorCheck = $conn->prepare("
                             SELECT validity_end, access_status 
                             FROM visitor_logs 
-                            WHERE temporary_card_uid = ? 
+                            WHERE UPPER(temporary_card_uid) = ? 
                             AND access_status != 'denied'
                             ORDER BY created_at DESC LIMIT 1
                         ");
@@ -391,14 +389,13 @@ switch ($action) {
                         break;
                 }
             } else {
-                // ✅ DEACTIVATED / EXPIRED / LOST card - FORCE DENY
+                // DEACTIVATED / EXPIRED / LOST card - FORCE DENY
                 $user_name = 'Inactive Card (' . ucfirst($cardStatus) . ')';
                 $cardType = $row['card_type'] ?? 'unknown';
                 $isAuthorized = false;
                 $granted = false;
-                $forced_deny = true;   // ✅ Mark as forced deny
+                $forced_deny = true;
                 
-                // Still set user info for logging
                 if ($cardType == 'visitor' && !empty($visitor_name)) {
                     $user_name = $visitor_name . ' (' . ucfirst($cardStatus) . ')';
                 } elseif (!empty($row['full_name'])) {
@@ -407,8 +404,6 @@ switch ($action) {
                 $room_number = $row['room_number'] ?? 'N/A';
                 $student_id = $row['student_id'] ?? 'N/A';
                 $user_id = $row['user_id'];
-                
-                error_log("🚫 FORCED DENY: Card $uid is $cardStatus - blocking access");
             }
         }
         $stmt->close();
@@ -416,7 +411,7 @@ switch ($action) {
         // ------------------------------------------------------------
         // STEP 2: If not found in rfid_cards, check visitor_logs
         // ------------------------------------------------------------
-        if (!$card_exists || $user_name == 'Unknown' || strpos($user_name, 'Inactive') !== false) {
+        if (!$card_exists) {
             $stmt = $conn->prepare("
                 SELECT 
                     v.visitor_name, 
@@ -430,7 +425,7 @@ switch ($action) {
                     u.room_number as resident_room
                 FROM visitor_logs v
                 LEFT JOIN users u ON v.resident_visited = u.user_id
-                WHERE v.temporary_card_uid = ? 
+                WHERE UPPER(v.temporary_card_uid) = ? 
                 AND v.access_status != 'denied'
                 ORDER BY v.created_at DESC LIMIT 1
             ");
@@ -439,31 +434,30 @@ switch ($action) {
             $result = $stmt->get_result();
             
             if ($row = $result->fetch_assoc()) {
-                // Only override if the card isn't already marked inactive
-                if (strpos($user_name, 'Inactive') === false) {
-                    $card_exists = true;
-                    $today = date('Y-m-d');
-                    if ($row['validity_end'] >= $today) {
-                        $user_name = $row['visitor_name'] . ' (Visitor)';
-                        $room_number = $row['resident_room'] ?? 'N/A';
-                        $cardType = 'visitor';
-                        $visitor_name = $row['visitor_name'];
-                        $purpose = $row['purpose_of_visit'] ?? '';
-                        $isAuthorized = true;
-                        $granted = true;
-                    } else {
-                        $user_name = $row['visitor_name'] . ' (Expired)';
-                        $cardType = 'visitor';
-                        $isAuthorized = false;
-                        $granted = false;
-                    }
+                $card_exists = true;
+                $today = date('Y-m-d');
+                if ($row['validity_end'] >= $today) {
+                    $user_name = $row['visitor_name'] . ' (Visitor)';
+                    $room_number = $row['resident_room'] ?? 'N/A';
+                    $cardType = 'visitor';
+                    $visitor_name = $row['visitor_name'];
+                    $purpose = $row['purpose_of_visit'] ?? '';
+                    $isAuthorized = true;
+                    $granted = true;
+                    $card_status = 'active';
+                } else {
+                    $user_name = $row['visitor_name'] . ' (Expired)';
+                    $cardType = 'visitor';
+                    $isAuthorized = false;
+                    $granted = false;
+                    $card_status = 'expired';
                 }
             }
             $stmt->close();
         }
         
         // ------------------------------------------------------------
-        // STEP 3: If card doesn't exist at all, it's unauthorized
+        // STEP 3: If card doesn't exist at all
         // ------------------------------------------------------------
         if (!$card_exists) {
             $granted = false;
@@ -474,14 +468,28 @@ switch ($action) {
         }
         
         // ------------------------------------------------------------
-        // ✅ STEP 4: FINAL SAFETY CHECK
-        // If card exists and is NOT active, FORCE deny
+        // STEP 4: FINAL SAFETY CHECK
         // ------------------------------------------------------------
         if ($card_exists && $card_status !== 'active' && $card_status !== 'not_found' && $card_status !== 'unknown') {
             $granted = false;
             $isAuthorized = false;
             $forced_deny = true;
-            error_log("🚫 FINAL CHECK: Forcing deny for card $uid (status: $card_status)");
+        }
+        
+        // ------------------------------------------------------------
+        // ✅ AUTO-RESOLVE PENDING ALERTS KAPAG GRANTED
+        // ------------------------------------------------------------
+        if ($granted) {
+            $resolveStmt = $conn->prepare("
+                UPDATE alert_logs 
+                SET delivery_status = 'resolved', 
+                    resolved_at = NOW() 
+                WHERE UPPER(card_uid) = ? 
+                AND delivery_status = 'pending'
+            ");
+            $resolveStmt->bind_param("s", $uid);
+            $resolveStmt->execute();
+            $resolveStmt->close();
         }
         
         // ------------------------------------------------------------
@@ -492,21 +500,14 @@ switch ($action) {
         
         $stmt = $conn->prepare("
             INSERT INTO access_logs (
-                card_uid, 
-                access_status, 
-                access_type, 
-                user_id, 
-                alert_triggered, 
-                power_source, 
-                timestamp
+                card_uid, access_status, access_type, user_id, 
+                alert_triggered, power_source, timestamp
             ) VALUES (?, ?, ?, ?, ?, ?, NOW())
         ");
         $stmt->bind_param("sssiss", $uid, $status, $type, $user_id, $alert_triggered, $power_source);
         
         if ($stmt->execute()) {
-            // ------------------------------------------------------------
-            // CREATE ALERT AND NOTIFICATION FOR DENIED ACCESS
-            // ------------------------------------------------------------
+            // CREATE ALERT FOR DENIED ACCESS
             if (!$granted) {
                 if ($user_name == 'Unknown Card') {
                     $reason = 'Unknown card detected: ' . $uid;
@@ -525,14 +526,8 @@ switch ($action) {
                 
                 $stmt2 = $conn->prepare("
                     INSERT INTO alert_logs (
-                        card_uid, 
-                        alert_type, 
-                        reason, 
-                        delivery_status, 
-                        timestamp,
-                        access_type,
-                        user_name,
-                        card_type
+                        card_uid, alert_type, reason, delivery_status, 
+                        timestamp, access_type, user_name, card_type
                     ) VALUES (?, 'unauthorized', ?, 'pending', NOW(), ?, ?, ?)
                 ");
                 $stmt2->bind_param("sssss", $uid, $reason, $type, $displayName, $cardType);
@@ -540,36 +535,16 @@ switch ($action) {
                 if ($stmt2->execute()) {
                     $alert_id = $conn->insert_id;
                     $alert_created = true;
-                    
-                    $notif_id = createAlertNotification($uid, $reason, $displayName, $cardType, $type);
-                    
-                    error_log("✅ Alert created with ID: " . $alert_id . " for card: " . $uid);
+                    createAlertNotification($uid, $reason, $displayName, $cardType, $type);
                 }
                 $stmt2->close();
-                
-                if (tableExists('security_logs')) {
-                    $stmt3 = $conn->prepare("
-                        INSERT INTO security_logs (
-                            event_type, 
-                            card_uid, 
-                            user_name, 
-                            details, 
-                            timestamp
-                        ) VALUES ('unauthorized_access', ?, ?, ?, NOW())
-                    ");
-                    $details = $reason . ' | Type: ' . $type;
-                    $stmt3->bind_param("sss", $uid, $displayName, $details);
-                    $stmt3->execute();
-                    $stmt3->close();
-                }
             }
             
             if ($cardType == 'visitor' && $granted) {
                 $stmt5 = $conn->prepare("
                     UPDATE visitor_logs 
-                    SET access_status = 'granted',
-                        entry_timestamp = NOW()
-                    WHERE temporary_card_uid = ?
+                    SET access_status = 'granted', entry_timestamp = NOW()
+                    WHERE UPPER(temporary_card_uid) = ?
                     ORDER BY created_at DESC LIMIT 1
                 ");
                 $stmt5->bind_param("s", $uid);
@@ -586,9 +561,9 @@ switch ($action) {
                 'room_number' => $room_number,
                 'student_id' => $student_id,
                 'card_type' => $cardType,
-                'card_status' => $card_status,          // ✅ Ibalik ang status
+                'card_status' => $card_status,
                 'is_authorized' => $isAuthorized,
-                'forced_deny' => $forced_deny,          // ✅ Ibalik kung forced deny
+                'forced_deny' => $forced_deny,
                 'visitor_name' => $visitor_name,
                 'purpose' => $purpose,
                 'alert_created' => $alert_created,
@@ -604,7 +579,7 @@ switch ($action) {
     // SEND ALERT FROM ESP
     // ============================================================
     case 'send_alert':
-        $uid = isset($input['uid']) ? strtoupper(trim($input['uid'])) : '';
+        $uid = normalizeUID($input['uid'] ?? '');
         $reason = isset($input['reason']) ? trim($input['reason']) : 'Unauthorized access attempt';
         $alert_type = isset($input['alert_type']) ? $input['alert_type'] : 'unauthorized';
         $access_type = isset($input['access_type']) ? $input['access_type'] : 'entry';
@@ -621,7 +596,7 @@ switch ($action) {
             SELECT c.card_type, c.visitor_name, u.full_name 
             FROM rfid_cards c
             LEFT JOIN users u ON c.user_id = u.user_id
-            WHERE c.card_uid = ?
+            WHERE UPPER(c.card_uid) = ?
         ");
         $stmt->bind_param("s", $uid);
         $stmt->execute();
@@ -642,7 +617,7 @@ switch ($action) {
             $stmt = $conn->prepare("
                 SELECT visitor_name 
                 FROM visitor_logs 
-                WHERE temporary_card_uid = ? 
+                WHERE UPPER(temporary_card_uid) = ? 
                 ORDER BY created_at DESC LIMIT 1
             ");
             $stmt->bind_param("s", $uid);
@@ -657,14 +632,8 @@ switch ($action) {
         
         $stmt = $conn->prepare("
             INSERT INTO alert_logs (
-                card_uid, 
-                alert_type, 
-                reason, 
-                user_name,
-                card_type,
-                access_type,
-                delivery_status, 
-                timestamp
+                card_uid, alert_type, reason, user_name,
+                card_type, access_type, delivery_status, timestamp
             ) VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())
         ");
         $stmt->bind_param("ssssss", $uid, $alert_type, $reason, $user_name, $card_type, $access_type);
@@ -699,7 +668,7 @@ switch ($action) {
                 c.card_type as rfid_card_type,
                 c.visitor_name
             FROM notifications n
-            LEFT JOIN rfid_cards c ON n.card_uid = c.card_uid
+            LEFT JOIN rfid_cards c ON UPPER(n.card_uid) = UPPER(c.card_uid)
             WHERE 1=1
         ";
         
@@ -751,8 +720,7 @@ switch ($action) {
         
         $stmt = $conn->prepare("
             UPDATE notifications 
-            SET status = 'read', 
-                read_at = NOW() 
+            SET status = 'read', read_at = NOW() 
             WHERE notification_id = ?
         ");
         $stmt->bind_param("i", $notif_id);
@@ -771,8 +739,7 @@ switch ($action) {
     case 'mark_all_read':
         $stmt = $conn->prepare("
             UPDATE notifications 
-            SET status = 'read', 
-                read_at = NOW() 
+            SET status = 'read', read_at = NOW() 
             WHERE status = 'unread'
         ");
         
@@ -803,7 +770,7 @@ switch ($action) {
                 u.room_number,
                 ru.full_name as resident_visited_name
             FROM alert_logs al
-            LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
+            LEFT JOIN rfid_cards c ON UPPER(al.card_uid) = UPPER(c.card_uid)
             LEFT JOIN users u ON c.user_id = u.user_id
             LEFT JOIN users ru ON c.resident_visited = ru.user_id
             WHERE 1=1
@@ -879,8 +846,7 @@ switch ($action) {
         
         $stmt = $conn->prepare("
             UPDATE alert_logs 
-            SET delivery_status = 'resolved',
-                resolved_at = NOW() 
+            SET delivery_status = 'resolved', resolved_at = NOW() 
             WHERE alert_id = ?
         ");
         $stmt->bind_param("i", $alert_id);
@@ -918,38 +884,22 @@ switch ($action) {
     // GET ALERT STATS
     // ============================================================
     case 'get_alert_stats':
-        $stats = [
-            'total' => 0,
-            'pending' => 0,
-            'resolved' => 0,
-            'unauthorized' => 0,
-            'today' => 0
-        ];
+        $stats = ['total' => 0, 'pending' => 0, 'resolved' => 0, 'unauthorized' => 0, 'today' => 0];
         
         $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs");
-        if ($result && $row = $result->fetch_assoc()) {
-            $stats['total'] = (int)$row['count'];
-        }
+        if ($result && $row = $result->fetch_assoc()) $stats['total'] = (int)$row['count'];
         
         $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'pending'");
-        if ($result && $row = $result->fetch_assoc()) {
-            $stats['pending'] = (int)$row['count'];
-        }
+        if ($result && $row = $result->fetch_assoc()) $stats['pending'] = (int)$row['count'];
         
         $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'resolved'");
-        if ($result && $row = $result->fetch_assoc()) {
-            $stats['resolved'] = (int)$row['count'];
-        }
+        if ($result && $row = $result->fetch_assoc()) $stats['resolved'] = (int)$row['count'];
         
         $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE alert_type = 'unauthorized'");
-        if ($result && $row = $result->fetch_assoc()) {
-            $stats['unauthorized'] = (int)$row['count'];
-        }
+        if ($result && $row = $result->fetch_assoc()) $stats['unauthorized'] = (int)$row['count'];
         
         $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE DATE(timestamp) = CURDATE()");
-        if ($result && $row = $result->fetch_assoc()) {
-            $stats['today'] = (int)$row['count'];
-        }
+        if ($result && $row = $result->fetch_assoc()) $stats['today'] = (int)$row['count'];
         
         sendResponse(true, 'Alert stats retrieved', ['stats' => $stats]);
         break;
@@ -969,7 +919,7 @@ switch ($action) {
                 u.full_name as user_name,
                 u.room_number
             FROM access_logs al
-            LEFT JOIN rfid_cards c ON al.card_uid = c.card_uid
+            LEFT JOIN rfid_cards c ON UPPER(al.card_uid) = UPPER(c.card_uid)
             LEFT JOIN users u ON c.user_id = u.user_id
             WHERE al.access_status = 'denied'
         ";
@@ -1001,8 +951,7 @@ switch ($action) {
     case 'resolve_all_alerts':
         $stmt = $conn->prepare("
             UPDATE alert_logs 
-            SET delivery_status = 'resolved',
-                resolved_at = NOW()
+            SET delivery_status = 'resolved', resolved_at = NOW()
             WHERE delivery_status = 'pending'
         ");
         
@@ -1041,7 +990,7 @@ switch ($action) {
     // REGISTER VISITOR
     // ============================================================
     case 'register_visitor':
-        $uid = isset($input['uid']) ? strtoupper(trim($input['uid'])) : '';
+        $uid = normalizeUID($input['uid'] ?? '');
         $visitor_name = isset($input['visitor_name']) ? trim($input['visitor_name']) : '';
         $resident_visited = isset($input['resident_visited']) ? (int)$input['resident_visited'] : 0;
         $purpose = isset($input['purpose']) ? trim($input['purpose']) : '';
@@ -1054,7 +1003,7 @@ switch ($action) {
         $conn->begin_transaction();
         
         try {
-            $check = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE card_uid = ?");
+            $check = $conn->prepare("SELECT card_uid FROM rfid_cards WHERE UPPER(card_uid) = ?");
             $check->bind_param("s", $uid);
             $check->execute();
             if ($check->get_result()->num_rows > 0) {
@@ -1065,14 +1014,8 @@ switch ($action) {
             
             $stmt = $conn->prepare("
                 INSERT INTO rfid_cards (
-                    card_uid, 
-                    card_type, 
-                    status, 
-                    visitor_name, 
-                    resident_visited, 
-                    purpose_of_visit,
-                    issued_date,
-                    expiry_date
+                    card_uid, card_type, status, visitor_name, resident_visited, 
+                    purpose_of_visit, issued_date, expiry_date
                 ) VALUES (?, 'visitor', 'active', ?, ?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL ? DAY))
             ");
             $stmt->bind_param("ssisi", $uid, $visitor_name, $resident_visited, $purpose, $validity_days);
@@ -1084,14 +1027,8 @@ switch ($action) {
             
             $stmt2 = $conn->prepare("
                 INSERT INTO visitor_logs (
-                    visitor_name,
-                    resident_visited,
-                    purpose_of_visit,
-                    temporary_card_uid,
-                    validity_start,
-                    validity_end,
-                    access_status,
-                    created_at
+                    visitor_name, resident_visited, purpose_of_visit, temporary_card_uid,
+                    validity_start, validity_end, access_status, created_at
                 ) VALUES (?, ?, ?, ?, CURDATE(), DATE_ADD(CURDATE(), INTERVAL ? DAY), 'pending', NOW())
             ");
             $stmt2->bind_param("sisis", $visitor_name, $resident_visited, $purpose, $uid, $validity_days);
@@ -1115,10 +1052,77 @@ switch ($action) {
         break;
     
     // ============================================================
+    // ✅ FORCE REFRESH - Para siguradong nakuha ng ESP32
+    // ============================================================
+    case 'force_refresh':
+        $cards = [];
+        
+        $result = $conn->query("
+            SELECT 
+                c.card_uid, 
+                c.user_id, 
+                c.card_type,
+                c.status,
+                c.visitor_name,
+                c.purpose_of_visit,
+                c.resident_visited,
+                u.full_name as user_name, 
+                u.room_number,
+                u.student_id,
+                ru.full_name as resident_visited_name
+            FROM rfid_cards c
+            LEFT JOIN users u ON c.user_id = u.user_id
+            LEFT JOIN users ru ON c.resident_visited = ru.user_id
+            WHERE c.status = 'active'
+            ORDER BY c.card_type, c.created_at DESC
+        ");
+        
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $displayName = '';
+                $roomNumber = $row['room_number'] ?? 'N/A';
+                $cardType = $row['card_type'] ?? 'resident';
+                
+                switch ($cardType) {
+                    case 'visitor':
+                        $displayName = !empty($row['visitor_name']) 
+                            ? $row['visitor_name'] 
+                            : ($row['user_name'] ?? 'Visitor');
+                        if (!empty($row['resident_visited_name'])) {
+                            $roomNumber = 'Visit: ' . $row['resident_visited_name'];
+                        }
+                        break;
+                    case 'staff':
+                        $displayName = $row['user_name'] ?? 'Staff';
+                        break;
+                    default:
+                        $displayName = $row['user_name'] ?? 'Resident';
+                        break;
+                }
+                
+                $cards[] = [
+                    'uid' => normalizeUID($row['card_uid']),
+                    'user_name' => $displayName,
+                    'room_number' => $roomNumber,
+                    'card_type' => $cardType,
+                    'status' => $row['status'] ?? 'active'
+                ];
+            }
+        }
+        
+        // ✅ Laging nagbabagong hash para siguradong mag-refresh ang ESP32
+        sendResponse(true, 'Force refresh data', [
+            'cards' => $cards,
+            'total' => count($cards),
+            'version_hash' => md5(time() . count($cards))
+        ]);
+        break;
+    
+    // ============================================================
     // DEFAULT
     // ============================================================
     default:
-        sendResponse(false, 'Invalid action. Available actions: get_cards, check_card_status, log_access, send_alert, get_alerts, resolve_alert, delete_alert, get_alert_stats, get_unauthorized, resolve_all_alerts, delete_old_alerts, register_visitor, get_notifications, mark_read, mark_all_read, get_alert_count');
+        sendResponse(false, 'Invalid action');
         break;
 }
 
