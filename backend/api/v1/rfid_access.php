@@ -18,6 +18,7 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Key');
 
 require_once '../../config/config.php';
 require_once '../../helpers/functions.php';
+require_once '../../v1/api/get_latest_scan.php';
 
 $conn = getDBConnection();
 
