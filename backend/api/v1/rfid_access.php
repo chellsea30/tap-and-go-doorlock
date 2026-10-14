@@ -5,7 +5,10 @@
  * WITH ACCESS CONTROL
  * WITH CARD STATUS VERIFICATION (DEACTIVATE/ACTIVATE SYNC)
  * ✅ WITH FORCED DENY FOR DEACTIVATED CARDS
- * ✅ FIXED: Uppercase UID, JOIN issues, at hash consistency
+ * ✅ FIXED: Uppercase UID matching (case-insensitive)
+ * ✅ FIXED: COALESCE for orphan cards (walang users match)
+ * ✅ FIXED: Consistent version_hash
+ * ✅ FIXED: Auto-resolve alerts kapag granted
  */
 
 header('Content-Type: application/json');
@@ -28,6 +31,9 @@ $valid_api_key = 'TAP_AND_GO_2024_SECURE_KEY';
 $input = json_decode(file_get_contents('php://input'), true);
 $action = isset($input['action']) ? $input['action'] : '';
 
+// ============================================================
+// ✅ HELPER: Send Response
+// ============================================================
 function sendResponse($success, $message, $data = [], $statusCode = 200) {
     http_response_code($statusCode);
     $response = ['success' => $success, 'message' => $message];
@@ -39,14 +45,14 @@ function sendResponse($success, $message, $data = [], $statusCode = 200) {
 }
 
 // ============================================================
-// ✅ NORMALIZE UID - Consistent uppercase, trim
+// ✅ HELPER: Normalize UID (UPPERCASE + trim)
 // ============================================================
 function normalizeUID($uid) {
     return strtoupper(trim($uid));
 }
 
 // ============================================================
-// CHECK IF TABLE EXISTS
+// ✅ HELPER: Check if table exists
 // ============================================================
 function tableExists($table) {
     global $conn;
@@ -55,7 +61,7 @@ function tableExists($table) {
 }
 
 // ============================================================
-// CREATE REAL-TIME ALERT NOTIFICATION
+// ✅ HELPER: Create Real-time Alert Notification
 // ============================================================
 function createAlertNotification($uid, $reason, $user_name, $card_type, $access_type = 'entry') {
     global $conn;
@@ -99,11 +105,15 @@ function createAlertNotification($uid, $reason, $user_name, $card_type, $access_
     return false;
 }
 
+// ============================================================
+// SWITCH: Handle Actions
+// ============================================================
 switch ($action) {
     
     // ============================================================
     // ✅ GET ALL AUTHORIZED CARDS - WITH VERSION HASH
-    // ✅ FIXED: Simple JOIN, uppercase UID, active only
+    // Only ACTIVE cards are returned.
+    // ✅ FIXED: COALESCE for orphan cards (walang users match)
     // ============================================================
     case 'get_cards':
         $cards = [];
@@ -117,11 +127,10 @@ switch ($action) {
                 c.visitor_name,
                 c.purpose_of_visit,
                 c.resident_visited,
-                c.room_number as card_room_number,
-                u.full_name as user_name, 
-                u.room_number as user_room_number,
-                u.student_id,
-                ru.full_name as resident_visited_name
+                COALESCE(u.full_name, 'Unknown User') as user_name,
+                COALESCE(u.room_number, 'N/A') as user_room_number,
+                COALESCE(u.student_id, 'N/A') as student_id,
+                COALESCE(ru.full_name, '') as resident_visited_name
             FROM rfid_cards c
             LEFT JOIN users u ON c.user_id = u.user_id
             LEFT JOIN users ru ON c.resident_visited = ru.user_id
@@ -133,10 +142,7 @@ switch ($action) {
             while ($row = $result->fetch_assoc()) {
                 $cardType = $row['card_type'] ?? 'resident';
                 $displayName = '';
-                $roomNumber = $row['user_room_number'] ?? $row['card_room_number'] ?? 'N/A';
-                
-                // ✅ SIGURADUHING NORMALIZED ANG UID
-                $normalizedUID = normalizeUID($row['card_uid']);
+                $roomNumber = $row['user_room_number'] ?? 'N/A';
                 
                 switch ($cardType) {
                     case 'visitor':
@@ -157,7 +163,7 @@ switch ($action) {
                 }
                 
                 $cards[] = [
-                    'uid' => $normalizedUID,  // ✅ NORMALIZED
+                    'uid' => normalizeUID($row['card_uid']),
                     'user_id' => $row['user_id'],
                     'user_name' => $displayName,
                     'room_number' => $roomNumber,
@@ -172,7 +178,7 @@ switch ($action) {
             }
         }
         
-        // ✅ VERSION HASH - simple at consistent
+        // ✅ Version hash - uppercase UIDs para consistent
         $versionResult = $conn->query("
             SELECT 
                 COUNT(*) as total,
@@ -196,7 +202,6 @@ switch ($action) {
     
     // ============================================================
     // ✅ CHECK SINGLE CARD STATUS - REAL-TIME VERIFICATION
-    // ✅ FIXED: Uppercase comparison
     // ============================================================
     case 'check_card_status':
         $uid = normalizeUID($input['uid'] ?? '');
@@ -211,8 +216,8 @@ switch ($action) {
                 c.status, 
                 c.card_type,
                 c.visitor_name,
-                u.full_name as user_name,
-                u.room_number
+                COALESCE(u.full_name, 'Unknown') as user_name,
+                COALESCE(u.room_number, 'N/A') as room_number
             FROM rfid_cards c
             LEFT JOIN users u ON c.user_id = u.user_id
             WHERE UPPER(c.card_uid) = ?
@@ -247,8 +252,8 @@ switch ($action) {
                 'uid' => $uid,
                 'status' => $row['status'],
                 'card_type' => $row['card_type'],
-                'user_name' => $row['user_name'] ?? 'Unknown',
-                'room_number' => $row['room_number'] ?? 'N/A',
+                'user_name' => $row['user_name'],
+                'room_number' => $row['room_number'],
                 'is_active' => $final_active,
                 'visitor_valid' => $visitor_valid,
                 'exists' => true
@@ -265,8 +270,8 @@ switch ($action) {
         break;
     
     // ============================================================
-    // ✅ LOG ACCESS ATTEMPT
-    // ✅ FIXED: Uppercase comparison at auto-resolve kapag granted
+    // ✅ LOG ACCESS ATTEMPT - WITH FORCED DENY FOR DEACTIVATED
+    // ✅ AUTO-RESOLVE alerts kapag granted
     // ============================================================
     case 'log_access':
         $uid = normalizeUID($input['uid'] ?? '');
@@ -293,7 +298,7 @@ switch ($action) {
         $forced_deny = false;
         
         // ------------------------------------------------------------
-        // STEP 1: Check rfid_cards table
+        // STEP 1: Check rfid_cards
         // ------------------------------------------------------------
         $stmt = $conn->prepare("
             SELECT 
@@ -303,11 +308,11 @@ switch ($action) {
                 c.visitor_name,
                 c.purpose_of_visit,
                 c.resident_visited,
-                u.full_name, 
-                u.room_number, 
-                u.student_id,
-                ru.full_name as resident_visited_name,
-                ru.room_number as resident_room
+                COALESCE(u.full_name, 'Unknown') as full_name,
+                COALESCE(u.room_number, 'N/A') as room_number,
+                COALESCE(u.student_id, 'N/A') as student_id,
+                COALESCE(ru.full_name, '') as resident_visited_name,
+                COALESCE(ru.room_number, 'N/A') as resident_room
             FROM rfid_cards c
             LEFT JOIN users u ON c.user_id = u.user_id
             LEFT JOIN users ru ON c.resident_visited = ru.user_id
@@ -389,7 +394,7 @@ switch ($action) {
                         break;
                 }
             } else {
-                // DEACTIVATED / EXPIRED / LOST card - FORCE DENY
+                // DEACTIVATED / EXPIRED / LOST - FORCE DENY
                 $user_name = 'Inactive Card (' . ucfirst($cardStatus) . ')';
                 $cardType = $row['card_type'] ?? 'unknown';
                 $isAuthorized = false;
@@ -409,7 +414,7 @@ switch ($action) {
         $stmt->close();
         
         // ------------------------------------------------------------
-        // STEP 2: If not found in rfid_cards, check visitor_logs
+        // STEP 2: If not found, check visitor_logs
         // ------------------------------------------------------------
         if (!$card_exists) {
             $stmt = $conn->prepare("
@@ -421,8 +426,8 @@ switch ($action) {
                     v.validity_end, 
                     v.temporary_card_uid,
                     v.access_status,
-                    u.full_name as resident_name, 
-                    u.room_number as resident_room
+                    COALESCE(u.full_name, 'Unknown') as resident_name, 
+                    COALESCE(u.room_number, 'N/A') as resident_room
                 FROM visitor_logs v
                 LEFT JOIN users u ON v.resident_visited = u.user_id
                 WHERE UPPER(v.temporary_card_uid) = ? 
@@ -507,7 +512,9 @@ switch ($action) {
         $stmt->bind_param("sssiss", $uid, $status, $type, $user_id, $alert_triggered, $power_source);
         
         if ($stmt->execute()) {
+            // ------------------------------------------------------------
             // CREATE ALERT FOR DENIED ACCESS
+            // ------------------------------------------------------------
             if (!$granted) {
                 if ($user_name == 'Unknown Card') {
                     $reason = 'Unknown card detected: ' . $uid;
@@ -538,6 +545,18 @@ switch ($action) {
                     createAlertNotification($uid, $reason, $displayName, $cardType, $type);
                 }
                 $stmt2->close();
+                
+                if (tableExists('security_logs')) {
+                    $stmt3 = $conn->prepare("
+                        INSERT INTO security_logs (
+                            event_type, card_uid, user_name, details, timestamp
+                        ) VALUES ('unauthorized_access', ?, ?, ?, NOW())
+                    ");
+                    $details = $reason . ' | Type: ' . $type;
+                    $stmt3->bind_param("sss", $uid, $displayName, $details);
+                    $stmt3->execute();
+                    $stmt3->close();
+                }
             }
             
             if ($cardType == 'visitor' && $granted) {
@@ -593,7 +612,7 @@ switch ($action) {
         $visitor_name = '';
         
         $stmt = $conn->prepare("
-            SELECT c.card_type, c.visitor_name, u.full_name 
+            SELECT c.card_type, c.visitor_name, COALESCE(u.full_name, 'Unknown') as full_name
             FROM rfid_cards c
             LEFT JOIN users u ON c.user_id = u.user_id
             WHERE UPPER(c.card_uid) = ?
@@ -1052,7 +1071,7 @@ switch ($action) {
         break;
     
     // ============================================================
-    // ✅ FORCE REFRESH - Para siguradong nakuha ng ESP32
+    // ✅ FORCE REFRESH - Siguraduhing updated ang ESP32
     // ============================================================
     case 'force_refresh':
         $cards = [];
@@ -1066,10 +1085,9 @@ switch ($action) {
                 c.visitor_name,
                 c.purpose_of_visit,
                 c.resident_visited,
-                u.full_name as user_name, 
-                u.room_number,
-                u.student_id,
-                ru.full_name as resident_visited_name
+                COALESCE(u.full_name, 'Unknown User') as user_name,
+                COALESCE(u.room_number, 'N/A') as room_number,
+                COALESCE(ru.full_name, '') as resident_visited_name
             FROM rfid_cards c
             LEFT JOIN users u ON c.user_id = u.user_id
             LEFT JOIN users ru ON c.resident_visited = ru.user_id
@@ -1114,7 +1132,7 @@ switch ($action) {
         sendResponse(true, 'Force refresh data', [
             'cards' => $cards,
             'total' => count($cards),
-            'version_hash' => md5(time() . count($cards))
+            'version_hash' => md5(time() . count($cards) . rand())
         ]);
         break;
     
@@ -1122,7 +1140,7 @@ switch ($action) {
     // DEFAULT
     // ============================================================
     default:
-        sendResponse(false, 'Invalid action');
+        sendResponse(false, 'Invalid action. Available actions: get_cards, check_card_status, log_access, send_alert, get_alerts, resolve_alert, delete_alert, get_alert_stats, get_unauthorized, resolve_all_alerts, delete_old_alerts, register_visitor, get_notifications, mark_read, mark_all_read, get_alert_count, force_refresh');
         break;
 }
 
