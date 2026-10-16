@@ -4,6 +4,7 @@
  * ISABELA STATE UNIVERSITY - LADIES DORMITORY
  * ✅ AUTO-UNLOCK kapag natapos na ang 10-minute ban
  * ✅ COMPACT LAYOUT - fit sa screen, walang extra space sa baba
+ * ✅ NEW: Student Portal Register button
  */
 
 session_start();
@@ -1258,6 +1259,29 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
             color: #0a1628 !important;
         }
 
+        /* ✅ BAGO: Student Portal Register Button (Purple) */
+        .btn-portal-register {
+            background: linear-gradient(135deg, #8b5cf6, #6d28d9) !important;
+            border: none !important;
+            color: white !important;
+            padding: 13px 22px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: block;
+            width: 100%;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .btn-portal-register:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+            color: white !important;
+        }
+
         .btn-cancel-confirm {
             background: #2a2a4a !important;
             border: none !important;
@@ -1285,19 +1309,13 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
         body:not(.modal-open) .modal-backdrop { display: none !important; }
         .modal:not(.show) { display: none !important; pointer-events: none !important; }
 
-        /* Custom scrollbar for login-card */
         .login-card::-webkit-scrollbar { width: 4px; }
         .login-card::-webkit-scrollbar-track { background: transparent; }
         .login-card::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
         .login-card::-webkit-scrollbar-thumb:hover { background: rgba(255, 215, 0, 0.3); }
 
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
         @media (max-width: 992px) {
-            html {
-                overflow: auto;
-            }
+            html { overflow: auto; }
             body {
                 height: auto;
                 min-height: 100vh;
@@ -1707,21 +1725,34 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
                         </p>
                         <p>
                             <i class="fas fa-user-plus me-1"></i>
-                            <strong>New Student:</strong> Fill up the registration form
+                            <strong>New Student (Self-Register):</strong> Fill up the registration form
+                        </p>
+                        <p>
+                            <i class="fas fa-id-card me-1"></i>
+                            <strong>Student Portal Register:</strong> Pre-register for RFID / Portal access
                         </p>
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <!-- ✅ BUTTON 1: Existing Account Login -->
                     <button type="button" class="btn-have-account" onclick="showStudentLogin()">
                         <i class="fas fa-sign-in-alt me-2"></i>
                         Yes, I have an account (Login)
                     </button>
 
+                    <!-- ✅ BUTTON 2: Self Registration -->
                     <a href="student-self-registration.php" class="btn-no-account">
                         <i class="fas fa-user-plus me-2"></i>
                         No, I want to register (Sign Up)
                     </a>
 
+                    <!-- ✅ BUTTON 3: BAGO — Student Portal Register -->
+                    <a href="student-portal-register.php" class="btn-portal-register">
+                        <i class="fas fa-id-card me-2"></i>
+                        Student Portal Register
+                    </a>
+
+                    <!-- ✅ BUTTON 4: Cancel -->
                     <button type="button" class="btn-cancel-confirm" data-bs-dismiss="modal">
                         <i class="fas fa-times me-1"></i> Cancel
                     </button>
