@@ -4,6 +4,7 @@
  * Location: backend/api/dashboard_data.php
  * Returns JSON data for auto-updating dashboard
  * ✅ FIXED: Presence tracking base sa GRANTED access logs only
+ * ✅ NEW: Inside/Outside residents grouped by room (for box-style UI)
  */
 
 session_start();
@@ -34,7 +35,9 @@ $data = [
     'timestamp' => date('Y-m-d H:i:s'),
     'stats' => [],
     'rooms' => [],
-    'outside_residents' => [],
+    'inside_residents_by_room' => [],   // ✅ NEW
+    'outside_residents_by_room' => [],  // ✅ NEW
+    'outside_residents' => [],          // legacy (flat list)
     'latest_alerts' => [],
     'latest_unauthorized' => null,
     'pending_alerts_count' => 0,
@@ -43,7 +46,9 @@ $data = [
     'latest_access_logs' => []
 ];
 
+// ============================================================
 // 1. TOTAL REGISTERED RESIDENTS
+// ============================================================
 $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM users 
@@ -53,15 +58,21 @@ $result = $conn->query("
 ");
 $data['stats']['total_residents'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
 
+// ============================================================
 // 2. TOTAL ACTIVE CARDS
+// ============================================================
 $result = $conn->query("SELECT COUNT(*) as count FROM rfid_cards WHERE status = 'active'");
 $data['stats']['active_cards'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
 
+// ============================================================
 // 3. TODAY'S ACCESS
+// ============================================================
 $result = $conn->query("SELECT COUNT(*) as count FROM access_logs WHERE DATE(timestamp) = CURDATE()");
 $data['stats']['today_access'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
 
+// ============================================================
 // 4. UNAUTHORIZED TODAY
+// ============================================================
 $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM access_logs 
@@ -72,12 +83,12 @@ $data['stats']['unauthorized_today'] = $result ? (int)$result->fetch_assoc()['co
 
 // ============================================================
 // 5 & 6. RESIDENTS INSIDE/OUTSIDE
-// ✅ FIXED: Base sa latest GRANTED access log ng resident
+// ✅ Base sa latest GRANTED access log ng resident
 // ✅ HINDI naka-depende sa card status
-// ✅ Kapag ni-deactivate ang card, nananatili ang resident sa huling state
 // ============================================================
 $insideCount = 0;
 $outsideCount = 0;
+$outsideResidents = [];
 
 $result = $conn->query("
     SELECT 
@@ -100,7 +111,6 @@ $result = $conn->query("
     AND u.room_number != ''
 ");
 
-$outsideResidents = [];
 if ($result) {
     while ($row = $result->fetch_assoc()) {
         // ✅ Default = OUTSIDE kung walang granted access log
@@ -123,7 +133,9 @@ $data['stats']['residents_inside'] = $insideCount;
 $data['stats']['residents_outside'] = $outsideCount;
 $data['outside_residents'] = $outsideResidents;
 
+// ============================================================
 // 7. VISITORS
+// ============================================================
 $result = $conn->query("SELECT COUNT(*) as count FROM visitor_logs WHERE DATE(entry_timestamp) = CURDATE()");
 $data['stats']['total_visitors'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
 
@@ -135,7 +147,9 @@ $result = $conn->query("
 ");
 $data['stats']['visitors_inside'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
 
+// ============================================================
 // 8. PENDING ALERTS
+// ============================================================
 $result = $conn->query("SELECT COUNT(*) as count FROM alert_logs WHERE delivery_status = 'pending'");
 $pendingCount = $result ? (int)$result->fetch_assoc()['count'] : 0;
 $data['stats']['pending_alerts'] = $pendingCount;
@@ -153,8 +167,7 @@ $data['critical_alerts_count'] = $criticalCount;
 
 // ============================================================
 // 9. ROOM OCCUPANCY (13 Rooms)
-// ✅ FIXED: Base sa latest GRANTED access log ng resident
-// ✅ HINDI naka-depende sa card status
+// ✅ Base sa latest GRANTED access log ng resident
 // ============================================================
 for ($i = 1; $i <= $totalRooms; $i++) {
     $roomInfo = [
@@ -196,7 +209,107 @@ for ($i = 1; $i <= $totalRooms; $i++) {
     $data['rooms'][] = $roomInfo;
 }
 
+// ============================================================
+// ✅ NEW: INSIDE RESIDENTS — GROUPED BY ROOM (GREEN boxes)
+// ============================================================
+$insideResidentsByRoom = [];
+$result = $conn->query("
+    SELECT 
+        u.user_id, u.full_name, u.student_id, u.room_number, u.profile_photo,
+        rp.course, rp.year_level,
+        al.timestamp as last_entry, al.card_uid
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    LEFT JOIN access_logs al ON u.user_id = al.user_id 
+        AND al.timestamp = (
+            SELECT MAX(timestamp) 
+            FROM access_logs al2 
+            WHERE al2.user_id = u.user_id
+            AND al2.access_status = 'granted'
+        )
+    WHERE u.status = 'active'
+    AND u.room_number IS NOT NULL
+    AND u.room_number != ''
+    AND al.access_type = 'entry'
+    ORDER BY u.room_number ASC, al.timestamp DESC
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $room = (int)$row['room_number'];
+        if (!isset($insideResidentsByRoom[$room])) {
+            $insideResidentsByRoom[$room] = [
+                'room_number' => $room,
+                'residents' => []
+            ];
+        }
+        $insideResidentsByRoom[$room]['residents'][] = [
+            'user_id'      => $row['user_id'],
+            'full_name'    => $row['full_name'],
+            'student_id'   => $row['student_id'] ?? 'N/A',
+            'room_number'  => $row['room_number'],
+            'profile_photo'=> $row['profile_photo'] ?? null,
+            'course'       => $row['course'] ?? null,
+            'year_level'   => $row['year_level'] ?? null,
+            'last_entry'   => $row['last_entry'],
+            'card_uid'     => $row['card_uid'] ?? null
+        ];
+    }
+}
+ksort($insideResidentsByRoom);
+$data['inside_residents_by_room'] = array_values($insideResidentsByRoom);
+
+// ============================================================
+// ✅ NEW: OUTSIDE RESIDENTS — GROUPED BY ROOM (RED boxes)
+// ============================================================
+$outsideResidentsByRoom = [];
+$result = $conn->query("
+    SELECT 
+        u.user_id, u.full_name, u.student_id, u.room_number, u.profile_photo,
+        rp.course, rp.year_level,
+        al.timestamp as last_exit, al.card_uid
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    LEFT JOIN access_logs al ON u.user_id = al.user_id 
+        AND al.timestamp = (
+            SELECT MAX(timestamp) 
+            FROM access_logs al2 
+            WHERE al2.user_id = u.user_id
+            AND al2.access_status = 'granted'
+        )
+    WHERE u.status = 'active'
+    AND u.room_number IS NOT NULL
+    AND u.room_number != ''
+    AND al.access_type = 'exit'
+    ORDER BY u.room_number ASC, al.timestamp DESC
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $room = (int)$row['room_number'];
+        if (!isset($outsideResidentsByRoom[$room])) {
+            $outsideResidentsByRoom[$room] = [
+                'room_number' => $room,
+                'residents' => []
+            ];
+        }
+        $outsideResidentsByRoom[$room]['residents'][] = [
+            'user_id'      => $row['user_id'],
+            'full_name'    => $row['full_name'],
+            'student_id'   => $row['student_id'] ?? 'N/A',
+            'room_number'  => $row['room_number'],
+            'profile_photo'=> $row['profile_photo'] ?? null,
+            'course'       => $row['course'] ?? null,
+            'year_level'   => $row['year_level'] ?? null,
+            'last_exit'    => $row['last_exit'],
+            'card_uid'     => $row['card_uid'] ?? null
+        ];
+    }
+}
+ksort($outsideResidentsByRoom);
+$data['outside_residents_by_room'] = array_values($outsideResidentsByRoom);
+
+// ============================================================
 // 10. LATEST ALERTS
+// ============================================================
 $result = $conn->query("
     SELECT 
         alog.*,
@@ -225,7 +338,9 @@ if ($result) {
     }
 }
 
+// ============================================================
 // 11. LATEST UNAUTHORIZED
+// ============================================================
 $result = $conn->query("
     SELECT 
         alog.*,
@@ -250,7 +365,9 @@ if ($result && $row = $result->fetch_assoc()) {
     $data['latest_unauthorized'] = $row;
 }
 
+// ============================================================
 // 12. NEW ACCESS COUNT (last 10 seconds)
+// ============================================================
 $result = $conn->query("
     SELECT COUNT(*) as count 
     FROM access_logs 
@@ -258,7 +375,9 @@ $result = $conn->query("
 ");
 $data['new_access_count'] = $result ? (int)$result->fetch_assoc()['count'] : 0;
 
-// 13. LATEST ACCESS LOGS (for live indicator)
+// ============================================================
+// 13. LATEST ACCESS LOGS (for live indicator / toast)
+// ============================================================
 $result = $conn->query("
     SELECT 
         al.*,
