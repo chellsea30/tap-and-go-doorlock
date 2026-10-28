@@ -84,7 +84,6 @@ if ($result && $row = $result->fetch_assoc()) {
 
 // ============================================================
 // 5 & 6. Residents Inside & Outside
-// ✅ Base sa LATEST ACCESS LOG ng resident
 // ============================================================
 $insideCount = 0;
 $outsideCount = 0;
@@ -256,7 +255,6 @@ if ($result) {
 
 // ============================================================
 // ROOM OCCUPANCY (1-13)
-// ✅ Base sa latest GRANTED access log ng resident
 // ============================================================
 $roomData = [];
 for ($i = 1; $i <= $totalRooms; $i++) {
@@ -297,7 +295,7 @@ for ($i = 1; $i <= $totalRooms; $i++) {
 }
 
 // ============================================================
-// ✅ NEW: RESIDENTS INSIDE — GROUPED BY ROOM (GREEN BOXES)
+// ✅ INSIDE RESIDENTS BY ROOM (GREEN BOXES)
 // ============================================================
 $insideResidentsByRoom = [];
 $result = $conn->query("
@@ -335,7 +333,7 @@ if ($result) {
 ksort($insideResidentsByRoom);
 
 // ============================================================
-// ✅ NEW: RESIDENTS OUTSIDE — GROUPED BY ROOM (RED BOXES)
+// ✅ OUTSIDE RESIDENTS BY ROOM (RED BOXES)
 // ============================================================
 $outsideResidentsByRoom = [];
 $result = $conn->query("
