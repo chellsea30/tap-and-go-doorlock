@@ -6,7 +6,7 @@
  * 13 ROOMS × 8 SLOTS EACH
  * PURE DARK MODE
  * ✅ FIXED: Presence tracking base sa latest access log (hindi sa card status)
- * ✅ NEW: Residents Inside (GREEN box per room) & Outside (RED box per room)
+ * ✅ NEW: Residents Inside (GREEN) & Outside (RED) as Box Style per Room
  */
 
 session_start();
@@ -295,7 +295,7 @@ for ($i = 1; $i <= $totalRooms; $i++) {
 }
 
 // ============================================================
-// ✅ INSIDE RESIDENTS BY ROOM (GREEN BOXES)
+// ✅ INSIDE RESIDENTS — GROUPED BY ROOM (GREEN BOXES)
 // ============================================================
 $insideResidentsByRoom = [];
 $result = $conn->query("
@@ -333,7 +333,7 @@ if ($result) {
 ksort($insideResidentsByRoom);
 
 // ============================================================
-// ✅ OUTSIDE RESIDENTS BY ROOM (RED BOXES)
+// ✅ OUTSIDE RESIDENTS — GROUPED BY ROOM (RED BOXES)
 // ============================================================
 $outsideResidentsByRoom = [];
 $result = $conn->query("
@@ -1532,7 +1532,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         }
 
         // ============================================================
-        // RENDER ROOMS (occupancy grid)
+        // RENDER ROOMS
         // ============================================================
         function renderRooms(rooms) {
             const container = document.getElementById('roomsContainer');
