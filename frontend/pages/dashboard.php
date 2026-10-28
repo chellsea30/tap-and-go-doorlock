@@ -6,6 +6,7 @@
  * 13 ROOMS × 8 SLOTS EACH
  * PURE DARK MODE
  * ✅ FIXED: Presence tracking base sa latest access log (hindi sa card status)
+ * ✅ NEW: Residents Inside (GREEN box per room) & Outside (RED box per room)
  */
 
 session_start();
@@ -83,9 +84,7 @@ if ($result && $row = $result->fetch_assoc()) {
 
 // ============================================================
 // 5 & 6. Residents Inside & Outside
-// ✅ FIXED: Base sa LATEST ACCESS LOG ng resident
-// ✅ HINDI naka-depende sa card status
-// ✅ Kapag ni-deactivate ang card, nananatili ang resident sa huling state niya
+// ✅ Base sa LATEST ACCESS LOG ng resident
 // ============================================================
 $insideCount = 0;
 $outsideCount = 0;
@@ -113,7 +112,6 @@ $result = $conn->query("
 
 if ($result) {
     while ($row = $result->fetch_assoc()) {
-        // ✅ Default = OUTSIDE kung walang access log
         if ($row['last_access_type'] === 'entry') {
             $insideCount++;
         } else {
@@ -259,7 +257,6 @@ if ($result) {
 // ============================================================
 // ROOM OCCUPANCY (1-13)
 // ✅ Base sa latest GRANTED access log ng resident
-// ✅ HINDI naka-depende sa card status
 // ============================================================
 $roomData = [];
 for ($i = 1; $i <= $totalRooms; $i++) {
@@ -300,21 +297,52 @@ for ($i = 1; $i <= $totalRooms; $i++) {
 }
 
 // ============================================================
-// RESIDENTS OUTSIDE (with Room Number)
-// ✅ Base sa latest GRANTED access log na 'exit'
+// ✅ NEW: RESIDENTS INSIDE — GROUPED BY ROOM (GREEN BOXES)
 // ============================================================
-$outsideResidents = [];
+$insideResidentsByRoom = [];
 $result = $conn->query("
     SELECT 
-        u.user_id,
-        u.full_name,
-        u.student_id,
-        u.room_number,
-        u.profile_photo,
-        rp.course,
-        rp.year_level,
-        al.timestamp as last_exit,
-        al.card_uid
+        u.user_id, u.full_name, u.student_id, u.room_number, u.profile_photo,
+        rp.course, rp.year_level,
+        al.timestamp as last_entry, al.card_uid
+    FROM users u
+    LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
+    LEFT JOIN access_logs al ON u.user_id = al.user_id 
+        AND al.timestamp = (
+            SELECT MAX(timestamp) 
+            FROM access_logs al2 
+            WHERE al2.user_id = u.user_id
+            AND al2.access_status = 'granted'
+        )
+    WHERE u.status = 'active'
+    AND u.room_number IS NOT NULL
+    AND u.room_number != ''
+    AND al.access_type = 'entry'
+    ORDER BY u.room_number ASC, al.timestamp DESC
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $room = (int)$row['room_number'];
+        if (!isset($insideResidentsByRoom[$room])) {
+            $insideResidentsByRoom[$room] = [
+                'room_number' => $room,
+                'residents' => []
+            ];
+        }
+        $insideResidentsByRoom[$room]['residents'][] = $row;
+    }
+}
+ksort($insideResidentsByRoom);
+
+// ============================================================
+// ✅ NEW: RESIDENTS OUTSIDE — GROUPED BY ROOM (RED BOXES)
+// ============================================================
+$outsideResidentsByRoom = [];
+$result = $conn->query("
+    SELECT 
+        u.user_id, u.full_name, u.student_id, u.room_number, u.profile_photo,
+        rp.course, rp.year_level,
+        al.timestamp as last_exit, al.card_uid
     FROM users u
     LEFT JOIN resident_profiles rp ON u.user_id = rp.user_id
     LEFT JOIN access_logs al ON u.user_id = al.user_id 
@@ -328,13 +356,27 @@ $result = $conn->query("
     AND u.room_number IS NOT NULL
     AND u.room_number != ''
     AND al.access_type = 'exit'
-    ORDER BY al.timestamp DESC
+    ORDER BY u.room_number ASC, al.timestamp DESC
 ");
 if ($result) {
     while ($row = $result->fetch_assoc()) {
-        $outsideResidents[] = $row;
+        $room = (int)$row['room_number'];
+        if (!isset($outsideResidentsByRoom[$room])) {
+            $outsideResidentsByRoom[$room] = [
+                'room_number' => $room,
+                'residents' => []
+            ];
+        }
+        $outsideResidentsByRoom[$room]['residents'][] = $row;
     }
 }
+ksort($outsideResidentsByRoom);
+
+// Totals
+$totalInsideCount = 0;
+foreach ($insideResidentsByRoom as $r) { $totalInsideCount += count($r['residents']); }
+$totalOutsideCount = 0;
+foreach ($outsideResidentsByRoom as $r) { $totalOutsideCount += count($r['residents']); }
 
 // ============================================================
 // ANNOUNCEMENTS
@@ -693,6 +735,78 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         .border-bottom { border-bottom-color: #1a2a4a !important; }
         .border-top { border-top-color: #1a2a4a !important; }
         hr { border-color: #1a2a4a !important; }
+
+        /* ============================================================
+           RESIDENT ROOM BOXES (Inside = GREEN, Outside = RED)
+           ============================================================ */
+        .resident-room-box {
+            background: #111827 !important;
+            border: 1px solid #1a2a4a !important;
+            border-radius: 14px;
+            padding: 14px 16px;
+            height: 100%;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .resident-room-box:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        }
+        .resident-room-box.inside-box { border-left: 4px solid #34d399; }
+        .resident-room-box.inside-box:hover { box-shadow: 0 6px 20px rgba(52, 211, 153, 0.15); }
+        .resident-room-box.outside-box { border-left: 4px solid #f87171; }
+        .resident-room-box.outside-box:hover { box-shadow: 0 6px 20px rgba(248, 113, 113, 0.15); }
+
+        .resident-room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .resident-room-title {
+            font-weight: 700;
+            font-size: 15px;
+            color: #93c5fd !important;
+        }
+        .resident-room-count {
+            font-size: 13px;
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 20px;
+            min-width: 28px;
+            text-align: center;
+        }
+        .resident-room-count.green { background: #065f46 !important; color: #34d399 !important; }
+        .resident-room-count.red { background: #7a2a2a !important; color: #f87171 !important; }
+
+        .resident-room-divider {
+            border-color: #1a2a4a !important;
+            margin: 8px 0;
+            opacity: 1;
+        }
+
+        .resident-room-item {
+            padding: 6px 0;
+            border-bottom: 1px solid #1a2a4a;
+        }
+        .resident-room-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .resident-room-item:first-child { padding-top: 0; }
+
+        .resident-room-name {
+            color: #e0e0e0 !important;
+            font-weight: 500;
+            font-size: 13px;
+            line-height: 1.3;
+        }
+        .resident-room-meta {
+            color: #606070 !important;
+            font-size: 10px;
+        }
+        .resident-room-time {
+            color: #808090 !important;
+            font-size: 10px;
+            white-space: nowrap;
+            margin-left: 6px;
+        }
         
         @media (max-width: 768px) {
             body { padding-top: 60px !important; }
@@ -1055,98 +1169,123 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                     </div>
                 </div>
 
-                <!-- RESIDENTS OUTSIDE (WITH ROOM NUMBER) -->
+                <!-- ✅ RESIDENTS INSIDE — BOX STYLE PER ROOM (GREEN) -->
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="card" id="insideResidentsCard">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5>
+                                    <i class="fas fa-door-open me-2" style="color: #34d399;"></i>
+                                    Residents Inside
+                                    <span class="badge bg-success ms-2" id="insideCountBadge"><?php echo $totalInsideCount; ?></span>
+                                </h5>
+                                <span class="text-muted small">
+                                    <i class="fas fa-sync-alt me-1"></i> Auto-updates
+                                </span>
+                            </div>
+                            <div class="card-body" id="insideResidentsBody">
+                                <?php if (empty($insideResidentsByRoom)): ?>
+                                    <div class="text-center text-muted py-4">
+                                        <i class="fas fa-info-circle fa-2x d-block mb-2 text-warning"></i>
+                                        <p class="mb-0">No residents are currently inside their rooms.</p>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="row g-3">
+                                        <?php foreach ($insideResidentsByRoom as $room): ?>
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="resident-room-box inside-box">
+                                                <div class="resident-room-header">
+                                                    <span class="resident-room-title">
+                                                        <i class="fas fa-door-open me-2"></i> Room <?php echo $room['room_number']; ?>
+                                                    </span>
+                                                    <span class="resident-room-count green"><?php echo count($room['residents']); ?></span>
+                                                </div>
+                                                <hr class="resident-room-divider">
+                                                <?php foreach ($room['residents'] as $resident): 
+                                                    $parts = explode(' ', $resident['full_name']);
+                                                    $initials = '';
+                                                    foreach ($parts as $p) { if (!empty($p)) $initials .= strtoupper($p[0]); }
+                                                    $initials = substr($initials, 0, 2) ?: '?';
+                                                    $entryTime = $resident['last_entry'] ? date('h:i A', strtotime($resident['last_entry'])) : 'N/A';
+                                                ?>
+                                                <div class="resident-room-item">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <div class="profile-img-placeholder" style="background: #065f46 !important;"><?php echo $initials; ?></div>
+                                                        <div class="flex-grow-1">
+                                                            <div class="resident-room-name"><?php echo htmlspecialchars($resident['full_name']); ?></div>
+                                                            <div class="resident-room-meta"><?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?></div>
+                                                        </div>
+                                                        <div class="resident-room-time">
+                                                            <i class="far fa-clock me-1 text-success"></i><?php echo $entryTime; ?>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ✅ RESIDENTS OUTSIDE — BOX STYLE PER ROOM (RED) -->
                 <div class="row g-3 mb-4">
                     <div class="col-12">
                         <div class="card" id="outsideResidentsCard">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h5>
                                     <i class="fas fa-door-closed me-2" style="color: #f87171;"></i>
-                                    Residents Outside 
-                                    <span class="badge bg-danger ms-2" id="outsideCountBadge"><?php echo count($outsideResidents); ?></span>
+                                    Residents Outside
+                                    <span class="badge bg-danger ms-2" id="outsideCountBadge"><?php echo $totalOutsideCount; ?></span>
                                 </h5>
                                 <span class="text-muted small">
-                                    <i class="fas fa-sync-alt me-1"></i>
-                                    Auto-updates
+                                    <i class="fas fa-sync-alt me-1"></i> Auto-updates
                                 </span>
                             </div>
                             <div class="card-body" id="outsideResidentsBody">
-                                <?php if (empty($outsideResidents)): ?>
+                                <?php if (empty($outsideResidentsByRoom)): ?>
                                     <div class="text-center text-muted py-4">
                                         <i class="fas fa-check-circle fa-2x d-block mb-2 text-success"></i>
                                         <p class="mb-0">All residents are currently inside their rooms.</p>
-                                        <small class="text-muted">No residents have exited yet today.</small>
                                     </div>
                                 <?php else: ?>
-                                    <div class="table-responsive">
-                                        <table class="table table-dark table-hover">
-                                            <thead>
-                                                <tr>
-                                                    <th>#</th>
-                                                    <th>Resident</th>
-                                                    <th>Room</th>
-                                                    <th>Course / Year</th>
-                                                    <th>Last Exit</th>
-                                                    <th>Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <?php $counter = 1; foreach ($outsideResidents as $resident): ?>
-                                                <tr>
-                                                    <td style="color: #808090; font-size: 13px;"><?php echo $counter++; ?></td>
-                                                    <td>
-                                                        <div class="d-flex align-items-center gap-2">
-                                                            <?php 
-                                                            $parts = explode(' ', $resident['full_name']);
-                                                            $initials = '';
-                                                            foreach ($parts as $p) {
-                                                                if (!empty($p)) $initials .= strtoupper($p[0]);
-                                                            }
-                                                            $initials = substr($initials, 0, 2) ?: '?';
-                                                            ?>
-                                                            <div class="profile-img-placeholder" style="background: #7a2a2a !important;">
-                                                                <?php echo $initials; ?>
-                                                            </div>
-                                                            <div>
-                                                                <div style="color: #e0e0e0; font-weight: 500; font-size: 14px;">
-                                                                    <?php echo htmlspecialchars($resident['full_name']); ?>
-                                                                </div>
-                                                                <div style="color: #606070; font-size: 11px;">
-                                                                    <?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?>
-                                                                </div>
-                                                            </div>
+                                    <div class="row g-3">
+                                        <?php foreach ($outsideResidentsByRoom as $room): ?>
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="resident-room-box outside-box">
+                                                <div class="resident-room-header">
+                                                    <span class="resident-room-title">
+                                                        <i class="fas fa-door-closed me-2"></i> Room <?php echo $room['room_number']; ?>
+                                                    </span>
+                                                    <span class="resident-room-count red"><?php echo count($room['residents']); ?></span>
+                                                </div>
+                                                <hr class="resident-room-divider">
+                                                <?php foreach ($room['residents'] as $resident): 
+                                                    $parts = explode(' ', $resident['full_name']);
+                                                    $initials = '';
+                                                    foreach ($parts as $p) { if (!empty($p)) $initials .= strtoupper($p[0]); }
+                                                    $initials = substr($initials, 0, 2) ?: '?';
+                                                    $exitTime = $resident['last_exit'] ? date('M d, h:i A', strtotime($resident['last_exit'])) : 'N/A';
+                                                ?>
+                                                <div class="resident-room-item">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <div class="profile-img-placeholder" style="background: #7a2a2a !important;"><?php echo $initials; ?></div>
+                                                        <div class="flex-grow-1">
+                                                            <div class="resident-room-name"><?php echo htmlspecialchars($resident['full_name']); ?></div>
+                                                            <div class="resident-room-meta"><?php echo htmlspecialchars($resident['student_id'] ?? 'N/A'); ?></div>
                                                         </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="badge badge-room">
-                                                            <i class="fas fa-door-open me-1"></i>
-                                                            Room <?php echo htmlspecialchars($resident['room_number']); ?>
-                                                        </span>
-                                                    </td>
-                                                    <td style="color: #b0b0c0; font-size: 13px;">
-                                                        <?php echo htmlspecialchars($resident['course'] ?? 'N/A'); ?>
-                                                        <span class="text-muted small">
-                                                            (<?php echo htmlspecialchars($resident['year_level'] ?? 'N/A'); ?>)
-                                                        </span>
-                                                    </td>
-                                                    <td style="color: #b0b0c0; font-size: 13px;">
-                                                        <i class="far fa-clock me-1 text-warning"></i>
-                                                        <?php echo $resident['last_exit'] ? date('M d, h:i A', strtotime($resident['last_exit'])) : 'N/A'; ?>
-                                                    </td>
-                                                    <td>
-                                                        <span class="badge badge-denied">
-                                                            <i class="fas fa-door-closed me-1"></i>
-                                                            Outside
-                                                        </span>
-                                                    </td>
-                                                </tr>
+                                                        <div class="resident-room-time">
+                                                            <i class="far fa-clock me-1 text-warning"></i><?php echo $exitTime; ?>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                                 <?php endforeach; ?>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <div class="text-muted small mt-2">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        Showing <span id="outsideTableCount"><?php echo count($outsideResidents); ?></span> resident(s) currently outside
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
                                     </div>
                                 <?php endif; ?>
                             </div>
@@ -1333,9 +1472,9 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         let isFirstLoad = true;
         let updateInterval = null;
         let currentRoomsSignature = '';
+        let currentInsideSignature = '';
         let currentOutsideSignature = '';
 
-        // ✅ API PATH - backend/api/dashboard_data.php
         const API_URL = '../../backend/api/dashboard_data.php';
 
         // ============================================================
@@ -1395,7 +1534,7 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         }
 
         // ============================================================
-        // RENDER ROOMS
+        // RENDER ROOMS (occupancy grid)
         // ============================================================
         function renderRooms(rooms) {
             const container = document.getElementById('roomsContainer');
@@ -1475,101 +1614,121 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
         }
 
         // ============================================================
-        // RENDER OUTSIDE RESIDENTS
+        // HELPER: RENDER RESIDENT ROOM BOXES (shared inside/outside)
         // ============================================================
-        function renderOutsideResidents(residents) {
-            const container = document.getElementById('outsideResidentsBody');
-            if (!container) return;
-            
-            const signature = JSON.stringify(residents.map(r => ({ u: r.user_id, t: r.last_exit })));
-            if (signature === currentOutsideSignature) return;
-            currentOutsideSignature = signature;
-            
-            const countBadge = document.getElementById('outsideCountBadge');
-            if (countBadge) countBadge.textContent = residents.length;
-            
-            const tableCount = document.getElementById('outsideTableCount');
-            if (tableCount) tableCount.textContent = residents.length;
-            
-            if (residents.length === 0) {
-                container.innerHTML = `
+        function renderResidentRoomBoxes(roomsByRoom, theme) {
+            const isInside = theme === 'inside';
+            const iconClass = isInside ? 'fa-door-open' : 'fa-door-closed';
+            const countClass = isInside ? 'green' : 'red';
+            const avatarBg = isInside ? '#065f46' : '#7a2a2a';
+            const timeColor = isInside ? 'text-success' : 'text-warning';
+            const emptyMsg = isInside 
+                ? 'No residents are currently inside their rooms.'
+                : 'All residents are currently inside their rooms.';
+            const emptyIcon = isInside ? 'fa-info-circle text-warning' : 'fa-check-circle text-success';
+
+            if (!roomsByRoom || roomsByRoom.length === 0) {
+                return `
                     <div class="text-center text-muted py-4">
-                        <i class="fas fa-check-circle fa-2x d-block mb-2 text-success"></i>
-                        <p class="mb-0">All residents are currently inside their rooms.</p>
-                        <small class="text-muted">No residents have exited yet today.</small>
+                        <i class="fas ${emptyIcon} fa-2x d-block mb-2"></i>
+                        <p class="mb-0">${emptyMsg}</p>
                     </div>
                 `;
-                return;
             }
-            
-            let html = `
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Resident</th>
-                                <th>Room</th>
-                                <th>Last Exit</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            residents.forEach((r, index) => {
-                const parts = (r.full_name || '').split(' ');
-                let initials = '';
-                parts.forEach(p => { if (p) initials += p[0].toUpperCase(); });
-                initials = initials.substring(0, 2) || '?';
-                
-                const exitTime = r.last_exit ? new Date(r.last_exit).toLocaleString('en-US', {
-                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
-                }) : 'N/A';
-                
+
+            let html = '<div class="row g-3">';
+            roomsByRoom.forEach(room => {
+                const residents = room.residents || [];
+                if (residents.length === 0) return;
+
                 html += `
-                    <tr>
-                        <td style="color: #808090; font-size: 13px;">${index + 1}</td>
-                        <td>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="resident-room-box ${isInside ? 'inside-box' : 'outside-box'}">
+                            <div class="resident-room-header">
+                                <span class="resident-room-title">
+                                    <i class="fas ${iconClass} me-2"></i> Room ${room.room_number}
+                                </span>
+                                <span class="resident-room-count ${countClass}">${residents.length}</span>
+                            </div>
+                            <hr class="resident-room-divider">
+                `;
+
+                residents.forEach(r => {
+                    const parts = (r.full_name || '').split(' ');
+                    let initials = '';
+                    parts.forEach(p => { if (p) initials += p[0].toUpperCase(); });
+                    initials = initials.substring(0, 2) || '?';
+
+                    const ts = isInside ? r.last_entry : r.last_exit;
+                    const timeStr = ts ? new Date(ts).toLocaleString('en-US', {
+                        month: 'short', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit', hour12: true
+                    }) : 'N/A';
+
+                    html += `
+                        <div class="resident-room-item">
                             <div class="d-flex align-items-center gap-2">
-                                <div class="profile-img-placeholder" style="background: #7a2a2a !important;">${initials}</div>
-                                <div>
-                                    <div style="color: #e0e0e0; font-weight: 500; font-size: 14px;">${escapeHtml(r.full_name)}</div>
-                                    <div style="color: #606070; font-size: 11px;">${escapeHtml(r.student_id)}</div>
+                                <div class="profile-img-placeholder" style="background: ${avatarBg} !important;">${initials}</div>
+                                <div class="flex-grow-1">
+                                    <div class="resident-room-name">${escapeHtml(r.full_name)}</div>
+                                    <div class="resident-room-meta">${escapeHtml(r.student_id || 'N/A')}</div>
+                                </div>
+                                <div class="resident-room-time">
+                                    <i class="far fa-clock me-1 ${timeColor}"></i>${timeStr}
                                 </div>
                             </div>
-                        </td>
-                        <td>
-                            <span class="badge badge-room">
-                                <i class="fas fa-door-open me-1"></i>
-                                Room ${escapeHtml(r.room_number)}
-                            </span>
-                        </td>
-                        <td style="color: #b0b0c0; font-size: 13px;">
-                            <i class="far fa-clock me-1 text-warning"></i>
-                            ${exitTime}
-                        </td>
-                        <td>
-                            <span class="badge badge-denied">
-                                <i class="fas fa-door-closed me-1"></i>
-                                Outside
-                            </span>
-                        </td>
-                    </tr>
-                `;
+                        </div>
+                    `;
+                });
+
+                html += `</div></div>`;
             });
-            
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-                <div class="text-muted small mt-2">
-                    <i class="fas fa-info-circle me-1"></i>
-                    Showing ${residents.length} resident(s) currently outside
-                </div>
-            `;
-            
-            container.innerHTML = html;
+            html += '</div>';
+            return html;
+        }
+
+        // ============================================================
+        // RENDER INSIDE RESIDENTS
+        // ============================================================
+        function renderInsideResidents(roomsByRoom) {
+            const container = document.getElementById('insideResidentsBody');
+            if (!container) return;
+
+            const signature = JSON.stringify((roomsByRoom || []).map(r => ({
+                n: r.room_number,
+                u: (r.residents || []).map(x => x.user_id)
+            })));
+            if (signature === currentInsideSignature) return;
+            currentInsideSignature = signature;
+
+            let total = 0;
+            (roomsByRoom || []).forEach(r => total += (r.residents || []).length);
+            const badge = document.getElementById('insideCountBadge');
+            if (badge) badge.textContent = total;
+
+            container.innerHTML = renderResidentRoomBoxes(roomsByRoom, 'inside');
+        }
+
+        // ============================================================
+        // RENDER OUTSIDE RESIDENTS
+        // ============================================================
+        function renderOutsideResidents(roomsByRoom) {
+            const container = document.getElementById('outsideResidentsBody');
+            if (!container) return;
+
+            const signature = JSON.stringify((roomsByRoom || []).map(r => ({
+                n: r.room_number,
+                u: (r.residents || []).map(x => x.user_id)
+            })));
+            if (signature === currentOutsideSignature) return;
+            currentOutsideSignature = signature;
+
+            let total = 0;
+            (roomsByRoom || []).forEach(r => total += (r.residents || []).length);
+            const badge = document.getElementById('outsideCountBadge');
+            if (badge) badge.textContent = total;
+
+            container.innerHTML = renderResidentRoomBoxes(roomsByRoom, 'outside');
         }
 
         // ============================================================
@@ -1637,8 +1796,11 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                     // ---- UPDATE ROOMS ----
                     renderRooms(data.rooms);
                     
+                    // ---- UPDATE INSIDE RESIDENTS ----
+                    renderInsideResidents(data.inside_residents_by_room || []);
+                    
                     // ---- UPDATE OUTSIDE RESIDENTS ----
-                    renderOutsideResidents(data.outside_residents);
+                    renderOutsideResidents(data.outside_residents_by_room || []);
                     
                     // ---- UPDATE ALERT BADGE ----
                     const alertBadge = document.getElementById('alertBadge');
