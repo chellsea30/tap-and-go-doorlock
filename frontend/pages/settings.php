@@ -3,7 +3,7 @@
  * Tap-and-Go Doorlock - Settings
  * COMPLETE WORKING VERSION - With Audit Trail Pagination
  * WITH SAVED LOGINS - PURE DARK MODE
- * WITH WORKING BACKUP & RESTORE
+ * WITH WORKING BACKUP & RESTORE (FIXED TO INCLUDE DATA)
  * WITH WORKING EXPORT DATA - NO HTML, NO BOM - FIXED
  * FIXED LAYOUT: Navbar, Sidebar, Footer aligned with dashboard
  */
@@ -230,61 +230,56 @@ while ($row = $result->fetch_assoc()) {
 $stmt->close();
 
 // ============================================================
-// HANDLE BACKUP & RESTORE
+// HANDLE BACKUP & RESTORE (FIXED TO INCLUDE DATA)
 // ============================================================
 
 // Create backup
 if (isset($_GET['create_backup'])) {
     $backup_file = $backup_dir . 'backup_' . date('Y-m-d_H-i-s') . '.sql';
     
-    // Get all tables
-    $tables = [];
-    $result = $conn->query("SHOW TABLES");
-    while ($row = $result->fetch_row()) {
-        $tables[] = $row[0];
-    }
+    // Manual generation - pulls table structure AND all data
+    $output_sql = "-- Tap-and-Go Doorlock Database Backup\n";
+    $output_sql .= "-- Generated: " . date('Y-m-d H:i:s') . "\n\n";
+    $output_sql .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
     
-    $output = "-- Tap-and-Go Doorlock Database Backup\n";
-    $output .= "-- Generated: " . date('Y-m-d H:i:s') . "\n";
-    $output .= "-- Tables: " . implode(', ', $tables) . "\n\n";
-    $output .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
-    
-    foreach ($tables as $table) {
-        // Create table structure
-        $result = $conn->query("SHOW CREATE TABLE `$table`");
-        $row = $result->fetch_row();
-        $output .= "DROP TABLE IF EXISTS `$table`;\n";
-        $output .= $row[1] . ";\n\n";
+    $tables_result = $conn->query("SHOW TABLES");
+    while ($table_row = $tables_result->fetch_row()) {
+        $table = $table_row[0];
         
-        // Get data
-        $dataResult = $conn->query("SELECT * FROM `$table`");
-        if ($dataResult && $dataResult->num_rows > 0) {
+        // Get Create Table syntax
+        $create_result = $conn->query("SHOW CREATE TABLE `$table`");
+        $create_row = $create_result->fetch_row();
+        $output_sql .= "DROP TABLE IF EXISTS `$table`;\n";
+        $output_sql .= $create_row[1] . ";\n\n";
+        
+        // Get Data
+        $data_result = $conn->query("SELECT * FROM `$table`");
+        if ($data_result && $data_result->num_rows > 0) {
             $fields = [];
-            $fieldResult = $conn->query("SHOW COLUMNS FROM `$table`");
-            while ($field = $fieldResult->fetch_row()) {
-                $fields[] = $field[0];
+            $col_result = $conn->query("SHOW COLUMNS FROM `$table`");
+            while ($col = $col_result->fetch_row()) {
+                $fields[] = $col[0];
             }
+            $field_str = implode("`, `", $fields);
             
-            while ($rowData = $dataResult->fetch_assoc()) {
+            while ($row = $data_result->fetch_assoc()) {
                 $values = [];
                 foreach ($fields as $field) {
-                    $value = $rowData[$field];
-                    if ($value === null) {
+                    $val = $row[$field];
+                    if ($val === null) {
                         $values[] = 'NULL';
                     } else {
-                        $values[] = "'" . $conn->real_escape_string($value) . "'";
+                        $values[] = "'" . $conn->real_escape_string($val) . "'";
                     }
                 }
-                $output .= "INSERT INTO `$table` (`" . implode("`, `", $fields) . "`) VALUES (" . implode(", ", $values) . ");\n";
+                $output_sql .= "INSERT INTO `$table` (`$field_str`) VALUES (" . implode(", ", $values) . ");\n";
             }
-            $output .= "\n";
+            $output_sql .= "\n";
         }
     }
+    $output_sql .= "SET FOREIGN_KEY_CHECKS=1;\n";
     
-    $output .= "SET FOREIGN_KEY_CHECKS=1;\n";
-    
-    // Save file
-    if (file_put_contents($backup_file, $output)) {
+    if (file_put_contents($backup_file, $output_sql)) {
         logAudit((int)$_SESSION['admin_id'], 'Create Backup', "Created backup: " . basename($backup_file));
         $success = "✅ Backup created successfully!";
         
@@ -315,28 +310,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_backup'])) {
         } elseif ($_FILES['backup_file']['size'] > 10485760) { // 10MB max
             $error = "File too large. Maximum size is 10MB.";
         } else {
-            $sql = file_get_contents($file_tmp);
-            
-            // Split SQL into individual queries
-            $queries = array_filter(array_map('trim', explode(';', $sql)));
-            
+            // Disable foreign key checks
             $conn->query("SET FOREIGN_KEY_CHECKS=0");
+            $conn->query("SET AUTOCOMMIT=0");
             
             $success_count = 0;
             $error_count = 0;
             
-            foreach ($queries as $query) {
-                if (!empty($query)) {
-                    if ($conn->query($query)) {
-                        $success_count++;
-                    } else {
-                        $error_count++;
-                        error_log("Backup restore error: " . $conn->error);
+            // Read file line by line (prevents memory limit issues)
+            $handle = fopen($file_tmp, "r");
+            if ($handle) {
+                $current_query = '';
+                while (($line = fgets($handle)) !== false) {
+                    $line = trim($line);
+                    
+                    // Skip empty lines and comments
+                    if (empty($line) || strpos($line, '--') === 0 || strpos($line, '/*') === 0 || strpos($line, 'SET ') === 0) {
+                        continue;
+                    }
+                    
+                    $current_query .= $line . "\n";
+                    
+                    // Check if line ends with semicolon (end of query)
+                    if (substr($line, -1) === ';') {
+                        if (!empty(trim($current_query)) && $current_query !== ';') {
+                            if ($conn->query($current_query)) {
+                                $success_count++;
+                            } else {
+                                $error_count++;
+                                // Log error but continue
+                                error_log("Restore SQL Error: " . $conn->error . " | Query: " . substr($current_query, 0, 100));
+                            }
+                        }
+                        $current_query = '';
                     }
                 }
+                fclose($handle);
             }
             
+            $conn->query("COMMIT");
             $conn->query("SET FOREIGN_KEY_CHECKS=1");
+            $conn->query("SET AUTOCOMMIT=1");
             
             if ($error_count == 0) {
                 logAudit((int)$_SESSION['admin_id'], 'Restore Backup', "Restored backup: $file_name ($success_count queries)");
