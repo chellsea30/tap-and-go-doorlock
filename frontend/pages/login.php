@@ -5,6 +5,7 @@
  * ✅ AUTO-UNLOCK kapag natapos na ang 10-minute ban
  * ✅ COMPACT LAYOUT - fit sa screen, walang extra space sa baba
  * ✅ NEW: Student Portal Register button
+ * ✅ FIXED: Math Puzzle Error Message & Attempts Counter
  */
 
 session_start();
@@ -237,7 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $result2 = $stmt->get_result();
                 if ($row = $result2->fetch_assoc()) {
                     $blocked_until = date('h:i A', strtotime($row['math_blocked_until']));
-                    $blocked_until_timestamp = strtotime($row['math_blocked_until']);
+                    $block_until_timestamp = strtotime($row['math_blocked_until']);
                 }
                 $stmt->close();
                 $conn->close();
@@ -373,21 +374,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 }
 
 // ============================================================
-// HANDLE MATH PUZZLE VERIFICATION
+// HANDLE MATH PUZZLE VERIFICATION (FIXED)
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_math'])) {
-    $user_answer = isset($_POST['math_answer']) ? (int)trim($_POST['math_answer']) : -1;
+    $user_answer = isset($_POST['math_answer']) && $_POST['math_answer'] !== '' ? (int)trim($_POST['math_answer']) : null;
     $user_id = (int)($_POST['user_id'] ?? 0);
     $user_type = $_POST['user_type'] ?? '';
     $email = $_POST['email'] ?? '';
     $question = $_POST['question'] ?? '';
     $correct_answer = (int)($_POST['correct_answer'] ?? 0);
 
-    if ($user_answer === -1 || $user_answer === '') {
+    if ($user_answer === null) {
         $error = 'Please enter your answer.';
+        $show_puzzle = true;
+        $puzzle_user_id = $user_id;
+        $puzzle_user_type = $user_type;
+        $puzzle_email = $email;
+        $puzzle_name = $_SESSION['puzzle_name'] ?? '';
     } else {
         if (isMathBlocked($user_type, $user_id)) {
-            $error = '⛔ You are temporarily blocked. Please try again later.';
+            $error = '⛔ You are temporarily blocked due to too many incorrect attempts.';
+            $is_blocked = true;
+            $show_puzzle = true;
         } else {
             $checkResult = checkMathPuzzle($user_type, $user_id, $email, $question, $user_answer, $correct_answer);
 
@@ -478,10 +486,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_math'])) {
                         exit();
                 }
             } else {
+                // ✅ ERROR HANDLING FIX
                 $error = $checkResult['message'];
+                
                 if (isset($checkResult['blocked']) && $checkResult['blocked']) {
-                    $error = '⛔ Too many failed attempts. You are blocked for 5 minutes.';
+                    $is_blocked = true;
+                    $remaining_attempts = 0;
+                    
+                    $conn = getDBConnection();
+                    $table = $user_type . '_users';
+                    $id_field = $user_type . '_id';
+                    $stmt = $conn->prepare("SELECT math_blocked_until FROM $table WHERE $id_field = ?");
+                    $stmt->bind_param("i", $user_id);
+                    $stmt->execute();
+                    $row = $stmt->get_result()->fetch_assoc();
+                    if ($row && !empty($row['math_blocked_until'])) {
+                        $block_until = date('h:i A', strtotime($row['math_blocked_until']));
+                        $block_until_timestamp = strtotime($row['math_blocked_until']);
+                    }
+                    $stmt->close();
+                    $conn->close();
+                } else {
+                    $remaining_attempts = $checkResult['attempts_left'] ?? 1;
+                    $error = "❌ Incorrect answer. You have $remaining_attempts attempt(s) left before being blocked.";
                 }
+                
                 $show_puzzle = true;
                 $puzzle_user_id = (int)$_POST['user_id'];
                 $puzzle_user_type = $_POST['user_type'];
@@ -1490,7 +1519,7 @@ if (!$puzzle_data && isset($_SESSION['puzzle_user_id'])) {
 
                     <div class="puzzle-attempts">
                         <span>Attempts left: </span>
-                        <span id="attemptsLeft">3</span>
+                        <span id="attemptsLeft"><?php echo $remaining_attempts; ?></span>
                     </div>
 
                     <button type="submit" name="verify_math" class="btn-login-puzzle" id="verifyMathBtn">
