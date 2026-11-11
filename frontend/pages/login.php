@@ -6,7 +6,6 @@
  * ✅ COMPACT LAYOUT - fit sa screen, walang extra space sa baba
  * ✅ NEW: Student Portal Register button
  * ✅ FIXED: Math Puzzle Error Message & Attempts Counter
- * ✅ NEW: Failed Login Attempts Logging (ISO 27001 - A.8.16)
  */
 
 session_start();
@@ -275,31 +274,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             }
         } else {
             $conn = getDBConnection();
-
-            // ✅ LOG THE FAILED ATTEMPT
-            $ip_address = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
-            $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
-            
-            // Create table if not exists
-            $conn->query("
-                CREATE TABLE IF NOT EXISTS failed_login_attempts (
-                    attempt_id INT AUTO_INCREMENT PRIMARY KEY,
-                    email VARCHAR(255) NOT NULL,
-                    user_role VARCHAR(50) NOT NULL,
-                    ip_address VARCHAR(50) NOT NULL,
-                    user_agent VARCHAR(255),
-                    attempt_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    reason VARCHAR(255) DEFAULT 'Invalid credentials'
-                )
-            ");
-            
-            $log_stmt = $conn->prepare("
-                INSERT INTO failed_login_attempts (email, user_role, ip_address, user_agent, reason) 
-                VALUES (?, ?, ?, ?, 'Invalid credentials')
-            ");
-            $log_stmt->bind_param("ssss", $email, $role, $ip_address, $user_agent);
-            $log_stmt->execute();
-            $log_stmt->close();
 
             $user_found = false;
             $found_user_id = 0;
