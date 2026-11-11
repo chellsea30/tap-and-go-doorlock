@@ -7,6 +7,7 @@
  * PURE DARK MODE
  * ✅ FIXED: Presence tracking base sa latest access log
  * ✅ UPDATED: Residents Outside is now box-style per room (RED)
+ * ✅ NEW: Suspicious Login Activity Alert (ISO 27001 - A.8.16)
  */
 
 session_start();
@@ -44,7 +45,8 @@ $stats = [
     'pending_alerts' => 0,
     'critical_alerts' => 0,
     'total_rooms' => $totalRooms,
-    'max_per_room' => $maxPerRoom
+    'max_per_room' => $maxPerRoom,
+    'failed_logins_today' => 0
 ];
 
 // 1. Total Registered Residents
@@ -156,6 +158,25 @@ if ($result && $row = $result->fetch_assoc()) {
     $stats['critical_alerts'] = (int)$row['count'];
 }
 
+// 9. Failed Login Attempts Today
+// Create table if not exists first to avoid errors
+$conn->query("
+    CREATE TABLE IF NOT EXISTS failed_login_attempts (
+        attempt_id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        user_role VARCHAR(50) NOT NULL,
+        ip_address VARCHAR(50) NOT NULL,
+        user_agent VARCHAR(255),
+        attempt_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        reason VARCHAR(255) DEFAULT 'Invalid credentials'
+    )
+");
+
+$result = $conn->query("SELECT COUNT(*) as count FROM failed_login_attempts WHERE DATE(attempt_timestamp) = CURDATE()");
+if ($result && $row = $result->fetch_assoc()) {
+    $stats['failed_logins_today'] = (int)$row['count'];
+}
+
 // ============================================================
 // COURSE & YEAR LEVEL DISTRIBUTION
 // ============================================================
@@ -252,6 +273,25 @@ if ($result) {
         $latestAlerts[] = $row;
     }
 }
+
+// ============================================================
+// ✅ CHECK FOR SUSPICIOUS LOGIN ACTIVITY (Multiple failed attempts)
+// ============================================================
+$suspiciousLogins = [];
+$result = $conn->query("
+    SELECT email, COUNT(*) as attempt_count, MAX(attempt_timestamp) as last_attempt, ip_address
+    FROM failed_login_attempts 
+    WHERE attempt_timestamp >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+    GROUP BY email, ip_address
+    HAVING attempt_count >= 3
+    ORDER BY last_attempt DESC
+");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $suspiciousLogins[] = $row;
+    }
+}
+$hasSuspiciousLogins = !empty($suspiciousLogins);
 
 // ============================================================
 // ROOM OCCUPANCY (1-13)
@@ -821,6 +861,59 @@ $showAlert = $latestUnauthorized !== null && $stats['critical_alerts'] > 0;
                         </button>
                     </div>
                 </div>
+
+                <!-- ✅ SUSPICIOUS LOGIN ACTIVITY ALERT -->
+                <?php if ($hasSuspiciousLogins): ?>
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="card alert-card border-danger" style="border-left-color: #f59e0b;">
+                            <div class="card-header" style="background: #4a2a0a !important; border-bottom: 1px solid #7a4a0a !important;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0" style="color: #fbbf24 !important;">
+                                        <i class="fas fa-shield-alt me-2"></i>
+                                        Suspicious Login Activity Detected!
+                                    </h5>
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-clock me-1"></i>
+                                        <?php echo count($suspiciousLogins); ?> Account(s) targeted
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-body" style="background: #1a1205 !important;">
+                                <p class="text-warning mb-3">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    The system identified multiple failed login attempts. Please review the following accounts:
+                                </p>
+                                <?php foreach ($suspiciousLogins as $suspicious): ?>
+                                <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color: #3a2a0a !important;">
+                                    <div>
+                                        <span class="fw-bold text-warning"><?php echo htmlspecialchars($suspicious['email']); ?></span>
+                                        <span class="badge bg-danger ms-2">
+                                            <?php echo $suspicious['attempt_count']; ?> failed attempts
+                                        </span>
+                                        <span class="text-muted ms-2" style="font-size: 12px;">
+                                            <i class="fas fa-network-wired me-1"></i>
+                                            <?php echo htmlspecialchars($suspicious['ip_address']); ?>
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span class="text-muted" style="font-size: 12px;">
+                                            <i class="fas fa-clock me-1"></i>
+                                            Last attempt: <?php echo date('h:i A', strtotime($suspicious['last_attempt'])); ?>
+                                        </span>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                                <div class="mt-3 text-end">
+                                    <a href="settings.php?tab=security" class="btn btn-sm btn-warning text-dark">
+                                        <i class="fas fa-cog me-1"></i> Review Security Settings
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <!-- WARNING NOTIFICATION BAR -->
                 <?php if ($stats['critical_alerts'] > 0): ?>
